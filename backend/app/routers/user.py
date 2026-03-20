@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 import httpx
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, timezone, date
 from jose import jwt
 
 from ..dependencies import get_db, get_current_user
-from ..models import User
+from ..models import User, CheckIn
 from ..schemas import LoginRequest, LoginResponse, UserStatusResponse
 from ..config import settings
 from ..utils.time_utils import get_today_cst
@@ -22,9 +23,12 @@ async def get_wechat_openid(code: str) -> str:
         "js_code": code,
         "grant_type": "authorization_code"
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, params=params)
-        data = response.json()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(url, params=params)
+            data = response.json()
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail="WeChat service unavailable")
 
     if "errcode" in data and data["errcode"] != 0:
         raise HTTPException(status_code=400, detail=f"WeChat error: {data.get('errmsg', 'Unknown error')}")
@@ -37,18 +41,20 @@ async def get_wechat_openid(code: str) -> str:
 
 
 def create_jwt_token(user_id: int) -> str:
-    expire = datetime.utcnow() + timedelta(hours=settings.jwt_expire_hours)
+    expire = datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expire_hours)
     payload = {"sub": str(user_id), "exp": expire}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def get_user_today_status(user: User, today: date) -> bool:
+def get_user_today_status(user: User, today: date, db: Session) -> bool:
     """Check if user has completed today's check-in."""
     from ..models import CheckInStatus
-    if not user.checkins:
-        return False
-    today_checkins = [c for c in user.checkins if c.date == today]
-    return any(c.status == CheckInStatus.completed for c in today_checkins)
+    checkin = db.query(CheckIn).filter(
+        CheckIn.user_id == user.id,
+        CheckIn.date == today,
+        CheckIn.status == CheckInStatus.completed
+    ).first()
+    return checkin is not None
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -58,10 +64,14 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     # Get or create user
     user = db.query(User).filter(User.openid == openid).first()
     if not user:
-        user = User(openid=openid)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            user = User(openid=openid)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except IntegrityError:
+            db.rollback()
+            user = db.query(User).filter(User.openid == openid).first()
 
     token = create_jwt_token(user.id)
     today = get_today_cst()
@@ -76,7 +86,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         reminder_time=user.reminder_time,
         reminder_enabled=user.reminder_enabled,
         last_checkin_date=user.last_checkin_date,
-        today_completed=get_user_today_status(user, today)
+        today_completed=get_user_today_status(user, today, db)
     )
 
     return LoginResponse(token=token, user=user_status)
@@ -98,5 +108,5 @@ async def get_user_status(
         reminder_time=current_user.reminder_time,
         reminder_enabled=current_user.reminder_enabled,
         last_checkin_date=current_user.last_checkin_date,
-        today_completed=get_user_today_status(current_user, today)
+        today_completed=get_user_today_status(current_user, today, db)
     )

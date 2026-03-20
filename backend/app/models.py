@@ -28,8 +28,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_checkin_date = Column(Date, nullable=True)
 
-    checkins = relationship("CheckIn", back_populates="user")
-    topic_history = relationship("TopicHistory", back_populates="user")
+    checkins = relationship("CheckIn", back_populates="user", lazy="selectin")
+    topic_history = relationship("TopicHistory", back_populates="user", lazy="selectin")
 
 
 class CheckIn(Base):
