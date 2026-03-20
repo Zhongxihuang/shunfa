@@ -1,5 +1,7 @@
 from typing import Generator
 
+from fastapi import HTTPException
+
 from app.database import SessionLocal
 
 
@@ -13,4 +15,4 @@ def get_db() -> Generator:
 
 def get_current_user():
     # TODO: implement in Phase 1
-    raise NotImplementedError("get_current_user will be implemented in Phase 1")
+    raise HTTPException(status_code=401, detail="Authentication not yet implemented")

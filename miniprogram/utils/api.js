@@ -8,7 +8,7 @@ const request = (url, method, data) => {
       data: data || {},
       header: {
         'Content-Type': 'application/json',
-        'Authorization': app.globalData.token ? `Bearer ${app.globalData.token}` : ''
+        ...(app.globalData.token ? { Authorization: `Bearer ${app.globalData.token}` } : {})
       },
       success: (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
