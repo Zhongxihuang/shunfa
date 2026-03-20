@@ -1,0 +1,29 @@
+# Python
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Node / WeChat miniprogram
+node_modules/
+.DS_Store
+miniprogram/project.private.config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
