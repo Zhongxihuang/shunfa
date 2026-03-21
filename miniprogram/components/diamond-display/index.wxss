@@ -1,1 +1,3 @@
-/* styles */
+.diamond-display { display: flex; align-items: center; gap: 6rpx; }
+.diamond-icon { font-size: 32rpx; }
+.diamond-count { font-size: 32rpx; font-weight: bold; color: #5c6bc0; }

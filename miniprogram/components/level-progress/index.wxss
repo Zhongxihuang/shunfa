@@ -1,1 +1,6 @@
-/* styles */
+.level-progress { padding: 10rpx 0; }
+.level-info { display: flex; justify-content: space-between; margin-bottom: 10rpx; }
+.level-label { font-size: 28rpx; font-weight: bold; color: #333; }
+.points-text { font-size: 24rpx; color: #666; }
+.progress-bar { height: 12rpx; background: #eee; border-radius: 6rpx; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #07c160, #0dab4f); border-radius: 6rpx; transition: width 0.3s; }

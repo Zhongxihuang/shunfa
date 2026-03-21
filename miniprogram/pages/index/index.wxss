@@ -1,1 +1,65 @@
-/* styles */
+.container {
+  padding: 40rpx 30rpx;
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.loading {
+  text-align: center;
+  padding: 100rpx;
+  color: #999;
+}
+
+.header {
+  margin-bottom: 40rpx;
+}
+
+.app-title {
+  display: block;
+  font-size: 52rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.date {
+  display: block;
+  font-size: 26rpx;
+  color: #999;
+  margin-top: 8rpx;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.level-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 40rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+}
+
+.today-status {
+  text-align: center;
+}
+
+.completed-badge {
+  padding: 30rpx;
+  background: #f0fff4;
+  border-radius: 16rpx;
+  font-size: 32rpx;
+  color: #07c160;
+}
+
+.start-btn {
+  width: 100%;
+  background: #07c160;
+  color: #fff;
+  border-radius: 50rpx;
+  font-size: 36rpx;
+  padding: 30rpx;
+}

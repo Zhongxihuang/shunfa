@@ -1,1 +1,34 @@
-<view class="container"><text>首页 Page</text></view>
+<view class="container">
+  <view wx:if="{{loading}}" class="loading">
+    <text>加载中...</text>
+  </view>
+
+  <view wx:elif="{{userInfo}}" class="main">
+    <view class="header">
+      <text class="app-title">顺发</text>
+      <text class="date">{{userInfo.last_checkin_date || '开始你的第一次打卡'}}</text>
+    </view>
+
+    <view class="stats-row">
+      <streak-badge streak="{{userInfo.streak}}" longest-streak="{{userInfo.longest_streak}}" />
+      <diamond-display diamonds="{{userInfo.diamonds}}" />
+    </view>
+
+    <view class="level-card">
+      <level-progress level="{{userInfo.level}}" points="{{userInfo.points}}" />
+    </view>
+
+    <view class="today-status">
+      <view wx:if="{{todayCompleted}}" class="completed-badge">
+        <text>✅ 今日已打卡</text>
+      </view>
+      <button
+        wx:else
+        class="start-btn"
+        bindtap="onStartWriting"
+      >
+        开始今日写作
+      </button>
+    </view>
+  </view>
+</view>

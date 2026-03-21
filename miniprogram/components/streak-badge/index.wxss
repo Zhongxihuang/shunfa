@@ -1,1 +1,14 @@
-/* styles */
+.streak-badge {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 12rpx 20rpx;
+  border-radius: 50rpx;
+  background: #fff3e0;
+}
+.badge-rare { background: #e8f5e9; }
+.badge-epic { background: #e3f2fd; }
+.badge-legendary { background: linear-gradient(135deg, #ffd700, #ff8c00); }
+.streak-number { font-size: 40rpx; font-weight: bold; color: #333; }
+.streak-label { font-size: 24rpx; color: #666; }
+.fire { font-size: 36rpx; }

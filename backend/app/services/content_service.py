@@ -118,26 +118,50 @@ async def confirm_content(checkin: CheckIn, content: str, db: Session) -> None:
     db.commit()
 
 async def confirm_publish(checkin: CheckIn, db: Session, user: User) -> dict:
-    """
-    User confirms publish. Updates checkin to completed.
-    Returns points info (gamification handled in Phase 4).
-    """
+    """User confirms publish. Updates checkin to completed."""
     if checkin.status == CheckInStatus.completed:
         raise ValueError("今日已完成发布，请勿重复提交")
     if checkin.status != CheckInStatus.pending:
         raise ValueError("请先确认内容后再发布")
 
+    # Import here to avoid circular imports
+    from .streak_service import calculate_and_update_streak
+    from .points_service import apply_points_and_update_user
+    from ..utils.time_utils import get_today_cst
+
+    today = get_today_cst()
+
+    # Update streak BEFORE calculating points (streak affects streak_bonus)
+    new_streak = calculate_and_update_streak(user, today, db)
+
+    # Apply points
+    result = apply_points_and_update_user(user, checkin, db)
+
+    # Complete the checkin
     checkin.status = CheckInStatus.completed
     checkin.completed_at = get_now_cst()
     db.commit()
 
-    # Gamification will be added in Phase 4
-    # For now return basic response
+    # Generate celebratory message
+    message = _get_celebratory_message(new_streak, result["points_earned"])
+
     return {
-        "streak": user.streak,
-        "points_earned": 0,
-        "total_points": user.points,
-        "level": user.level,
-        "diamonds": user.diamonds,
-        "message": "发布成功！"
+        "streak": new_streak,
+        "points_earned": result["points_earned"],
+        "total_points": result["total_points"],
+        "level": result["level"],
+        "diamonds": result["diamonds"],
+        "message": message
     }
+
+
+def _get_celebratory_message(streak: int, points_earned: int) -> str:
+    """Generate a celebratory message based on streak."""
+    if streak == 1:
+        return f"太棒了！已连更1天，赚取{points_earned}积分！"
+    elif streak < 7:
+        return f"继续保持！已连更{streak}天，赚取{points_earned}积分！"
+    elif streak < 30:
+        return f"厉害！连更{streak}天了，赚取{points_earned}积分！"
+    else:
+        return f"传奇！连更{streak}天！赚取{points_earned}积分！"

@@ -1,1 +1,4 @@
-<view class="diamond-display"></view>
+<view class="diamond-display">
+  <text class="diamond-icon">💎</text>
+  <text class="diamond-count">{{diamonds}}</text>
+</view>
