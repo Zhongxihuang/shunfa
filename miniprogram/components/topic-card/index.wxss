@@ -1,1 +1,58 @@
-/* styles */
+.card {
+  display: flex;
+  align-items: flex-start;
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 32rpx;
+  margin-bottom: 20rpx;
+  border: 2rpx solid transparent;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.06);
+}
+
+.card--selected {
+  border-color: #07c160;
+  background: #f0fff6;
+  box-shadow: 0 4rpx 20rpx rgba(7, 193, 96, 0.15);
+}
+
+.card__index {
+  flex-shrink: 0;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+  margin-top: 4rpx;
+}
+
+.card--selected .card__index {
+  background: #07c160;
+}
+
+.card__num {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #999;
+  line-height: 1;
+}
+
+.card__check {
+  font-size: 24rpx;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.card__topic {
+  flex: 1;
+  font-size: 32rpx;
+  color: #1a1a1a;
+  line-height: 1.65;
+}
+
+.card--selected .card__topic {
+  color: #07c160;
+  font-weight: 500;
+}

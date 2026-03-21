@@ -47,18 +47,29 @@ Page({
   },
 
   onSelectTopic(e) {
-    const topic = e.currentTarget.dataset.topic;
-    this.setData({ selectedTopic: topic });
+    // topic-card 组件通过 triggerEvent('select', { topic }) 传递
+    const topic = e.detail.topic;
+    this.setData({ selectedTopic: topic, customTopic: '' });
   },
 
   onConfirmTopic() {
-    const topic = this.data.selectedTopic || this.data.customTopic.trim();
+    let topic, batch_id;
+    if (this.data.selectedTopic) {
+      const selectedCard = this.data.topics.find(t => t.topic === this.data.selectedTopic);
+      topic = this.data.selectedTopic;
+      batch_id = selectedCard ? selectedCard.batch_id : null;
+    } else {
+      topic = this.data.customTopic.trim();
+      batch_id = null;
+    }
+
     if (!topic) {
       wx.showToast({ title: '请选择或输入一个选题', icon: 'none' });
       return;
     }
 
-    api.post('/api/select_topic', { topic })
+    const body = batch_id ? { topic, batch_id } : { topic };
+    api.post('/api/select_topic', body)
       .then(data => {
         wx.navigateTo({
           url: `/pages/discuss/discuss?checkin_id=${data.checkin_id}&topic=${encodeURIComponent(topic)}`
@@ -70,7 +81,7 @@ Page({
   },
 
   onCustomInput(e) {
-    this.setData({ customTopic: e.detail.value });
+    this.setData({ customTopic: e.detail.value, selectedTopic: null });
   },
 
   onToggleCustomInput() {

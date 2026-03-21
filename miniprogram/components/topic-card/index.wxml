@@ -1,1 +1,10 @@
-<view class="topic-card"></view>
+<view
+  class="card {{selected ? 'card--selected' : ''}}"
+  bindtap="onTap"
+>
+  <view class="card__index">
+    <text wx:if="{{selected}}" class="card__check">✓</text>
+    <text wx:else class="card__num">{{index}}</text>
+  </view>
+  <text class="card__topic">{{topic}}</text>
+</view>

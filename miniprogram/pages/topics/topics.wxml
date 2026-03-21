@@ -11,38 +11,41 @@
 
   <view wx:else>
     <view class="topic-list">
-      <view
+      <topic-card
         wx:for="{{topics}}"
         wx:key="topic"
-        class="topic-card {{selectedTopic === item.topic ? 'selected' : ''}}"
-        bindtap="onSelectTopic"
-        data-topic="{{item.topic}}"
-      >
-        <text class="topic-text">{{item.topic}}</text>
+        topic="{{item.topic}}"
+        index="{{index + 1}}"
+        selected="{{selectedTopic === item.topic}}"
+        bindselect="onSelectTopic"
+      />
+    </view>
+
+    <button
+      class="refresh-btn {{(refreshCount >= maxRefreshes || loading) ? 'refresh-btn--disabled' : ''}}"
+      bindtap="onRefresh"
+      disabled="{{refreshCount >= maxRefreshes || loading}}"
+    >
+      ↻ 换一批（还剩 {{maxRefreshes - refreshCount}} 次）
+    </button>
+
+    <view class="divider"><text class="divider-text">或者</text></view>
+
+    <view class="custom-area">
+      <view class="custom-toggle" bindtap="onToggleCustomInput">
+        <text class="custom-toggle__label">✏️ 自己来写选题</text>
+        <text class="custom-toggle__arrow">{{showCustomInput ? '∧' : '∨'}}</text>
       </view>
-    </view>
-
-    <view class="refresh-area">
-      <button
-        class="refresh-btn {{refreshCount >= maxRefreshes ? 'disabled' : ''}}"
-        bindtap="onRefresh"
-        disabled="{{refreshCount >= maxRefreshes}}"
-      >
-        换一批 ({{maxRefreshes - refreshCount}}次剩余)
-      </button>
-    </view>
-
-    <view class="custom-input-area">
-      <button class="toggle-custom-btn" bindtap="onToggleCustomInput">
-        {{showCustomInput ? '收起' : '自定义选题'}}
-      </button>
-      <view wx:if="{{showCustomInput}}" class="custom-input">
+      <view wx:if="{{showCustomInput}}" class="custom-input-wrap">
         <input
-          placeholder="输入你自己的选题..."
+          class="custom-input"
+          placeholder="写下你想聊的话题..."
           bindinput="onCustomInput"
           value="{{customTopic}}"
           maxlength="50"
+          focus="{{showCustomInput}}"
         />
+        <text class="custom-count">{{customTopic.length}}/50</text>
       </view>
     </view>
 
@@ -51,7 +54,7 @@
       bindtap="onConfirmTopic"
       disabled="{{!selectedTopic && !customTopic}}"
     >
-      开始写作
+      开始写作 →
     </button>
   </view>
 </view>

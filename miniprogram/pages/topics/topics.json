@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "今日选题"
+  "navigationBarTitleText": "今日选题",
+  "usingComponents": {
+    "topic-card": "/components/topic-card/index"
+  }
 }
