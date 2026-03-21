@@ -1,8 +1,10 @@
+const config = require('./config');
+
 App({
   globalData: {
     userInfo: null,
     token: null,
-    baseUrl: 'http://localhost:8000'
+    baseUrl: config.baseUrl
   },
   onLaunch() {
     // Check login status on launch
