@@ -1,1 +1,57 @@
-<view class="container"><text>topics Page</text></view>
+<view class="container">
+  <view class="header">
+    <text class="title">今日选题</text>
+    <text class="subtitle">选择一个话题，开始今日的表达</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">
+    <view class="loading-spinner"></view>
+    <text>正在生成选题...</text>
+  </view>
+
+  <view wx:else>
+    <view class="topic-list">
+      <view
+        wx:for="{{topics}}"
+        wx:key="topic"
+        class="topic-card {{selectedTopic === item.topic ? 'selected' : ''}}"
+        bindtap="onSelectTopic"
+        data-topic="{{item.topic}}"
+      >
+        <text class="topic-text">{{item.topic}}</text>
+      </view>
+    </view>
+
+    <view class="refresh-area">
+      <button
+        class="refresh-btn {{refreshCount >= maxRefreshes ? 'disabled' : ''}}"
+        bindtap="onRefresh"
+        disabled="{{refreshCount >= maxRefreshes}}"
+      >
+        换一批 ({{maxRefreshes - refreshCount}}次剩余)
+      </button>
+    </view>
+
+    <view class="custom-input-area">
+      <button class="toggle-custom-btn" bindtap="onToggleCustomInput">
+        {{showCustomInput ? '收起' : '自定义选题'}}
+      </button>
+      <view wx:if="{{showCustomInput}}" class="custom-input">
+        <input
+          placeholder="输入你自己的选题..."
+          bindinput="onCustomInput"
+          value="{{customTopic}}"
+          maxlength="50"
+        />
+      </view>
+    </view>
+
+    <button
+      class="confirm-btn"
+      bindtap="onConfirmTopic"
+      disabled="{{!selectedTopic && !customTopic}}"
+    >
+      开始写作
+    </button>
+  </view>
+</view>
