@@ -1,16 +1,21 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from alembic.config import Config
+from alembic import command
 
-from app.database import Base, engine
+from app.config import settings
 from app.routers import topics, content, user, reminder
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create all DB tables
-    Base.metadata.create_all(bind=engine)
+    # 开发环境自动升级到最新迁移
+    if settings.environment == "development":
+        alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
+        command.upgrade(alembic_cfg, "head")
     yield
     # Shutdown: nothing to clean up for now
 

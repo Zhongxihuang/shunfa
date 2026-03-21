@@ -9,3 +9,4 @@ pytest
 pytest-asyncio
 httpx
 pytz
+alembic>=1.13.0
