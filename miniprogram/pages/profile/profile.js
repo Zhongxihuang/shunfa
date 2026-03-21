@@ -4,6 +4,7 @@ const auth = require('../../utils/auth');
 Page({
   data: {
     userInfo: null,
+    achievements: [],
     loading: true
   },
 
@@ -14,13 +15,18 @@ Page({
   loadProfile() {
     this.setData({ loading: true });
     auth.ensureLoggedIn()
-      .then(() => api.get('/api/user_status'))
-      .then(data => {
-        this.setData({ userInfo: data, loading: false });
+      .then(() => Promise.all([
+        api.get('/api/user_status'),
+        api.get('/api/achievements')
+      ]))
+      .then(([userData, achData]) => {
+        this.setData({
+          userInfo: userData,
+          achievements: achData.achievements,
+          loading: false
+        });
       })
-      .catch(() => {
-        this.setData({ loading: false });
-      });
+      .catch(() => this.setData({ loading: false }));
   },
 
   onGoSettings() {

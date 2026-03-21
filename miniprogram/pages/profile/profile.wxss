@@ -66,3 +66,43 @@
 
 .menu-text { font-size: 32rpx; color: #333; }
 .menu-arrow { font-size: 36rpx; color: #ccc; }
+
+.achievements-section {
+  margin-bottom: 20rpx;
+}
+
+.section-title {
+  display: block;
+  font-size: 28rpx;
+  color: #999;
+  margin-bottom: 16rpx;
+  font-weight: 500;
+}
+
+.achievements-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.achievement-badge {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+  min-width: 140rpx;
+}
+
+.achievement-icon {
+  font-size: 44rpx;
+}
+
+.achievement-name {
+  font-size: 22rpx;
+  color: #333;
+  font-weight: 500;
+}

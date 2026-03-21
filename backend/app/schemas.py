@@ -81,3 +81,16 @@ class PublishResponse(BaseModel):
     level: int
     diamonds: int
     message: str  # celebratory message
+    newly_unlocked: List[dict] = []  # 本次新解锁的成就
+
+
+class AchievementItem(BaseModel):
+    type: str
+    name: str
+    desc: str
+    unlocked_at: Optional[str] = None
+
+
+class AchievementsResponse(BaseModel):
+    achievements: List[AchievementItem]
+    total: int

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Text, Boolean, DateTime, Enum as SAEnum, ForeignKey
+from sqlalchemy import Column, Integer, String, Date, Text, Boolean, DateTime, Enum as SAEnum, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -30,6 +30,7 @@ class User(Base):
 
     checkins = relationship("CheckIn", back_populates="user", lazy="selectin")
     topic_history = relationship("TopicHistory", back_populates="user", lazy="selectin")
+    achievements = relationship("Achievement", back_populates="user", lazy="selectin")
 
 
 class CheckIn(Base):
@@ -61,3 +62,19 @@ class TopicHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="topic_history")
+
+
+class Achievement(Base):
+    __tablename__ = "achievements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    achievement_type = Column(String, nullable=False)
+    unlocked_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="achievements")
+
+    __table_args__ = (
+        # 每个用户每个成就只能解锁一次
+        UniqueConstraint("user_id", "achievement_type", name="uq_user_achievement"),
+    )

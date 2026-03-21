@@ -145,13 +145,18 @@ async def confirm_publish(checkin: CheckIn, db: Session, user: User) -> dict:
     # Generate celebratory message
     message = _get_celebratory_message(new_streak, result["points_earned"])
 
+    # Check and unlock achievements
+    from .achievement_service import check_and_unlock
+    newly_unlocked = check_and_unlock(user, checkin, db)
+
     return {
         "streak": new_streak,
         "points_earned": result["points_earned"],
         "total_points": result["total_points"],
         "level": result["level"],
         "diamonds": result["diamonds"],
-        "message": message
+        "message": message,
+        "newly_unlocked": newly_unlocked,
     }
 
 

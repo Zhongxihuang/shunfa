@@ -7,7 +7,7 @@ from jose import jwt
 
 from ..dependencies import get_db, get_current_user
 from ..models import User, CheckIn
-from ..schemas import LoginRequest, LoginResponse, UserStatusResponse
+from ..schemas import LoginRequest, LoginResponse, UserStatusResponse, AchievementsResponse, AchievementItem
 from ..config import settings
 from ..utils.time_utils import get_today_cst
 from ..services.reminder_service import check_reminder_needed
@@ -92,6 +92,20 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     )
 
     return LoginResponse(token=token, user=user_status)
+
+
+@router.get("/achievements", response_model=AchievementsResponse)
+async def get_achievements(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取用户已解锁的成就列表。"""
+    from ..services.achievement_service import get_user_achievements
+    items = get_user_achievements(current_user)
+    return AchievementsResponse(
+        achievements=[AchievementItem(**i) for i in items],
+        total=len(items)
+    )
 
 
 @router.get("/user_status", response_model=UserStatusResponse)
