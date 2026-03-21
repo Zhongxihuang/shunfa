@@ -3,3 +3,34 @@ page {
   background-color: #f5f5f5;
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
 }
+
+/* Loading spinner animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  width: 60rpx;
+  height: 60rpx;
+  border: 4rpx solid #eee;
+  border-top-color: #07c160;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 20rpx auto;
+}
+
+/* Error state */
+.error-text {
+  color: #fa5151;
+  font-size: 28rpx;
+  text-align: center;
+  padding: 20rpx;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 80rpx 40rpx;
+  color: #999;
+  font-size: 30rpx;
+}

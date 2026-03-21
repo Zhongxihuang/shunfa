@@ -18,7 +18,11 @@ const request = (url, method, data) => {
         }
       },
       fail: (err) => {
-        reject(err);
+        reject({
+          statusCode: 0,
+          data: { detail: '网络连接失败，请检查网络设置' },
+          networkError: true
+        });
       }
     });
   });

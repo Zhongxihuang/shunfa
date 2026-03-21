@@ -8,7 +8,8 @@ Page({
     inputText: '',
     loading: false,
     draft: null,
-    status: 'discussing'
+    status: 'discussing',
+    inputDisabled: false
   },
 
   onLoad(options) {
@@ -62,7 +63,7 @@ Page({
       this.addMessage('assistant', data.reply);
 
       if (data.status === 'draft_ready' && data.draft) {
-        this.setData({ draft: data.draft });
+        this.setData({ draft: data.draft, inputDisabled: true });
         wx.setStorageSync('current_draft', data.draft);
         setTimeout(() => {
           wx.navigateTo({

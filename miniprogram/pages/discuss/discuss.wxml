@@ -32,11 +32,12 @@
       bindinput="onInputChange"
       auto-height="true"
       maxlength="500"
+      disabled="{{inputDisabled}}"
     />
-    <button 
-      class="send-btn {{(!inputText || loading) ? 'disabled' : ''}}"
+    <button
+      class="send-btn {{(!inputText || loading || inputDisabled) ? 'disabled' : ''}}"
       bindtap="onSend"
-      disabled="{{!inputText || loading}}"
+      disabled="{{!inputText || loading || inputDisabled}}"
     >
       发送
     </button>
