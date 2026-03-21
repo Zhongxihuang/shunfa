@@ -1,1 +1,33 @@
-<view class="container"><text>preview Page</text></view>
+<view class="container">
+  <view class="header">
+    <text class="title">预览初稿</text>
+    <text class="subtitle">你可以在发布前修改内容</text>
+  </view>
+
+  <view class="draft-area">
+    <textarea
+      class="draft-input"
+      value="{{content}}"
+      bindinput="onContentChange"
+      placeholder="初稿内容..."
+      auto-height="true"
+    />
+    <view class="char-count">
+      <text class="{{content.length < 140 || content.length > 300 ? 'count-warning' : 'count-ok'}}">
+        {{content.length}} 字
+      </text>
+      <text class="count-hint">建议 140-300 字</text>
+    </view>
+  </view>
+
+  <view class="actions">
+    <button class="btn-secondary" bindtap="onRegenerate">返回修改</button>
+    <button 
+      class="btn-primary {{submitting ? 'loading' : ''}}"
+      bindtap="onConfirm"
+      disabled="{{submitting}}"
+    >
+      {{submitting ? '发布中...' : '确认发布'}}
+    </button>
+  </view>
+</view>
