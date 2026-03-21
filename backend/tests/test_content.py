@@ -48,8 +48,17 @@ def test_generate_content_starts_discussion(user, checkin, client, db):
     assert data["draft"] is None
 
 def test_generate_content_produces_draft(user, checkin, client, db):
-    """Test that AI can produce a draft with the special markers."""
+    """Test that AI can produce a draft with the special markers after MIN_DISCUSSION_ROUNDS."""
     token = create_jwt_token(user.id)
+
+    # Pre-seed one prior user message so MIN_DISCUSSION_ROUNDS (1) is satisfied
+    prior_history = json.dumps([
+        {"role": "user", "content": "我最近在工作上有个小进步"},
+        {"role": "assistant", "content": "能说说具体是什么突破吗？"}
+    ], ensure_ascii=False)
+    checkin.conversation_history = prior_history
+    checkin.status = CheckInStatus.discussing
+    db.commit()
 
     draft_content = "上周我终于解决了困扰团队三个月的bug。那一刻，我感受到了久违的成就感。"
     ai_response = f"好的！<<<DRAFT_START>>>{draft_content}<<<DRAFT_END>>>"

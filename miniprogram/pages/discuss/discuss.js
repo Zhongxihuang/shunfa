@@ -63,9 +63,10 @@ Page({
 
       if (data.status === 'draft_ready' && data.draft) {
         this.setData({ draft: data.draft });
+        wx.setStorageSync('current_draft', data.draft);
         setTimeout(() => {
           wx.navigateTo({
-            url: `/pages/preview/preview?checkin_id=${this.data.checkinId}&draft=${encodeURIComponent(data.draft)}`
+            url: `/pages/preview/preview?checkin_id=${this.data.checkinId}`
           });
         }, 1000);
       }

@@ -9,7 +9,7 @@ Page({
   },
 
   onLoad(options) {
-    const draft = decodeURIComponent(options.draft || '');
+    const draft = wx.getStorageSync('current_draft') || '';
     this.setData({
       checkinId: parseInt(options.checkin_id),
       content: draft,

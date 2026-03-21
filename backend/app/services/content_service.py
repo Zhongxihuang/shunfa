@@ -51,15 +51,25 @@ async def process_message(
     # Check if draft was generated
     draft = None
     if "<<<DRAFT_START>>>" in ai_response and "<<<DRAFT_END>>>" in ai_response:
-        start = ai_response.index("<<<DRAFT_START>>>") + len("<<<DRAFT_START>>>")
-        end = ai_response.index("<<<DRAFT_END>>>")
-        draft = ai_response[start:end].strip()
-        # Clean reply - remove draft markers from display
-        reply = ai_response[:ai_response.index("<<<DRAFT_START>>>")].strip()
-        if not reply:
-            reply = "我帮你整理了一份初稿，你看看怎么样～"
-        new_status = CheckInStatus.draft_ready
-        checkin.content = draft
+        if user_rounds < MIN_DISCUSSION_ROUNDS:
+            # Too early for a draft — strip markers and continue discussing
+            draft_start = ai_response.find("<<<DRAFT_START>>>")
+            clean_reply = ai_response[:draft_start].strip() if draft_start > 0 else ai_response
+            if not clean_reply:
+                clean_reply = "能再多说一些吗？你有什么具体的经历想分享？"
+            reply = clean_reply
+            new_status = CheckInStatus.discussing
+            draft = None
+        else:
+            start = ai_response.index("<<<DRAFT_START>>>") + len("<<<DRAFT_START>>>")
+            end = ai_response.index("<<<DRAFT_END>>>")
+            draft = ai_response[start:end].strip()
+            # Clean reply - remove draft markers from display
+            reply = ai_response[:ai_response.index("<<<DRAFT_START>>>")].strip()
+            if not reply:
+                reply = "我帮你整理了一份初稿，你看看怎么样～"
+            new_status = CheckInStatus.draft_ready
+            checkin.content = draft
     elif user_rounds >= MAX_DISCUSSION_ROUNDS:
         # Force draft generation after max rounds
         draft = await _force_generate_draft(checkin.topic, history + [{"role": "user", "content": user_message}])
@@ -101,8 +111,8 @@ async def _force_generate_draft(topic: str, conversation: list[dict]) -> str:
 
 async def confirm_content(checkin: CheckIn, content: str, db: Session) -> None:
     """User confirms (possibly edited) content."""
-    if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.discussing):
-        raise ValueError("当前状态不允许确认内容")
+    if checkin.status != CheckInStatus.draft_ready:
+        raise ValueError("请先完成内容讨论，生成初稿后再确认")
     checkin.content = content
     checkin.status = CheckInStatus.pending
     db.commit()
@@ -112,10 +122,10 @@ async def confirm_publish(checkin: CheckIn, db: Session, user: User) -> dict:
     User confirms publish. Updates checkin to completed.
     Returns points info (gamification handled in Phase 4).
     """
-    if checkin.status != CheckInStatus.pending:
-        raise ValueError("请先确认内容后再发布")
     if checkin.status == CheckInStatus.completed:
         raise ValueError("今日已完成发布，请勿重复提交")
+    if checkin.status != CheckInStatus.pending:
+        raise ValueError("请先确认内容后再发布")
 
     checkin.status = CheckInStatus.completed
     checkin.completed_at = get_now_cst()
