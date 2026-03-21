@@ -1,1 +1,53 @@
-/* styles */
+.container {
+  padding: 30rpx;
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.header { margin-bottom: 30rpx; }
+.title { font-size: 40rpx; font-weight: bold; color: #333; }
+
+.settings-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 10rpx 30rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.setting-row:last-child { border-bottom: none; }
+
+.setting-label { font-size: 32rpx; color: #333; }
+
+.time-display {
+  font-size: 32rpx;
+  color: #07c160;
+  font-weight: 500;
+}
+
+.save-btn {
+  width: 100%;
+  background: #07c160;
+  color: #fff;
+  border-radius: 50rpx;
+  font-size: 32rpx;
+  margin-bottom: 30rpx;
+}
+
+.save-btn.saving { background: #ccc; }
+
+.note {
+  padding: 20rpx 30rpx;
+  background: #fff;
+  border-radius: 12rpx;
+}
+
+.note text { font-size: 26rpx; color: #666; line-height: 1.6; }

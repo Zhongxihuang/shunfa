@@ -1,1 +1,39 @@
-<view class="container"><text>settings Page</text></view>
+<view class="container">
+  <view class="header">
+    <text class="title">提醒设置</text>
+  </view>
+
+  <view class="settings-card">
+    <view class="setting-row">
+      <text class="setting-label">开启每日提醒</text>
+      <switch
+        checked="{{reminderEnabled}}"
+        bindchange="onToggleReminder"
+        color="#07c160"
+      />
+    </view>
+
+    <view wx:if="{{reminderEnabled}}" class="setting-row">
+      <text class="setting-label">提醒时间</text>
+      <picker
+        mode="time"
+        value="{{reminderTime}}"
+        bindchange="onTimeChange"
+      >
+        <text class="time-display">{{reminderTime}}</text>
+      </picker>
+    </view>
+  </view>
+
+  <button
+    class="save-btn {{saving ? 'saving' : ''}}"
+    bindtap="onSave"
+    disabled="{{saving}}"
+  >
+    {{saving ? '保存中...' : '保存设置'}}
+  </button>
+
+  <view class="note">
+    <text>💡 提醒在 App 内生效，打开顺发时若在提醒时间后2小时内且未打卡，将提示你</text>
+  </view>
+</view>

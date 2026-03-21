@@ -10,6 +10,7 @@ from ..models import User, CheckIn
 from ..schemas import LoginRequest, LoginResponse, UserStatusResponse
 from ..config import settings
 from ..utils.time_utils import get_today_cst
+from ..services.reminder_service import check_reminder_needed
 
 router = APIRouter()
 
@@ -86,7 +87,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         reminder_time=user.reminder_time,
         reminder_enabled=user.reminder_enabled,
         last_checkin_date=user.last_checkin_date,
-        today_completed=get_user_today_status(user, today, db)
+        today_completed=get_user_today_status(user, today, db),
+        reminder_needed=check_reminder_needed(user, db)
     )
 
     return LoginResponse(token=token, user=user_status)
@@ -108,5 +110,6 @@ async def get_user_status(
         reminder_time=current_user.reminder_time,
         reminder_enabled=current_user.reminder_enabled,
         last_checkin_date=current_user.last_checkin_date,
-        today_completed=get_user_today_status(current_user, today, db)
+        today_completed=get_user_today_status(current_user, today, db),
+        reminder_needed=check_reminder_needed(current_user, db)
     )

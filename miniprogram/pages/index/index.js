@@ -23,6 +23,13 @@ Page({
           todayCompleted: data.today_completed,
           loading: false
         });
+        if (data.reminder_needed) {
+          wx.showToast({
+            title: '该写今天的内容了！',
+            icon: 'none',
+            duration: 3000
+          });
+        }
       })
       .catch(err => {
         this.setData({ loading: false });

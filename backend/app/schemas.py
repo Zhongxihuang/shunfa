@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import date, datetime
 from typing import Optional, List
 from .models import CheckInStatus
@@ -16,6 +16,7 @@ class UserStatusResponse(BaseModel):
     reminder_enabled: bool
     last_checkin_date: Optional[date]
     today_completed: bool
+    reminder_needed: bool = False
 
     class Config:
         from_attributes = True
@@ -55,7 +56,8 @@ class MessageResponse(BaseModel):
 
 
 class SelectTopicRequest(BaseModel):
-    topic: str
+    topic: str = Field(..., min_length=1, max_length=100)
+    batch_id: Optional[str] = None  # If from suggestion, provide batch_id to mark was_used accurately
 
 
 class SelectTopicResponse(BaseModel):
