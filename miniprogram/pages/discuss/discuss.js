@@ -67,7 +67,7 @@ Page({
         wx.setStorageSync('current_draft', data.draft);
         setTimeout(() => {
           wx.navigateTo({
-            url: `/pages/preview/preview?checkin_id=${this.data.checkinId}`
+            url: `/pages/preview/preview?checkin_id=${this.data.checkinId}&topic=${encodeURIComponent(this.data.topic)}`
           });
         }, 1000);
       }

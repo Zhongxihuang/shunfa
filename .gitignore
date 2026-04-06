@@ -18,6 +18,9 @@ htmlcov/
 *.db-shm
 *.db-wal
 
+# Env files
+.env.*
+
 # Node / WeChat miniprogram
 node_modules/
 .DS_Store

@@ -5,12 +5,12 @@ from ..models import User, CheckIn, Achievement
 
 # 成就定义
 ACHIEVEMENTS = {
-    "first_post":     {"name": "破冰",     "desc": "完成第一次发布"},
-    "streak_3":       {"name": "三日坚持", "desc": "连续打卡3天"},
-    "streak_7":       {"name": "一周英雄", "desc": "连续打卡7天"},
-    "streak_30":      {"name": "月度传奇", "desc": "连续打卡30天"},
-    "quality_writer": {"name": "言之有物", "desc": "经过3轮讨论后发布"},
-    "century_points": {"name": "百分达人", "desc": "累计积分超过100分"},
+    "first_post":     {"name": "破冰",     "desc": "完成第一次发布",     "icon": "🌱"},
+    "streak_3":       {"name": "三日坚持", "desc": "连续打卡3天",       "icon": "🔥"},
+    "streak_7":       {"name": "一周英雄", "desc": "连续打卡7天",       "icon": "⚡"},
+    "streak_30":      {"name": "月度传奇", "desc": "连续打卡30天",      "icon": "👑"},
+    "quality_writer": {"name": "言之有物", "desc": "经过3轮讨论后发布",  "icon": "💎"},
+    "century_points": {"name": "百分达人", "desc": "累计积分超过100分",  "icon": "🌟"},
 }
 
 
@@ -82,6 +82,7 @@ def get_user_achievements(user: User) -> list[dict]:
             "type": a.achievement_type,
             "name": meta.get("name", a.achievement_type),
             "desc": meta.get("desc", ""),
+            "icon": meta.get("icon", "🏆"),
             "unlocked_at": a.unlocked_at.isoformat() if a.unlocked_at else None,
         })
     return result

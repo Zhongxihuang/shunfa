@@ -1,58 +1,89 @@
 .card {
   display: flex;
-  align-items: flex-start;
-  background: #ffffff;
-  border-radius: 20rpx;
-  padding: 32rpx;
+  align-items: center;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  padding: 28rpx 28rpx 28rpx 0;
   margin-bottom: 20rpx;
   border: 2rpx solid transparent;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-card);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card--hover {
+  opacity: 0.85;
+  transform: scale(0.98);
 }
 
 .card--selected {
-  border-color: #07c160;
-  background: #f0fff6;
-  box-shadow: 0 4rpx 20rpx rgba(7, 193, 96, 0.15);
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, #f0fff6 0%, var(--color-bg-card) 70%);
+  box-shadow: 0 4rpx 24rpx var(--color-shadow-primary);
 }
 
 .card__index {
   flex-shrink: 0;
-  width: 44rpx;
-  height: 44rpx;
-  border-radius: 50%;
-  background: #f5f5f5;
+  width: 72rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 24rpx;
-  margin-top: 4rpx;
 }
 
-.card--selected .card__index {
-  background: #07c160;
+.card__index-inner {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card--selected .card__index-inner {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 4rpx 12rpx var(--color-shadow-primary);
 }
 
 .card__num {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #999;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--color-text-hint);
   line-height: 1;
+}
+
+.card--selected .card__num {
+  color: #fff;
 }
 
 .card__check {
-  font-size: 24rpx;
-  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #fff;
   line-height: 1;
 }
 
-.card__topic {
+.card__content {
   flex: 1;
+  padding-right: 16rpx;
+}
+
+.card__topic {
   font-size: 32rpx;
-  color: #1a1a1a;
-  line-height: 1.65;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  font-weight: 450;
 }
 
 .card--selected .card__topic {
-  color: #07c160;
-  font-weight: 500;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.card__selected-icon {
+  font-size: 28rpx;
+  color: var(--color-primary);
+  font-weight: 700;
+  padding-right: 8rpx;
 }

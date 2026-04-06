@@ -4,9 +4,9 @@
     <text class="topic-text">{{topic}}</text>
   </view>
 
-  <scroll-view 
-    class="message-list" 
-    scroll-y="true" 
+  <scroll-view
+    class="message-list"
+    scroll-y="true"
     scroll-top="{{scrollTop}}"
     scroll-with-animation="true"
   >
@@ -16,10 +16,14 @@
         <text class="message-time">{{item.time}}</text>
       </view>
     </view>
-    
+
     <view wx:if="{{loading}}" class="message-item assistant">
-      <view class="bubble loading-bubble">
-        <text>...</text>
+      <view class="bubble typing-bubble">
+        <view class="typing-dots">
+          <view class="typing-dot"></view>
+          <view class="typing-dot"></view>
+          <view class="typing-dot"></view>
+        </view>
       </view>
     </view>
   </scroll-view>
@@ -33,13 +37,14 @@
       auto-height="true"
       maxlength="500"
       disabled="{{inputDisabled}}"
+      cursor-spacing="16"
     />
     <button
       class="send-btn {{(!inputText || loading || inputDisabled) ? 'disabled' : ''}}"
       bindtap="onSend"
       disabled="{{!inputText || loading || inputDisabled}}"
     >
-      发送
+      {{inputText ? '发送' : ''}}
     </button>
   </view>
 </view>

@@ -1,10 +1,16 @@
 <view
   class="card {{selected ? 'card--selected' : ''}}"
   bindtap="onTap"
+  hover-class="card--hover"
 >
   <view class="card__index">
-    <text wx:if="{{selected}}" class="card__check">✓</text>
-    <text wx:else class="card__num">{{index}}</text>
+    <view class="card__index-inner">
+      <text wx:if="{{selected}}" class="card__check">✓</text>
+      <text wx:else class="card__num">{{index}}</text>
+    </view>
   </view>
-  <text class="card__topic">{{topic}}</text>
+  <view class="card__content">
+    <text class="card__topic">{{topic}}</text>
+  </view>
+  <view wx:if="{{selected}}" class="card__selected-icon">→</view>
 </view>

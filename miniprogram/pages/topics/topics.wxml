@@ -1,7 +1,8 @@
 <view class="container">
-  <view class="header">
-    <text class="title">今日选题</text>
-    <text class="subtitle">选择一个话题，开始今日的表达</text>
+  <view class="hero">
+    <text class="hero__eyebrow">今日写作</text>
+    <text class="title">选一个话题</text>
+    <text class="subtitle">说出你的故事，世界想听</text>
   </view>
 
   <view wx:if="{{loading}}" class="loading">
@@ -22,11 +23,11 @@
     </view>
 
     <button
-      class="refresh-btn {{(refreshCount >= maxRefreshes || loading) ? 'refresh-btn--disabled' : ''}}"
+      class="refresh-btn {{refreshCount >= maxRefreshes ? 'refresh-btn--disabled' : ''}}"
       bindtap="onRefresh"
       disabled="{{refreshCount >= maxRefreshes || loading}}"
     >
-      ↻ 换一批（还剩 {{maxRefreshes - refreshCount}} 次）
+      ↻ 换一批 <text class="refresh-count">（还剩 {{maxRefreshes - refreshCount}} 次）</text>
     </button>
 
     <view class="divider"><text class="divider-text">或者</text></view>

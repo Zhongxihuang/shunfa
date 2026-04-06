@@ -108,11 +108,13 @@ def test_confirm_content(user, checkin, client, db):
     checkin.content = "初稿内容"
     db.commit()
 
-    response = client.post(
-        "/api/confirm_content",
-        json={"checkin_id": checkin.id, "content": "用户修改后的内容"},
-        headers={"Authorization": f"Bearer {token}"}
-    )
+    with patch("app.services.content_service._quality_check", new_callable=AsyncMock) as mock_qc:
+        mock_qc.return_value = {"pass": True, "issues": []}
+        response = client.post(
+            "/api/confirm_content",
+            json={"checkin_id": checkin.id, "content": "用户修改后的内容"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
 
     assert response.status_code == 200
     db.expire_all()

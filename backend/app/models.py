@@ -44,6 +44,7 @@ class CheckIn(Base):
     conversation_history = Column(Text, nullable=True)  # JSON string
     status = Column(SAEnum(CheckInStatus), default=CheckInStatus.topic_selected, nullable=False)
     refresh_count = Column(Integer, default=0, nullable=False)  # topic refresh count for the day
+    content_approved = Column(Boolean, default=False, nullable=False)  # 用户是否对初稿满意（质量反馈）
     points_earned = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)

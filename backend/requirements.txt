@@ -7,6 +7,6 @@ python-jose[cryptography]
 httpx
 pytest
 pytest-asyncio
-httpx
 pytz
 alembic>=1.13.0
+feedparser>=6.0

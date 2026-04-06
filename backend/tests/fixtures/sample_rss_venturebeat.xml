@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>VentureBeat AI</title>
+    <link>https://venturebeat.com/category/ai/</link>
+    <description>AI news from VentureBeat</description>
+    <item>
+      <title>Anthropic Claude 4 Achieves Human-Level Coding Performance</title>
+      <link>https://venturebeat.com/ai/anthropic-claude-4</link>
+      <description>Anthropic's latest model demonstrates unprecedented coding capabilities in independent benchmarks.</description>
+      <pubDate>Wed, 02 Apr 2026 11:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Google DeepMind Partners with Healthcare Giants on AI Diagnostics</title>
+      <link>https://venturebeat.com/ai/google-deepmind-healthcare</link>
+      <description>A new partnership aims to bring AI diagnostics to 50 million patients in the next two years.</description>
+      <pubDate>Wed, 02 Apr 2026 10:30:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

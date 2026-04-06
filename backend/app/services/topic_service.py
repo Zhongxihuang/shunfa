@@ -15,18 +15,25 @@ async def generate_topics(user_id: int, db: Session) -> dict:
     """
     Generate 3 topic suggestions for the user.
     Returns {"topics": [...], "refresh_count": int, "batch_id": str}
+
+    The first load (refresh_count == 0, no prior CheckIn) is free and does not
+    consume a refresh slot. Only user-initiated refreshes (refresh_count > 0)
+    count against the daily quota.
     """
     today = get_today_cst()
 
-    # Get today's refresh count from CheckIn
+    # Use with_for_update to lock the row and prevent race conditions
     today_checkin = db.query(CheckIn).filter(
         CheckIn.user_id == user_id,
         CheckIn.date == today
-    ).first()
+    ).with_for_update().first()
 
     refresh_count = today_checkin.refresh_count if today_checkin else 0
 
-    if refresh_count >= MAX_DAILY_REFRESHES:
+    # First load (refresh_count == 0) is free; only check limit on refreshes
+    is_first_load = (today_checkin is None or refresh_count == 0)
+
+    if not is_first_load and refresh_count >= MAX_DAILY_REFRESHES:
         raise ValueError(f"已达到今日最大刷新次数({MAX_DAILY_REFRESHES}次)")
 
     # Get topics shown in the last 24 hours for deduplication
@@ -51,24 +58,27 @@ async def generate_topics(user_id: int, db: Session) -> dict:
         )
         db.add(history)
 
-    # Increment refresh count (create or update CheckIn)
-    if today_checkin:
-        today_checkin.refresh_count = refresh_count + 1
+    # Update CheckIn: only increment refresh_count for user-initiated refreshes
+    if is_first_load:
+        if not today_checkin:
+            today_checkin = CheckIn(
+                user_id=user_id,
+                date=today,
+                topic="",  # Will be set when user selects a topic
+                status=CheckInStatus.topic_selected,
+                refresh_count=0
+            )
+            db.add(today_checkin)
+        # refresh_count stays 0 on first load
     else:
-        today_checkin = CheckIn(
-            user_id=user_id,
-            date=today,
-            topic="",  # Will be set when user selects a topic
-            status=CheckInStatus.topic_selected,
-            refresh_count=1
-        )
-        db.add(today_checkin)
+        today_checkin.refresh_count = refresh_count + 1
 
     db.commit()
 
+    new_refresh_count = today_checkin.refresh_count
     return {
         "topics": [{"topic": t, "batch_id": batch_id} for t in topics],
-        "refresh_count": refresh_count + 1,
+        "refresh_count": new_refresh_count,
         "batch_id": batch_id
     }
 
@@ -78,15 +88,15 @@ async def _generate_topics_via_ai(exclude_topics: list[str]) -> list[str]:
     if exclude_topics:
         exclude_text = f"\n\n请避免以下已出现过的选题：\n" + "\n".join(f"- {t}" for t in exclude_topics[:20])
 
-    prompt = f"""你是一个帮助用户找到有价值的写作话题的助手。请生成3个适合在微信公众号或朋友圈分享的写作选题。
+    prompt = f"""生成 3 个能让目标读者觉得"这只有懂行的人才知道"的写作选题。
 
 要求：
-1. 选题要具体、有深度，不要过于泛泛
-2. 适合普通人分享自己的观点和经历
-3. 选题长度在15-30字之间
-4. 每个选题用一行表示，不要加编号或符号{exclude_text}
+1. 每个选题必须是一个"内行洞察"或"圈内人才懂的角度"
+2. 选题要具体、有情绪点，让人看完想说"确实是这样"
+3. 长度 15-25 字，每行一个，不要编号
+4. 适合在小红书/朋友圈分享，普通话题不要{exclude_text}
 
-只输出3个选题，每个占一行，不要其他内容。"""
+直接输出 3 个选题，每行一个，不要其他内容。"""
 
     messages = [{"role": "user", "content": prompt}]
     response = await chat_completion(messages, temperature=0.9, max_tokens=200)

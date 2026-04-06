@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from app.models import User, CheckIn, CheckInStatus, TopicHistory
 from app.services.topic_service import generate_topics, MAX_DAILY_REFRESHES
-from datetime import date
+from app.utils.time_utils import get_today_cst
 
 @pytest.fixture
 def user(db):
@@ -26,7 +26,7 @@ async def test_generate_topics_returns_three(user, db, mock_ai_topics):
     _, topics = mock_ai_topics
     result = await generate_topics(user.id, db)
     assert len(result["topics"]) == 3
-    assert result["refresh_count"] == 1
+    assert result["refresh_count"] == 0  # First load is free, count stays 0
 
 @pytest.mark.asyncio
 async def test_topics_saved_to_history(user, db, mock_ai_topics):
@@ -42,7 +42,7 @@ async def test_topics_saved_to_history(user, db, mock_ai_topics):
 async def test_refresh_limit_enforced(user, db, mock_ai_topics):
     """Test that max daily refreshes are enforced."""
     # Create checkin with max refreshes already reached
-    today = date.today()
+    today = get_today_cst()
     checkin = CheckIn(
         user_id=user.id,
         date=today,
@@ -108,5 +108,5 @@ async def test_daily_topics_endpoint(user, db, client, mock_ai_topics):
     assert response.status_code == 200
     data = response.json()
     assert len(data["topics"]) == 3
-    assert data["refresh_count"] == 1
+    assert data["refresh_count"] == 0  # First load is free, count stays 0
     assert data["max_refreshes"] == 3

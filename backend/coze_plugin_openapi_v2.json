@@ -1,0 +1,492 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "顺发 Coze Plugin API",
+    "description": "顺发AI洞察者后端，供Coze工作流调用",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/coze/get_hot_topics": {
+      "get": {
+        "summary": "Get Hot Topics",
+        "description": "Return today's top-scored pending hot topics for the daily push.",
+        "operationId": "get_hot_topics",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3
+            },
+            "description": "Number of topics to return"
+          },
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "飞书用户ID，Coze自动注入"
+          },
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Plugin鉴权Token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "topics": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer"
+                          },
+                          "hot_topic": {
+                            "type": "string"
+                          },
+                          "hot_source": {
+                            "type": "string"
+                          },
+                          "ai_angle": {
+                            "type": "string"
+                          },
+                          "ai_counter_angle": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "integer"
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "record_id": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "date": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coze/quick_generate": {
+      "post": {
+        "summary": "Coze Quick Generate",
+        "description": "Quick mode: generate content from hot topic + angle in ~30s. Stateless.",
+        "operationId": "coze_quick_generate",
+        "parameters": [
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "飞书用户ID，Coze自动注入"
+          },
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Plugin鉴权Token"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "hot_topic",
+                  "angle"
+                ],
+                "properties": {
+                  "hot_topic": {
+                    "type": "string",
+                    "description": "热点话题标题"
+                  },
+                  "angle": {
+                    "type": "string",
+                    "description": "用户选择的写作角度"
+                  },
+                  "platform": {
+                    "type": "string",
+                    "default": "xiaohongshu",
+                    "enum": [
+                      "xiaohongshu",
+                      "twitter",
+                      "linkedin"
+                    ],
+                    "description": "发布平台"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string"
+                    },
+                    "char_count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coze/start_deep_mode": {
+      "post": {
+        "summary": "Start Deep Mode",
+        "description": "Create a deep mode CheckIn session. Returns checkin_id for subsequent messages.",
+        "operationId": "start_deep_mode",
+        "parameters": [
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "飞书用户ID，Coze自动注入"
+          },
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Plugin鉴权Token"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "hot_topic",
+                  "angle"
+                ],
+                "properties": {
+                  "hot_topic": {
+                    "type": "string",
+                    "description": "热点话题标题"
+                  },
+                  "angle": {
+                    "type": "string",
+                    "description": "用户选择的写作角度"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkin_id": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "opening_message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coze/deep_mode_message": {
+      "post": {
+        "summary": "Deep Mode Message",
+        "description": "Send a message in the deep mode discussion flow.",
+        "operationId": "deep_mode_message",
+        "parameters": [
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "飞书用户ID，Coze自动注入"
+          },
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Plugin鉴权Token"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "checkin_id",
+                  "message"
+                ],
+                "properties": {
+                  "checkin_id": {
+                    "type": "integer",
+                    "description": "由start_deep_mode返回的会话ID"
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "用户发送的消息"
+                  },
+                  "angle": {
+                    "type": "string",
+                    "default": "",
+                    "description": "写作角度（可选）"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reply": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "draft": {
+                      "type": "string"
+                    },
+                    "has_draft": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coze/confirm_and_publish": {
+      "post": {
+        "summary": "Confirm And Publish",
+        "description": "Confirm content and publish. Updates streak and points.",
+        "operationId": "confirm_and_publish",
+        "parameters": [
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "飞书用户ID，Coze自动注入"
+          },
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Plugin鉴权Token"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "checkin_id",
+                  "content"
+                ],
+                "properties": {
+                  "checkin_id": {
+                    "type": "integer",
+                    "description": "会话ID"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "最终确认发布的内容"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "streak": {
+                      "type": "integer"
+                    },
+                    "points_earned": {
+                      "type": "integer"
+                    },
+                    "total_points": {
+                      "type": "integer"
+                    },
+                    "level": {
+                      "type": "integer"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "newly_unlocked": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/coze/user_stats": {
+      "get": {
+        "summary": "Get User Stats",
+        "description": "Return user streak, points, level, and today's completion status.",
+        "operationId": "get_user_stats",
+        "parameters": [
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "飞书用户ID，Coze自动注入"
+          },
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Plugin鉴权Token"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "streak": {
+                      "type": "integer"
+                    },
+                    "longest_streak": {
+                      "type": "integer"
+                    },
+                    "points": {
+                      "type": "integer"
+                    },
+                    "level": {
+                      "type": "integer"
+                    },
+                    "diamonds": {
+                      "type": "integer"
+                    },
+                    "today_completed": {
+                      "type": "boolean"
+                    },
+                    "achievements": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://earl-stomatal-gladis.ngrok-free.dev"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ from alembic import command
 
 from app.config import settings
 from app.routers import topics, content, user, reminder
+from app.routers import coze_plugin
 
 
 @asynccontextmanager
@@ -38,6 +39,7 @@ app.include_router(topics.router, prefix="/api")
 app.include_router(content.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
 app.include_router(reminder.router, prefix="/api")
+app.include_router(coze_plugin.router, prefix="/api")
 
 
 @app.get("/health")

@@ -1,46 +1,75 @@
 <view class="container">
-  <view wx:if="{{loading}}" class="loading">
+  <view wx:if="{{loading}}" class="loading-state">
+    <view class="loading-spinner"></view>
     <text>加载中...</text>
   </view>
 
   <view wx:elif="{{userInfo}}" class="main">
+    <!-- Profile Hero -->
+    <view class="hero">
+      <view class="hero__avatar">
+        <text class="hero__avatar-text">写</text>
+      </view>
+      <text class="hero__greeting">继续加油 👏</text>
+      <text class="hero__subtitle">记录每一天，连更{{userInfo.streak}}天</text>
+    </view>
+
+    <!-- Stats Grid -->
     <view class="stats-grid">
-      <view class="stat-card">
+      <view class="stat-card stat-card--streak">
         <text class="stat-value">{{userInfo.streak}}</text>
-        <text class="stat-label">当前连更</text>
+        <text class="stat-label">当前连更（天）</text>
       </view>
-      <view class="stat-card">
+      <view class="stat-card stat-card--longest">
         <text class="stat-value">{{userInfo.longest_streak}}</text>
-        <text class="stat-label">最长连更</text>
+        <text class="stat-label">最长连更（天）</text>
       </view>
-      <view class="stat-card">
+      <view class="stat-card stat-card--points">
         <text class="stat-value">{{userInfo.points}}</text>
         <text class="stat-label">总积分</text>
       </view>
-      <view class="stat-card">
+      <view class="stat-card stat-card--level">
         <text class="stat-value">Lv.{{userInfo.level}}</text>
         <text class="stat-label">当前等级</text>
       </view>
     </view>
 
-    <view class="diamond-row">
-      <text class="diamond-label">💎 钻石</text>
-      <text class="diamond-value">{{userInfo.diamonds}}</text>
+    <!-- Diamond Card -->
+    <view class="diamond-card">
+      <view class="diamond-card__left">
+        <text class="diamond-card__icon">💎</text>
+        <text class="diamond-card__label">钻石</text>
+      </view>
+      <text class="diamond-card__value">{{userInfo.diamonds}}</text>
     </view>
 
+    <!-- Achievements -->
     <view wx:if="{{achievements.length > 0}}" class="achievements-section">
-      <text class="section-title">成就</text>
+      <text class="section-title">🏆 已解锁成就</text>
       <view class="achievements-grid">
         <view wx:for="{{achievements}}" wx:key="type" class="achievement-badge">
-          <text class="achievement-icon">🏆</text>
-          <text class="achievement-name">{{item.name}}</text>
+          <text class="achievement-icon">{{item.icon || '🏆'}}</text>
+          <view class="achievement-info">
+            <text class="achievement-name">{{item.name}}</text>
+            <text class="achievement-desc">{{item.desc}}</text>
+          </view>
         </view>
       </view>
     </view>
 
+    <view wx:if="{{achievements.length === 0}}" class="achievements-section">
+      <view class="achievements-empty">
+        <text>完成首次发布，解锁第一个成就 ✨</text>
+      </view>
+    </view>
+
+    <!-- Menu -->
     <view class="menu-list">
       <view class="menu-item" bindtap="onGoSettings">
-        <text class="menu-text">⏰ 提醒设置</text>
+        <view class="menu-left">
+          <text class="menu-icon">⏰</text>
+          <text class="menu-text">提醒设置</text>
+        </view>
         <text class="menu-arrow">›</text>
       </view>
     </view>

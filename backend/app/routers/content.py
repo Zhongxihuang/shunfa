@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_db, get_current_user
@@ -6,11 +6,27 @@ from ..models import User, CheckIn, CheckInStatus
 from ..schemas import (
     MessageRequest, MessageResponse,
     ConfirmContentRequest, ConfirmPublishRequest, PublishResponse,
-    SelectTopicRequest, SelectTopicResponse
+    SelectTopicRequest, SelectTopicResponse,
+    QuickGenerateRequest, QuickGenerateResponse,
 )
-from ..services.content_service import process_message, confirm_content, confirm_publish
+from ..services.content_service import process_message, confirm_content, confirm_publish, quick_generate
 
 router = APIRouter()
+
+
+@router.post("/quick_generate", response_model=QuickGenerateResponse)
+async def quick_generate_endpoint(
+    request: QuickGenerateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Quick mode: generate content in ~30s from a hot topic + angle. Stateless."""
+    result = await quick_generate(
+        hot_topic=request.hot_topic,
+        angle=request.angle,
+        platform=request.platform.value,
+    )
+    return QuickGenerateResponse(**result)
+
 
 def get_checkin_or_404(checkin_id: int, user_id: int, db: Session) -> CheckIn:
     checkin = db.query(CheckIn).filter(
@@ -50,14 +66,36 @@ async def confirm_content_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """User confirms (possibly edited) draft content."""
+    """User confirms (possibly edited) draft content. Returns quality check result."""
     checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
 
     try:
-        await confirm_content(checkin, request.content, db)
-        return {"status": "pending", "message": "内容已确认，可以发布了"}
+        qc_result = await confirm_content(checkin, request.content, db)
+        return {
+            "status": "pending",
+            "content_approved": qc_result["quality_pass"],
+            "quality_issues": qc_result["quality_issues"],
+            "topic": qc_result["topic"],
+            "message": "内容已确认，可以发布了"
+        }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/checkin/{checkin_id}")
+async def get_checkin(
+    checkin_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get checkin data including topic."""
+    checkin = get_checkin_or_404(checkin_id, current_user.id, db)
+    return {
+        "id": checkin.id,
+        "topic": checkin.topic,
+        "content": checkin.content,
+        "status": checkin.status.value,
+        "content_approved": checkin.content_approved,
+    }
 
 @router.post("/confirm_publish", response_model=PublishResponse)
 async def confirm_publish_endpoint(

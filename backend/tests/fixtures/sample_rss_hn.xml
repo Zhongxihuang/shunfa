@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Hacker News</title>
+    <link>https://news.ycombinator.com/</link>
+    <description>Links for the intellectually curious</description>
+    <item>
+      <title>DeepSeek V4 Released: 50% Cost Reduction in Reasoning</title>
+      <link>https://news.ycombinator.com/item?id=12345</link>
+      <description>DeepSeek announced V4 today with significant improvements in reasoning efficiency and cost reduction compared to previous models.</description>
+      <pubDate>Wed, 02 Apr 2026 10:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>OpenAI GPT-5 API Pricing Increases by 20%</title>
+      <link>https://news.ycombinator.com/item?id=12346</link>
+      <description>OpenAI has updated its API pricing for GPT-5, raising rates by 20% citing increased infrastructure costs.</description>
+      <pubDate>Wed, 02 Apr 2026 09:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>AI Startup Raises $500M Series B</title>
+      <link>https://news.ycombinator.com/item?id=12347</link>
+      <description>An AI startup focused on enterprise automation has raised $500M in a Series B funding round.</description>
+      <pubDate>Wed, 02 Apr 2026 08:00:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

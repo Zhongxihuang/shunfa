@@ -1,34 +1,46 @@
 <view class="container">
-  <view wx:if="{{loading}}" class="loading">
+  <view wx:if="{{loading}}" class="loading-state">
+    <view class="loading-spinner"></view>
     <text>加载中...</text>
   </view>
 
   <view wx:elif="{{userInfo}}" class="main">
-    <view class="header">
+    <!-- Hero Section -->
+    <view class="hero">
+      <text class="hero-greeting">{{userInfo.streak > 0 ? '继续加油 👏' : '欢迎开始 👋'}}</text>
       <text class="app-title">顺发</text>
-      <text class="date">{{userInfo.last_checkin_date || '开始你的第一次打卡'}}</text>
+      <text class="hero-subtitle">{{userInfo.last_checkin_date || '记录你的每一天'}}</text>
     </view>
 
+    <!-- Stats Row -->
     <view class="stats-row">
       <streak-badge streak="{{userInfo.streak}}" longest-streak="{{userInfo.longest_streak}}" />
       <diamond-display diamonds="{{userInfo.diamonds}}" />
     </view>
 
+    <!-- Level Card -->
     <view class="level-card">
       <level-progress level="{{userInfo.level}}" points="{{userInfo.points}}" />
     </view>
 
+    <!-- Today CTA -->
     <view class="today-status">
       <view wx:if="{{todayCompleted}}" class="completed-badge">
-        <text>✅ 今日已打卡</text>
+        <text class="completed-badge__icon">🎉</text>
+        <text class="completed-badge__text">今日已打卡</text>
       </view>
       <button
         wx:else
         class="start-btn"
         bindtap="onStartWriting"
       >
-        开始今日写作
+        开始今日写作 →
       </button>
+    </view>
+
+    <!-- Hint -->
+    <view wx:if="{{!todayCompleted}}" class="hint-card">
+      <text class="hint-text">每天写一点，积累自己的声音 ✨</text>
     </view>
   </view>
 </view>

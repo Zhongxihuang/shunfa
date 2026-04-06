@@ -1,65 +1,107 @@
 .container {
-  padding: 40rpx 30rpx;
+  padding: 0 0 60rpx;
   min-height: 100vh;
-  background: #f5f5f5;
+  background: var(--color-bg);
 }
 
-.loading {
-  text-align: center;
-  padding: 100rpx;
-  color: #999;
+/* Hero Header */
+.hero {
+  padding: 60rpx 40rpx 48rpx;
+  background: linear-gradient(160deg, #e8fff0 0%, transparent 100%);
+  border-bottom-left-radius: 40rpx;
+  border-bottom-right-radius: 40rpx;
+  margin-bottom: 32rpx;
+  position: relative;
 }
 
-.header {
-  margin-bottom: 40rpx;
+.hero-greeting {
+  font-size: 28rpx;
+  color: var(--color-primary);
+  font-weight: 500;
+  margin-bottom: 8rpx;
 }
 
 .app-title {
-  display: block;
-  font-size: 52rpx;
-  font-weight: bold;
-  color: #333;
+  font-size: 64rpx;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1;
+  margin-bottom: 12rpx;
 }
 
-.date {
-  display: block;
-  font-size: 26rpx;
-  color: #999;
-  margin-top: 8rpx;
+.hero-subtitle {
+  font-size: 28rpx;
+  color: var(--color-text-secondary);
 }
 
+/* Stats Row */
 .stats-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30rpx;
+  align-items: stretch;
+  gap: 20rpx;
+  margin: 0 32rpx 30rpx;
 }
 
+/* Level Card */
 .level-card {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 30rpx;
-  margin-bottom: 40rpx;
-  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+  margin: 0 32rpx 40rpx;
+  padding: 32rpx;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
+/* Today Status */
 .today-status {
-  text-align: center;
+  margin: 0 32rpx;
 }
 
 .completed-badge {
-  padding: 30rpx;
-  background: #f0fff4;
-  border-radius: 16rpx;
-  font-size: 32rpx;
-  color: #07c160;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 36rpx;
+  background: linear-gradient(135deg, #e8fff0, #d0f5de);
+  border-radius: var(--radius-lg);
+  border: 2rpx solid rgba(7, 193, 96, 0.2);
+}
+
+.completed-badge__icon {
+  font-size: 40rpx;
+}
+
+.completed-badge__text {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: var(--color-primary);
 }
 
 .start-btn {
   width: 100%;
-  background: #07c160;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
   color: #fff;
-  border-radius: 50rpx;
+  border-radius: var(--radius-pill);
   font-size: 36rpx;
-  padding: 30rpx;
+  font-weight: 700;
+  padding: 36rpx;
+  box-shadow: var(--shadow-primary);
+  letter-spacing: 2rpx;
+}
+.start-btn::after { border: none; }
+.start-btn:active { transform: scale(0.97); opacity: 0.9; }
+
+/* Hint */
+.hint-card {
+  margin: 32rpx;
+  padding: 24rpx 28rpx;
+  background: rgba(7, 193, 96, 0.06);
+  border-radius: var(--radius-md);
+  border-left: 4rpx solid var(--color-primary);
+}
+.hint-text {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
 }

@@ -65,10 +65,19 @@ async def select_topic(
 
     # Mark topic as used in history
     from ..models import TopicHistory
-    topic_history = db.query(TopicHistory).filter(
-        TopicHistory.user_id == current_user.id,
-        TopicHistory.topic == request.topic
-    ).order_by(TopicHistory.created_at.desc()).first()
+    if request.batch_id:
+        # Suggested topic: use batch_id for precise lookup
+        topic_history = db.query(TopicHistory).filter(
+            TopicHistory.user_id == current_user.id,
+            TopicHistory.topic == request.topic,
+            TopicHistory.batch_id == request.batch_id
+        ).first()
+    else:
+        # Custom topic: find most recent matching entry
+        topic_history = db.query(TopicHistory).filter(
+            TopicHistory.user_id == current_user.id,
+            TopicHistory.topic == request.topic
+        ).order_by(TopicHistory.created_at.desc()).first()
     if topic_history:
         topic_history.was_used = True
 

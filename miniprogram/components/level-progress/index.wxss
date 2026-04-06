@@ -1,6 +1,83 @@
-.level-progress { padding: 10rpx 0; }
-.level-info { display: flex; justify-content: space-between; margin-bottom: 10rpx; }
-.level-label { font-size: 28rpx; font-weight: bold; color: #333; }
-.points-text { font-size: 24rpx; color: #666; }
-.progress-bar { height: 12rpx; background: #eee; border-radius: 6rpx; overflow: hidden; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, #07c160, #0dab4f); border-radius: 6rpx; transition: width 0.3s; }
+.level-progress { padding: 4rpx 0; }
+
+.level-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.level-left {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  box-shadow: 0 4rpx 16rpx var(--color-shadow-primary);
+}
+
+.level-badge__text {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #fff;
+}
+
+.level-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.level-name {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.level-label {
+  font-size: 22rpx;
+  color: var(--color-text-hint);
+  font-weight: 500;
+}
+
+.points-text {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  text-align: right;
+}
+
+.progress-bar {
+  height: 14rpx;
+  background: #e9ecef;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), #0dab4f);
+  border-radius: var(--radius-pill);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}

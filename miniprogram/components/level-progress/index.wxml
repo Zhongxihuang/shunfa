@@ -1,6 +1,14 @@
 <view class="level-progress">
-  <view class="level-info">
-    <text class="level-label">Lv.{{level}}</text>
+  <view class="level-header">
+    <view class="level-left">
+      <view class="level-badge">
+        <text class="level-badge__text">{{level}}</text>
+      </view>
+      <view class="level-meta">
+        <text class="level-name">{{levelName}}</text>
+        <text class="level-label">Lv.{{level}}</text>
+      </view>
+    </view>
     <text class="points-text">{{points}} / {{nextLevelPoints}} pts</text>
   </view>
   <view class="progress-bar">
