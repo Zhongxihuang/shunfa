@@ -30,3 +30,7 @@ miniprogram/project.private.config.json
 .vscode/
 .idea/
 *.swp
+
+# Claude Code
+.claude/
+CLAUDE.md
