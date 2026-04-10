@@ -16,7 +16,7 @@ COZE_HEADERS = {
 
 
 def _create_feishu_user(db) -> User:
-    user = User(openid=f"feishu:{FEISHU_USER_ID}", streak=3, points=150, level=2)
+    user = User(openid=f"feishu_user:{FEISHU_USER_ID}", streak=3, points=150, level=2)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -48,7 +48,30 @@ def test_coze_creates_user_on_first_call(client, db):
     response = client.get("/api/coze/user_stats", headers=COZE_HEADERS)
     assert response.status_code == 200
     # User should have been auto-created
-    user = db.query(User).filter(User.openid == f"feishu:{FEISHU_USER_ID}").first()
+    user = db.query(User).filter(User.openid == f"feishu_user:{FEISHU_USER_ID}").first()
+    assert user is not None
+
+
+def test_coze_endpoint_accepts_lark_user_id_header(client, db):
+    response = client.get(
+        "/api/coze/user_stats",
+        headers={
+            "X-Coze-Plugin-Token": PLUGIN_TOKEN,
+            "X-Lark-User-Id": FEISHU_USER_ID,
+        },
+    )
+    assert response.status_code == 200
+    user = db.query(User).filter(User.openid == f"feishu_user:{FEISHU_USER_ID}").first()
+    assert user is not None
+
+
+def test_coze_endpoint_allows_missing_user_id_header(client, db):
+    response = client.get(
+        "/api/coze/user_stats",
+        headers={"X-Coze-Plugin-Token": PLUGIN_TOKEN},
+    )
+    assert response.status_code == 200
+    user = db.query(User).filter(User.openid == "coze_anonymous:anonymous").first()
     assert user is not None
 
 
@@ -91,6 +114,45 @@ def test_get_hot_topics_handles_bitable_error(client, db):
     # Should return empty list gracefully
     assert response.status_code == 200
     assert response.json()["topics"] == []
+
+
+def test_get_hot_topics_without_user_header_returns_list(client, db):
+    mock_topics = []
+
+    with patch("app.routers.coze_plugin.get_pending_topics", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = mock_topics
+        response = client.get(
+            "/api/coze/get_hot_topics",
+            headers={"X-Coze-Plugin-Token": PLUGIN_TOKEN},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["topics"] == []
+
+
+def test_get_hot_topics_does_not_mark_as_pushed(client, db):
+    _create_feishu_user(db)
+
+    mock_topics = [
+        MagicMock(
+            hot_topic="Claude Code costs up to $200 a month. Goose does the same thing for free.",
+            hot_source="VentureBeat AI",
+            hot_url="https://venturebeat.com/example",
+            hot_summary="summary",
+            ai_angle="angle",
+            ai_counter_angle="counter",
+            score=9,
+            topic_category=MagicMock(value="ai_product"),
+            record_id="rec_001",
+        )
+    ]
+
+    with patch("app.routers.coze_plugin.get_pending_topics", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = mock_topics
+        response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json()["topics"][0]["record_id"] == "rec_001"
 
 
 # ── quick_generate ────────────────────────────────────────────────────────────
@@ -147,7 +209,7 @@ def test_start_deep_mode_creates_checkin(client, db):
     assert "opening_message" in data
 
     # Verify CheckIn was created in DB
-    user = db.query(User).filter(User.openid == f"feishu:{FEISHU_USER_ID}").first()
+    user = db.query(User).filter(User.openid == f"feishu_user:{FEISHU_USER_ID}").first()
     checkin = db.query(CheckIn).filter(CheckIn.user_id == user.id).first()
     assert checkin is not None
     assert checkin.topic == "DeepSeek V4发布"
@@ -217,7 +279,7 @@ def test_deep_mode_message_returns_reply(client, db):
 
 def test_deep_mode_message_404_for_wrong_user(client, db):
     user = _create_feishu_user(db)
-    other_user = User(openid="feishu:other_user")
+    other_user = User(openid="feishu_user:other_user")
     db.add(other_user)
     db.commit()
     db.refresh(other_user)
@@ -309,3 +371,36 @@ def test_get_user_stats_today_completed(client, db):
     response = client.get("/api/coze/user_stats", headers=COZE_HEADERS)
     assert response.status_code == 200
     assert response.json()["today_completed"] is True
+
+
+def test_start_deep_mode_resets_stale_checkin_state(client, db):
+    user = _create_feishu_user(db)
+    existing = CheckIn(
+        user_id=user.id,
+        date=get_today_cst(),
+        topic="Old topic",
+        status=CheckInStatus.pending,
+        content="旧草稿",
+        conversation_history='[{"role":"user","content":"old"}]',
+        content_approved=True,
+        points_earned=30,
+        content_feedback="down",
+    )
+    db.add(existing)
+    db.commit()
+
+    with patch("app.routers.coze_plugin.process_message", new_callable=AsyncMock) as mock_pm:
+        mock_pm.return_value = {"reply": "角度建议...", "status": CheckInStatus.discussing, "draft": None}
+        response = client.post(
+            "/api/coze/start_deep_mode",
+            json={"hot_topic": "New hot topic", "angle": "角度"},
+            headers=COZE_HEADERS,
+        )
+
+    assert response.status_code == 200
+    db.refresh(existing)
+    assert existing.topic == "New hot topic"
+    assert existing.content is None
+    assert existing.conversation_history is None
+    assert existing.content_approved is False
+    assert existing.content_feedback is None

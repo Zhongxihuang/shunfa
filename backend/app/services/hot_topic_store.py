@@ -13,6 +13,8 @@ from ..schemas import ScoredTopic, HotTopicRecord, TopicCategory, TopicStatus
 COL_DATE = "date"
 COL_HOT_TOPIC = "hot_topic"
 COL_HOT_SOURCE = "hot_source"
+COL_HOT_URL = "hot_url"
+COL_HOT_SUMMARY = "hot_summary"
 COL_TOPIC_CATEGORY = "topic_category"
 COL_AI_ANGLE = "ai_angle"
 COL_AI_COUNTER_ANGLE = "ai_counter_angle"
@@ -26,6 +28,8 @@ def _topic_to_fields(topic: ScoredTopic, topic_date: Optional[date] = None) -> d
         COL_DATE: d.isoformat(),
         COL_HOT_TOPIC: topic.hot_topic,
         COL_HOT_SOURCE: topic.hot_source,
+        COL_HOT_URL: topic.hot_url,
+        COL_HOT_SUMMARY: topic.hot_summary,
         COL_TOPIC_CATEGORY: topic.topic_category.value,
         COL_AI_ANGLE: topic.ai_angle,
         COL_AI_COUNTER_ANGLE: topic.ai_counter_angle,
@@ -58,6 +62,8 @@ def _fields_to_record(record_id: str, fields: dict) -> HotTopicRecord:
         topic_date=parsed_date,
         hot_topic=fields.get(COL_HOT_TOPIC, ""),
         hot_source=fields.get(COL_HOT_SOURCE, ""),
+        hot_url=fields.get(COL_HOT_URL, ""),
+        hot_summary=fields.get(COL_HOT_SUMMARY, ""),
         topic_category=cat,
         ai_angle=fields.get(COL_AI_ANGLE, ""),
         ai_counter_angle=fields.get(COL_AI_COUNTER_ANGLE, ""),
@@ -86,6 +92,7 @@ async def save_topics(
 
 async def get_pending_topics(
     limit: int = 5,
+    topic_date: Optional[date] = None,
     client: Optional[BitableClient] = None,
 ) -> List[HotTopicRecord]:
     """Fetch pending hot topics ordered by score descending.
@@ -95,8 +102,11 @@ async def get_pending_topics(
     """
     client = client or get_bitable_client()
     table_id = settings.bitable_hot_topic_table_id
-
-    filter_formula = f'CurrentValue.[{COL_STATUS}] = "pending"'
+    effective_date = topic_date or date.today()
+    filter_formula = (
+        f'AND(CurrentValue.[{COL_STATUS}] = "pending",'
+        f'CurrentValue.[{COL_DATE}] = "{effective_date.isoformat()}")'
+    )
 
     data = await client.list_records(
         table_id,

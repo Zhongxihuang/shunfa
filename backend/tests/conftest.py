@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.database import Base
 from app.dependencies import get_db
+from app.config import settings
 
 # In-memory SQLite for tests
 TEST_DATABASE_URL = "sqlite://"
@@ -46,3 +47,21 @@ def client(db):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def override_test_settings():
+    original_admin_password = settings.admin_password
+    original_coze_plugin_token = settings.coze_plugin_token
+    original_environment = settings.environment
+
+    settings.admin_password = "test123"
+    settings.coze_plugin_token = "shunfa-coze-token"
+    settings.environment = "test"
+
+    try:
+        yield
+    finally:
+        settings.admin_password = original_admin_password
+        settings.coze_plugin_token = original_coze_plugin_token
+        settings.environment = original_environment

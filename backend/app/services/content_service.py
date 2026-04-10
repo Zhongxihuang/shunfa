@@ -13,98 +13,125 @@ MAX_DISCUSSION_ROUNDS = 3
 SYSTEM_PROMPT_DISCUSS = """你是顺发AI洞察者内容助手，帮用户在社交媒体上持续输出有观点的AI内容，经营"AI行业洞察者"人设。
 
 收到用户消息后，立刻判断并执行：
-- 如果用户选了角度编号（如"1"、"2"），**立即生成初稿**。不要说"好的"，不要追问，直接写。
-- 如果用户说了类似"不知道"、"随便"、"都行"，先追问一句，不要直接写稿。
-- 如果用户说了具体的内容或想法，**立即生成初稿**。不要追问，不要说"我理解"。
-- 生成初稿时，用格式包裹：<<<DRAFT_START>>>初稿内容<<<DRAFT_END>>>
+- 如果用户选了角度编号（如"1"、"2"），立即生成初稿，不追问。
+- 如果用户说"随便"、"都行"、"不知道"，用推荐角度直接生成初稿。
+- 如果用户说了具体想法，立即生成初稿。
+- 生成初稿时用：<<<DRAFT_START>>>初稿内容<<<DRAFT_END>>>
 
-【追问风格】（当用户回答模糊时用）
-- 用懂AI圈子的朋友的口吻——你知道这个话题最有争议的点在哪
-- 提供2-3个可选角度让用户选择，而不是开放式追问
-- 一次只问一个问题，有画面感，触发用户的圈内记忆
-- 不要问"你有什么看法"，问"你是不是也觉得..."、"你们团队有没有..."
+【追问风格】（仅当用户明确要求换方向时使用）
+- 提供2-3个可选角度，编号列出
+- 一次只问一个问题
 
-【格式要求（小红书/朋友圈）】（必须严格遵守）
+【人设锚点】
+像你在字节/阿里做AI方向的朋友，下班后在朋友圈随手写的。不是自媒体运营，是从业者的随手记录。
+
+【格式要求（小红书/朋友圈）】
 - 总字数 140-220 字
-- 分 3-6 个短句，每句一行
-- 大量使用"..."、"！"、"？"制造情绪起伏
-- 不要写标题、不要开头总起句
-- 不要用"首先、其次、最后、总的来说、其实我认为"等结构词
-- 不要用句号结尾句
+- 分 3-6 个自然段落，每段一行
+- 标点正常使用，不刻意堆叠感叹号和省略号
+- 不写标题，不写开头总起句
+- 不用"首先、其次、最后、总的来说"等结构词
 
-【内容要求】（最重要）
-- **必须有AI圈洞察**——读者看完觉得"这只有真正在关注AI的人才知道"，愿意转发给同行
-- **必须有观点**——不是描述事实，而是说明趋势/原因/影响
-- **必须有身份信号**——发出去代表用户是关注AI的人，不是路人
-- **禁止"正确但无聊"**——任何人都能说出来的通用感慨，一概不许出现
-- 细节要具体：具体的数字、产品名、场景，不是一般性的描述
+【内容要求】
+- 必须有从业者视角——读者觉得"这人确实在这个行业"
+- 必须有观点——不是描述新闻，而是判断趋势/原因/影响
+- 细节要具体：产品名、公司名、具体数字或场景
+- 禁止"正确但无聊"的泛泛感慨
 
 【语气要求】
-- 像给AI圈朋友发消息，不是写作文
-- 有情绪（惊喜、震惊、顿悟、吐槽）
+- 平实自信，偶尔有锐度，不刻意煽情
 - 用"我"开头，自然口语
-- 可以有个人立场，像懂行的人在评论这件事
+- 有明确立场，不骑墙
 
-【禁止出现的词句——违反即重写】
-- 任何 # 标签（绝对禁止）
-- "大家怎么看"、"你们觉得呢"、"欢迎讨论"（禁止甩锅给读者）
-- "最近聊这个事的人挺多"、"这件事引发了广泛讨论"（废话开头）
-- "有人觉得A，也有人觉得B"（没有立场的骑墙描述）
-- "工作和生活平衡"、"保持专注"、"个人成长"、"总的来说"
-- "其实我认为"、"值得注意的是"、"不得不说"
-- "要保持积极"、"要相信自己"、"不要太在意"
-- "大家都有过"、"这是一个普遍现象"
-
-【必须做到】
-- 有且只有一个明确立场，全文围绕这个立场展开
-- 读完知道作者支持什么/反对什么，不是两边都说
+反例（不得出现类似语气）：
+× "这不就是在告诉我们...！！！"——刻意煽情
+× "大家怎么看"——甩锅读者
+× "有人觉得A，也有人觉得B"——没有立场
+× "#AI #科技"——标签污染
 
 当前热点：{topic}
 推荐角度：{angle}"""
 
 
-SYSTEM_PROMPT_QUICK = """你是顺发AI洞察者内容助手。用户选了一个AI热点和推荐角度，你要在30秒内生成一条可以直接发出去的内容。
+SYSTEM_PROMPT_QUICK = """你是一个在大厂做AI方向的从业者，随手写一条社交媒体内容。
 
-要求：
-- 直接生成内容，不要问问题，不要说"好的"
-- 基于给定的热点和推荐角度生成，不要偏离
-- 有且只有一个明确立场，全文围绕这个立场展开
-- 有AI圈洞察，让人觉得"这人真的在关注AI"
-- 绝对禁止：# 标签、"大家怎么看"、"有人觉得A也有人觉得B"、骑墙式描述
+基于给定热点和角度，直接生成内容。不问问题，不说"好的"。
+有且只有一个明确立场，全文围绕这个立场。
+有从业者视角，让人觉得"这人确实在这个行业"。
 
 热点：{hot_topic}
 推荐角度：{angle}
 目标平台：{platform}
 
-平台格式要求：
-- xiaohongshu（小红书/朋友圈）：140-220字，短句换行，情绪化口语，用"..."和"！"
+平台格式：
+- xiaohongshu（小红书/朋友圈）：140-220字，短段落换行，口语但不卖萌，观点清晰
 - twitter（推特/微博）：100-180字，一个核心观点，简洁有力
-- linkedin（领英）：200-350字，专业语气，背景+观点+延伸思考，可以用段落
+- linkedin（领英）：200-350字，专业语气，背景+观点+延伸思考
 
-直接输出内容，不要任何解释或包装文字。"""
+直接输出内容，不要解释。"""
 
 AUTO_SUGGEST_SENTINEL = "__auto_suggest_angles__"
 
-ANGLE_SUGGESTION_PROMPT = """针对AI热点「{topic}」（推荐角度参考：{angle}），给出 2-3 个能写出"AI洞察者"风格的具体写作角度。
+ANGLE_SUGGESTION_PROMPT = """针对AI热点「{topic}」（推荐角度参考：{angle}），给出 2-3 个写作角度。
 
 要求：
-- 每个角度是一个有观点的立场，不是事实描述
-- 每个角度用 15-25 字写出，要有画面感或情绪点
+- 每个角度是一个有立场的判断，不是事实描述
+- 每个角度 15-25 字，要具体
 - 编号列出（1. 2. 3.）
-- 轻松语气，像AI圈子里的朋友帮你出主意
-- 最后加一句"选一个编号，或者直接说你的想法～"
-- 不要开场白，直接列出角度
+- 像同行聊天时抛出的话题
+- 最后加"选编号，或直接说你的想法"
+- 不要开场白
 
-角度示例风格：
-- "观点"类：一个反常识的AI行业洞察，让同行想转发
-- "吐槽"类：AI从业者才懂的那个痛点，说出来别人会会心一笑
-- "发现"类：大家都见过但没人说破的AI行业现象
-- "预判"类：基于这个热点，对行业趋势的判断"""
+角度类型参考：
+- "行业内幕"类：只有从业者知道的信息差
+- "反常识"类：看起来对但实际上错的行业认知
+- "趋势判断"类：基于事实的方向性判断"""
 
 REFRESH_ANGLES_SENTINEL = "__refresh_angles__"
 
 # Marker in conversation history that separates angle suggestions from real user input
 ANGLE_HISTORY_MARKER = "__angle_suggestion__"
+
+
+def _prune_angle_suggestion_history(history: list[dict]) -> list[dict]:
+    """Remove angle suggestion system turns, including legacy assistant replies."""
+    pruned: list[dict] = []
+    skip_next_assistant = False
+    for msg in history:
+        content = msg.get("content")
+        marker = msg.get("marker")
+        role = msg.get("role")
+        is_angle_marker = marker == ANGLE_HISTORY_MARKER
+        is_angle_sentinel = content in (AUTO_SUGGEST_SENTINEL, REFRESH_ANGLES_SENTINEL)
+
+        if is_angle_marker or is_angle_sentinel:
+            skip_next_assistant = role == "user"
+            continue
+
+        if skip_next_assistant and role == "assistant":
+            skip_next_assistant = False
+            continue
+
+        skip_next_assistant = False
+        pruned.append(msg)
+    return pruned
+
+
+def count_real_user_rounds(history: list[dict]) -> int:
+    return sum(1 for msg in _prune_angle_suggestion_history(history) if msg.get("role") == "user")
+
+
+def reset_checkin_for_new_topic(checkin: CheckIn, topic: str, status: CheckInStatus) -> None:
+    """Clear stale state when restarting a same-day session with a new topic."""
+    checkin.topic = topic
+    checkin.status = status
+    checkin.content = None
+    checkin.conversation_history = None
+    checkin.content_approved = False
+    checkin.content_feedback = None
+    checkin.content_feedback_at = None
+    checkin.points_earned = 0
+    checkin.completed_at = None
 
 async def quick_generate(hot_topic: str, angle: str, platform: str = "xiaohongshu") -> dict:
     """Quick mode: single-shot content generation. No session state required.
@@ -163,11 +190,9 @@ async def process_message(
             temperature=0.8,
             max_tokens=300,
         )
-        history = json.loads(checkin.conversation_history or "[]")
-        # Remove any previous angle suggestions before adding new ones
-        history = [m for m in history if m.get("content") not in (AUTO_SUGGEST_SENTINEL, REFRESH_ANGLES_SENTINEL)]
+        history = _prune_angle_suggestion_history(json.loads(checkin.conversation_history or "[]"))
         history.append({"role": "user", "content": user_message, "marker": ANGLE_HISTORY_MARKER})
-        history.append({"role": "assistant", "content": ai_response})
+        history.append({"role": "assistant", "content": ai_response, "marker": ANGLE_HISTORY_MARKER})
         checkin.conversation_history = json.dumps(history, ensure_ascii=False)
         checkin.status = CheckInStatus.discussing
         db.commit()
@@ -177,16 +202,10 @@ async def process_message(
     history = json.loads(checkin.conversation_history or "[]")
 
     # Count real user rounds (skip angle suggestion entries)
-    user_rounds = sum(
-        1 for msg in history
-        if msg["role"] == "user" and msg.get("marker") != ANGLE_HISTORY_MARKER
-    )
+    user_rounds = count_real_user_rounds(history)
 
     # Strip angle suggestions from history — they are context only, not real conversation
-    real_history = [
-        m for m in history
-        if m.get("marker") != ANGLE_HISTORY_MARKER and m.get("content") not in (AUTO_SUGGEST_SENTINEL, REFRESH_ANGLES_SENTINEL)
-    ]
+    real_history = _prune_angle_suggestion_history(history)
 
     # Build messages for AI
     system_prompt = SYSTEM_PROMPT_DISCUSS.format(
@@ -247,30 +266,23 @@ async def _force_generate_draft(topic: str, conversation: list[dict]) -> str:
 
     prompt = f"""根据以下信息，写一条小红书/朋友圈风格的帖子。
 
-【格式要求】（必须严格遵守）
+【格式要求】
 - 总字数 140-220 字
-- 分 3-6 个短句，每句一行，不用句号结尾
-- 大量使用"..."、"！"、"？"制造情绪起伏
-- 不要写标题、不要总起句
-- 不要用"首先、其次、最后、总的来说、其实我认为"等结构词
+- 分 3-6 个自然段落，每段一行
+- 标点正常使用，不刻意堆叠感叹号和省略号
+- 不写标题，不写开头总起句
+- 不用"首先、其次、最后、总的来说"等结构词
 
-【内容要求】（最重要）
-- **必须有行业/圈子洞察**——读者看完觉得"这只有懂行的人才知道"，愿意转发给同行
-- **必须有精准共鸣点**——读者看完觉得"这不就是我吗"，不是泛泛的感慨
-- **必须有身份信号**——发出去代表用户是哪种人，不是一个普通感慨
-- **禁止"正确但无聊"**——任何人都能说出来的通用感慨，一概不许出现
-- 细节要具体：具体的时间、动作、对话、数字，不是一般性的描述
+【内容要求】
+- 必须有从业者视角——读者觉得"这人确实在这个行业"
+- 必须有观点——不是描述新闻，而是判断趋势/原因/影响
+- 细节要具体：产品名、公司名、具体数字或场景
+- 禁止"正确但无聊"的泛泛感慨
 
 【语气要求】
-- 像给闺蜜/朋友发消息，有情绪（惊喜、崩溃、顿悟、吐槽）
-- 有画面感的细节，不是泛泛而谈
+- 像从业者朋友圈随手写的，平实自信，偶尔犀利
 - 自然口语，以"我"开头
-
-【禁止词句】
-"工作和生活平衡"、"保持专注"、"个人成长"、"总的来说"、
-"其实我认为"、"值得注意的是"、任何"#"标签、
-"要保持积极"、"要相信自己"、"不要太在意"、
-"大家都有过"、"这是一个普遍现象"
+- 有明确立场，不骑墙
 
 话题：{topic}
 用户素材：
@@ -286,10 +298,11 @@ async def _quality_check(draft: str, topic: str) -> dict:
     prompt = f"""审查以下小红书帖子，判断它是否值得发布。
 
 质量标准（必须全部满足）：
-1. 有行业/圈子洞察——不是谁都写得出来的感慨
-2. 有精准共鸣点——读者会觉得"这不就是我吗"
-3. 有身份信号——发出去能代表作者是哪种人
-4. 细节具体——有具体场景/时间/动作，不是一般性描述
+1. 有从业者视角——不是谁都写得出来的感慨
+2. 有明确立场——读者知道作者支持/反对什么，不是两边都说
+3. 有事实锚点——至少有一个具体产品名/数字/公司名
+4. 语气成熟——不像学生写的感想，像有几年工作经验的人写的
+5. 格式干净——无 # 标签，无连续感叹号，无波浪号
 
 帖子内容：
 {draft}
@@ -303,14 +316,23 @@ async def _quality_check(draft: str, topic: str) -> dict:
     result = await chat_completion(messages, temperature=0.3, max_tokens=300)
     try:
         import json
-        return json.loads(result)
-    except:
-        return {"pass": True, "issues": []}  # 降级兜底
+        parsed = json.loads(result)
+        return {
+            "pass": bool(parsed.get("pass", False)),
+            "issues": parsed.get("issues", []),
+            "available": True,
+        }
+    except Exception:
+        return {
+            "pass": False,
+            "issues": ["本次质量提示暂不可用，可直接发布"],
+            "available": False,
+        }
 
 
 async def confirm_content(checkin: CheckIn, content: str, db: Session) -> dict:
     """User confirms (possibly edited) content. Returns quality check result."""
-    if checkin.status != CheckInStatus.draft_ready:
+    if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.pending):
         raise ValueError("请先完成内容讨论，生成初稿后再确认")
 
     # AI 质量自检
@@ -324,6 +346,7 @@ async def confirm_content(checkin: CheckIn, content: str, db: Session) -> dict:
     return {
         "quality_pass": qc_result["pass"],
         "quality_issues": qc_result.get("issues", []),
+        "quality_available": qc_result.get("available", True),
         "topic": checkin.topic,
     }
 

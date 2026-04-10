@@ -134,3 +134,14 @@ def test_level_updates_after_points(user, checkin, db):
     # Should have crossed 100 points threshold
     assert result["total_points"] >= 100
     assert result["level"] >= 2
+
+
+def test_discussion_bonus_excludes_angle_suggestions(user, checkin):
+    checkin.conversation_history = json.dumps([
+        {"role": "user", "content": "__auto_suggest_angles__", "marker": "__angle_suggestion__"},
+        {"role": "assistant", "content": "角度A", "marker": "__angle_suggestion__"},
+        {"role": "user", "content": "1"},
+        {"role": "assistant", "content": "draft"},
+    ])
+    result = calculate_points_earned(checkin, user)
+    assert result["discussion_bonus"] == 3

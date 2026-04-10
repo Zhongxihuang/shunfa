@@ -60,7 +60,8 @@ async def test_score_articles_handles_invalid_json():
         mock_ai.return_value = "not valid json at all"
         scores = await score_articles(SAMPLE_ARTICLES)
 
-    assert scores == []
+    assert len(scores) == 3
+    assert all("score" in item for item in scores)
 
 
 @pytest.mark.asyncio
@@ -95,8 +96,8 @@ async def test_generate_angles_handles_invalid_json():
         mock_ai.return_value = "Some non-JSON response from AI"
         angles = await generate_angles("Test topic")
 
-    assert angles["ai_angle"] == ""
-    assert angles["ai_counter_angle"] == ""
+    assert angles["ai_angle"] != ""
+    assert angles["ai_counter_angle"] != ""
 
 
 # ── score_and_filter ──────────────────────────────────────────────────────────
@@ -134,20 +135,53 @@ async def test_score_and_filter_empty_input():
 
 
 @pytest.mark.asyncio
+async def test_score_and_filter_falls_back_when_all_below_threshold():
+    score_response = json.dumps([
+        {"index": 0, "score": 1, "category": "industry"},
+        {"index": 1, "score": 2, "category": "industry"},
+        {"index": 2, "score": 3, "category": "industry"},
+    ])
+    angle_response = json.dumps({
+        "ai_angle": "Some insight angle",
+        "ai_counter_angle": "Counter perspective",
+    })
+
+    with patch("app.services.hot_topic_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+        mock_ai.side_effect = [score_response, angle_response, angle_response, angle_response]
+        topics = await score_and_filter(SAMPLE_ARTICLES)
+
+    assert len(topics) == 3
+    assert all(topic.hot_url for topic in topics)
+
+
+@pytest.mark.asyncio
+async def test_score_and_filter_preserves_url_and_summary():
+    score_response = json.dumps([{"index": 0, "score": 8, "category": "ai_model"}])
+    angle_response = json.dumps({"ai_angle": "Some angle", "ai_counter_angle": "Counter"})
+
+    with patch("app.services.hot_topic_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+        mock_ai.side_effect = [score_response, angle_response]
+        topics = await score_and_filter([SAMPLE_ARTICLES[0]])
+
+    assert len(topics) == 1
+    assert topics[0].hot_url == "https://hn.com/1"
+    assert topics[0].hot_summary == "DeepSeek announced V4 with major cost improvements."
+
+
+@pytest.mark.asyncio
 async def test_score_and_filter_all_below_threshold():
     score_response = json.dumps([
         {"index": 0, "score": 2, "category": "industry"},
         {"index": 1, "score": 3, "category": "industry"},
         {"index": 2, "score": 4, "category": "industry"},
     ])
+    angle_response = json.dumps({"ai_angle": "Test angle", "ai_counter_angle": "Counter"})
 
     with patch("app.services.hot_topic_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.return_value = score_response
+        mock_ai.side_effect = [score_response, angle_response, angle_response, angle_response]
         topics = await score_and_filter(SAMPLE_ARTICLES)
 
-    # Only scoring call, no angle calls
-    assert mock_ai.call_count == 1
-    assert topics == []
+    assert len(topics) == 3
 
 
 @pytest.mark.asyncio

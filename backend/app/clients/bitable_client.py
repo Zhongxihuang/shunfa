@@ -178,7 +178,7 @@ class BitableClient:
             f"/tables/{table_id}/records/batch_update"
         )
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.put(
+            resp = await client.post(
                 url,
                 headers=await self._headers(),
                 json={"records": updates},
@@ -187,6 +187,58 @@ class BitableClient:
             data = resp.json()
 
         self._check(data)
+
+    # ── Field management ──────────────────────────────────────────────────────
+
+    async def add_field(self, table_id: str, field_name: str, field_type: int = 1) -> str:
+        """Add a column (field) to a table. Returns the new field_id.
+
+        Common field types:
+          1  = Text (多行文本)
+          2  = Number
+          15 = URL
+        """
+        url = f"{FEISHU_BASE}/bitable/v1/apps/{self._app_token}/tables/{table_id}/fields"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                url,
+                headers=await self._headers(),
+                json={"field_name": field_name, "type": field_type},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        self._check(data)
+        return data["data"]["field"]["field_id"]
+
+    async def list_fields(self, table_id: str) -> list[dict]:
+        """List all fields in a table."""
+        url = f"{FEISHU_BASE}/bitable/v1/apps/{self._app_token}/tables/{table_id}/fields"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url, headers=await self._headers())
+            resp.raise_for_status()
+            data = resp.json()
+
+        self._check(data)
+        return data["data"].get("items", [])
+
+    async def batch_delete_records(self, table_id: str, record_ids: list[str]) -> None:
+        """Batch delete records by ID."""
+        if not record_ids:
+            return
+        url = (
+            f"{FEISHU_BASE}/bitable/v1/apps/{self._app_token}"
+            f"/tables/{table_id}/records/batch_delete"
+        )
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.request(
+                "DELETE",
+                url,
+                headers=await self._headers(),
+                json={"records": record_ids},
+            )
+            resp.raise_for_status()
+            self._check(resp.json())
 
 
 def get_bitable_client() -> BitableClient:

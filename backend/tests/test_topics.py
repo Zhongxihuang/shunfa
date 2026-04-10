@@ -110,3 +110,44 @@ async def test_daily_topics_endpoint(user, db, client, mock_ai_topics):
     assert len(data["topics"]) == 3
     assert data["refresh_count"] == 0  # First load is free, count stays 0
     assert data["max_refreshes"] == 3
+
+
+@pytest.mark.asyncio
+async def test_second_load_counts_as_refresh(user, db, mock_ai_topics):
+    await generate_topics(user.id, db)
+    result = await generate_topics(user.id, db)
+    assert result["refresh_count"] == 1
+
+
+def test_select_topic_resets_stale_checkin_state(user, db, client):
+    from app.routers.user import create_jwt_token
+
+    token = create_jwt_token(user.id)
+    checkin = CheckIn(
+        user_id=user.id,
+        date=get_today_cst(),
+        topic="旧话题",
+        status=CheckInStatus.pending,
+        content="旧草稿",
+        conversation_history='[{"role":"user","content":"old"}]',
+        content_approved=True,
+        points_earned=45,
+        content_feedback="down",
+    )
+    db.add(checkin)
+    db.commit()
+
+    response = client.post(
+        "/api/select_topic",
+        json={"topic": "新话题"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    db.refresh(checkin)
+    assert checkin.topic == "新话题"
+    assert checkin.status == CheckInStatus.topic_selected
+    assert checkin.content is None
+    assert checkin.conversation_history is None
+    assert checkin.content_approved is False
+    assert checkin.content_feedback is None

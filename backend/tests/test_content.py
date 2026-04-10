@@ -122,6 +122,66 @@ def test_confirm_content(user, checkin, client, db):
     assert updated.status == CheckInStatus.pending
     assert updated.content == "用户修改后的内容"
 
+
+def test_confirm_content_soft_signal_when_quality_fails(user, checkin, client, db):
+    token = create_jwt_token(user.id)
+    checkin.status = CheckInStatus.draft_ready
+    checkin.content = "初稿内容"
+    db.commit()
+
+    with patch("app.services.content_service._quality_check", new_callable=AsyncMock) as mock_qc:
+        mock_qc.return_value = {"pass": False, "issues": ["缺少事实锚点"], "available": True}
+        response = client.post(
+            "/api/confirm_content",
+            json={"checkin_id": checkin.id, "content": "用户修改后的内容"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["content_approved"] is False
+    assert data["quality_issues"] == ["缺少事实锚点"]
+
+    db.expire_all()
+    updated = db.query(CheckIn).filter(CheckIn.id == checkin.id).first()
+    assert updated.status == CheckInStatus.pending
+
+
+def test_confirm_publish_allowed_after_quality_fail(user, checkin, client, db):
+    token = create_jwt_token(user.id)
+    checkin.status = CheckInStatus.pending
+    checkin.content = "准备发布的内容"
+    checkin.content_approved = False
+    db.commit()
+
+    response = client.post(
+        "/api/confirm_publish",
+        json={"checkin_id": checkin.id},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+
+
+def test_content_feedback_persisted(user, checkin, client, db):
+    token = create_jwt_token(user.id)
+    checkin.status = CheckInStatus.pending
+    db.commit()
+
+    response = client.post(
+        "/api/content_feedback",
+        json={"checkin_id": checkin.id, "feedback": "down"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["feedback"] == "down"
+
+    db.expire_all()
+    updated = db.query(CheckIn).filter(CheckIn.id == checkin.id).first()
+    assert updated.content_feedback == "down"
+    assert updated.content_feedback_at is not None
+
 def test_confirm_publish(user, checkin, client, db):
     """Test that confirm_publish completes the checkin."""
     token = create_jwt_token(user.id)

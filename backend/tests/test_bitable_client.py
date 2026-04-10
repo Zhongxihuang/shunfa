@@ -235,3 +235,32 @@ async def test_update_record_succeeds(client):
         await client.update_record("tbl_001", "rec_1", {"status": "pushed"})
 
     mock_http.put.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_batch_update_records_uses_post(client):
+    client._token = "test_token"
+    client._token_expires_at = time.time() + 3600
+
+    update_response = {
+        "code": 0,
+        "data": {
+            "records": [
+                {"record_id": "rec_1", "fields": {"status": "pushed"}},
+            ]
+        },
+    }
+
+    with patch("app.clients.bitable_client.httpx.AsyncClient") as mock_cls:
+        mock_http = AsyncMock()
+        mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_http.__aexit__ = AsyncMock(return_value=False)
+        mock_http.post = AsyncMock(return_value=_mock_post(update_response))
+        mock_cls.return_value = mock_http
+
+        await client.batch_update_records(
+            "tbl_001",
+            [{"record_id": "rec_1", "fields": {"status": "pushed"}}],
+        )
+
+    mock_http.post.assert_called_once()

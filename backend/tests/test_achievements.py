@@ -97,3 +97,19 @@ def test_get_user_achievements(user, checkin, db):
     items = get_user_achievements(user)
     assert len(items) >= 1
     assert all("name" in i and "type" in i for i in items)
+
+
+def test_quality_writer_excludes_angle_suggestions(user, checkin, db):
+    checkin.conversation_history = json.dumps([
+        {"role": "user", "content": "__auto_suggest_angles__", "marker": "__angle_suggestion__"},
+        {"role": "assistant", "content": "角度A", "marker": "__angle_suggestion__"},
+        {"role": "user", "content": "1"},
+        {"role": "assistant", "content": "a"},
+        {"role": "user", "content": "2"},
+        {"role": "assistant", "content": "b"},
+    ])
+    db.commit()
+    user.streak = 1; user.points = 30; db.commit()
+    unlocked = check_and_unlock(user, checkin, db)
+    types = [u["type"] for u in unlocked]
+    assert "quality_writer" not in types

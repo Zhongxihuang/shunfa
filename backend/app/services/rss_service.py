@@ -85,7 +85,10 @@ def _url_to_source_name(url: str) -> str:
         "venturebeat": "VentureBeat AI",
         "techcrunch": "TechCrunch AI",
         "technologyreview": "MIT Tech Review",
-        "36kr": "36Kr AI",
+        "theverge": "The Verge",
+        "arstechnica": "Ars Technica",
+        "jiqizhixin": "机器之心",
+        "36kr": "36Kr",
     }
     for key, name in mapping.items():
         if key in url:

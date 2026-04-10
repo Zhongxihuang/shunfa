@@ -7,6 +7,7 @@ from ..schemas import TopicsResponse, TopicCard, SelectTopicRequest, SelectTopic
 from ..services.topic_service import generate_topics
 from ..models import CheckIn, CheckInStatus
 from ..utils.time_utils import get_today_cst
+from ..services.content_service import reset_checkin_for_new_topic
 
 router = APIRouter()
 
@@ -51,8 +52,7 @@ async def select_topic(
     ).first()
 
     if checkin:
-        checkin.topic = request.topic
-        checkin.status = CheckInStatus.topic_selected
+        reset_checkin_for_new_topic(checkin, request.topic, CheckInStatus.topic_selected)
     else:
         checkin = CheckIn(
             user_id=current_user.id,

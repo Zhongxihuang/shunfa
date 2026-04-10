@@ -6,10 +6,12 @@ Uses DeepSeek to:
 3. Categorize topic into predefined categories
 """
 
+import asyncio
 import json
 from typing import List
 
 from .ai_service import chat_completion
+from ..config import settings
 from ..schemas import RawArticle, ScoredTopic, TopicCategory
 
 
@@ -47,6 +49,72 @@ ANGLE_PROMPT = """你是一个AI行业内容顾问，帮助用户经营"AI洞察
 
 只返回JSON，不要有其他文字。"""
 
+AI_KEYWORDS = {
+    "openai": 9,
+    "anthropic": 9,
+    "deepseek": 9,
+    "gemini": 8,
+    "gpt": 8,
+    "claude": 8,
+    "copilot": 8,
+    "microsoft": 8,
+    "google": 8,
+    "meta": 8,
+    "nvidia": 8,
+    "ai": 7,
+    "llm": 7,
+    "model": 7,
+    "benchmark": 7,
+    "chip": 7,
+    "regulation": 7,
+    "investigation": 7,
+    "startup": 7,
+    "funding": 7,
+}
+MAX_ANGLE_GENERATION_TOPICS = 10
+
+
+def _heuristic_score(article: RawArticle) -> int:
+    haystack = f"{article.title} {article.summary}".lower()
+    score = 6
+    for keyword, keyword_score in AI_KEYWORDS.items():
+        if keyword in haystack:
+            score = max(score, keyword_score)
+    return min(score, 10)
+
+
+def _infer_category(article: RawArticle) -> str:
+    haystack = f"{article.title} {article.summary}".lower()
+    if any(k in haystack for k in ("policy", "regulation", "investigation", "pentagon")):
+        return TopicCategory.policy.value
+    if any(k in haystack for k in ("startup", "funding", "acquisition")):
+        return TopicCategory.startup.value
+    if any(k in haystack for k in ("gpt", "claude", "gemini", "deepseek", "model")):
+        return TopicCategory.ai_model.value
+    if any(k in haystack for k in ("copilot", "product", "app")):
+        return TopicCategory.ai_product.value
+    if any(k in haystack for k in ("chip", "benchmark", "infra")):
+        return TopicCategory.tech.value
+    return TopicCategory.industry.value
+
+
+def _fallback_scores(articles: List[RawArticle]) -> List[dict]:
+    return [
+        {
+            "index": i,
+            "score": _heuristic_score(article),
+            "category": _infer_category(article),
+        }
+        for i, article in enumerate(articles)
+    ]
+
+
+def _default_angles(topic: str) -> dict:
+    return {
+        "ai_angle": f"我更关注「{topic}」背后的行业信号，这通常不只是单点新闻，而是竞争格局在变。",
+        "ai_counter_angle": f"另一种看法是，「{topic}」可能只是短期噪音，真正决定结果的还是落地和分发能力。",
+    }
+
 
 async def score_articles(articles: List[RawArticle]) -> List[dict]:
     """Batch score articles for discussion potential. Returns list of {index, score, category}."""
@@ -69,10 +137,10 @@ async def score_articles(articles: List[RawArticle]) -> List[dict]:
     try:
         scores = json.loads(response)
         if not isinstance(scores, list):
-            return []
+            return _fallback_scores(articles)
         return scores
     except (json.JSONDecodeError, ValueError):
-        return []
+        return _fallback_scores(articles)
 
 
 async def generate_angles(topic: str, summary: str = "") -> dict:
@@ -86,12 +154,14 @@ async def generate_angles(topic: str, summary: str = "") -> dict:
 
     try:
         data = json.loads(response)
+        if not isinstance(data, dict):
+            return _default_angles(topic)
         return {
             "ai_angle": data.get("ai_angle", ""),
             "ai_counter_angle": data.get("ai_counter_angle", ""),
         }
     except (json.JSONDecodeError, ValueError):
-        return {"ai_angle": "", "ai_counter_angle": ""}
+        return _default_angles(topic)
 
 
 async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
@@ -103,7 +173,7 @@ async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
         return []
 
     scores = await score_articles(articles)
-    threshold = 6
+    threshold = settings.topic_score_threshold
 
     # Build map: index → score data
     score_map = {item["index"]: item for item in scores if "index" in item and "score" in item}
@@ -118,10 +188,22 @@ async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
             continue
         qualifying.append((i, article, score, score_data.get("category", "other")))
 
+    if not qualifying:
+        fallback_scores = _fallback_scores(articles)
+        for i, article in enumerate(articles[: min(5, len(articles))]):
+            score_data = fallback_scores[i]
+            qualifying.append((i, article, score_data["score"], score_data["category"]))
+
+    qualifying.sort(key=lambda item: item[2], reverse=True)
+    qualifying = qualifying[:MAX_ANGLE_GENERATION_TOPICS]
+
     # Generate angles for each qualifying article
     results: List[ScoredTopic] = []
-    for i, article, score, category in qualifying:
-        angles = await generate_angles(article.title, article.summary)
+    angles_list = await asyncio.gather(
+        *(generate_angles(article.title, article.summary) for _, article, _, _ in qualifying)
+    )
+
+    for (i, article, score, category), angles in zip(qualifying, angles_list):
 
         try:
             cat = TopicCategory(category)
@@ -132,6 +214,8 @@ async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
             ScoredTopic(
                 hot_topic=article.title,
                 hot_source=article.source,
+                hot_url=article.link,
+                hot_summary=article.summary,
                 topic_category=cat,
                 ai_angle=angles["ai_angle"],
                 ai_counter_angle=angles["ai_counter_angle"],

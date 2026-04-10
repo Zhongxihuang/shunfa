@@ -27,8 +27,9 @@ async def get_wechat_openid(code: str) -> str:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(url, params=params)
+            response.raise_for_status()
             data = response.json()
-    except httpx.RequestError as e:
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError):
         raise HTTPException(status_code=503, detail="WeChat service unavailable")
 
     if "errcode" in data and data["errcode"] != 0:
@@ -96,6 +97,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/web_login", response_model=LoginResponse)
 async def web_login(request: WebLoginRequest, db: Session = Depends(get_db)):
+    if not settings.admin_password:
+        raise HTTPException(status_code=503, detail="Web login is not configured")
     if request.password != settings.admin_password:
         raise HTTPException(status_code=401, detail="Invalid password")
 

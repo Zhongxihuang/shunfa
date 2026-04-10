@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..models import User, CheckIn
 from ..utils.time_utils import get_now_cst, is_reminder_time_active
+from .content_service import count_real_user_rounds
 
 LEVEL_THRESHOLDS = [0, 100, 300, 700, 1500, 3100, 6300]
 
@@ -40,7 +41,7 @@ def calculate_points_earned(checkin: CheckIn, user: User) -> dict:
 
     # Discussion rounds bonus: +3 per user message, max +9
     history = json.loads(checkin.conversation_history or "[]")
-    user_rounds = sum(1 for msg in history if msg["role"] == "user")
+    user_rounds = count_real_user_rounds(history)
     discussion_bonus = min(user_rounds * 3, 9)
 
     # On-time bonus

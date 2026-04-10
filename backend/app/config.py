@@ -11,21 +11,31 @@ class Settings(BaseSettings):
     jwt_expire_hours: int = 720
     database_url: str = "sqlite:///./shunfa.db"
     environment: str = "development"
-    admin_password: str = "shunfa2024"
+    admin_password: str = ""
+    cors_allow_origins: List[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 
     # RSS aggregation settings
     rss_sources: List[str] = [
+        # English
         "https://news.ycombinator.com/rss",
         "https://venturebeat.com/category/ai/feed/",
         "https://techcrunch.com/category/artificial-intelligence/feed/",
         "https://www.technologyreview.com/feed/",
+        "https://www.theverge.com/rss/index.xml",
+        "https://feeds.arstechnica.com/arstechnica/index",
+        # Chinese
+        "https://www.jiqizhixin.com/rss",
+        "https://36kr.com/feed",
     ]
     topic_score_threshold: int = 6
     rss_fetch_timeout: int = 30
     rss_max_articles_per_source: int = 10
 
     # Coze plugin auth
-    coze_plugin_token: str = "shunfa-coze-token"
+    coze_plugin_token: str = ""
 
     # Feishu / Bitable settings
     feishu_app_id: str = ""

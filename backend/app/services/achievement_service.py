@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from ..models import User, CheckIn, Achievement
+from .content_service import count_real_user_rounds
 
 # 成就定义
 ACHIEVEMENTS = {
@@ -59,7 +60,7 @@ def check_and_unlock(user: User, checkin: CheckIn, db: Session) -> list[dict]:
     # 言之有物：3轮讨论
     if "quality_writer" not in existing:
         history = json.loads(checkin.conversation_history or "[]")
-        user_rounds = sum(1 for m in history if m["role"] == "user")
+        user_rounds = count_real_user_rounds(history)
         if user_rounds >= 3:
             try_unlock("quality_writer")
 

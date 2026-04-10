@@ -31,7 +31,7 @@ async def generate_topics(user_id: int, db: Session) -> dict:
     refresh_count = today_checkin.refresh_count if today_checkin else 0
 
     # First load (refresh_count == 0) is free; only check limit on refreshes
-    is_first_load = (today_checkin is None or refresh_count == 0)
+    is_first_load = today_checkin is None
 
     if not is_first_load and refresh_count >= MAX_DAILY_REFRESHES:
         raise ValueError(f"已达到今日最大刷新次数({MAX_DAILY_REFRESHES}次)")

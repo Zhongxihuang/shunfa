@@ -1,0 +1,1213 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "顺发 Coze Plugin API",
+    "description": "顺发AI洞察者后端，供Coze工作流调用",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/coze/get_hot_topics": {
+      "get": {
+        "summary": "Get Hot Topics",
+        "description": "Return today's top-scored pending hot topics for the daily push.",
+        "operationId": "get_hot_topics_api_coze_get_hot_topics_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Coze-Plugin-Token"
+            }
+          },
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetHotTopicsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CozePluginToken": []
+          }
+        ]
+      }
+    },
+    "/api/coze/quick_generate": {
+      "post": {
+        "summary": "Coze Quick Generate",
+        "description": "Quick mode: generate content from hot topic + angle in ~30s. Stateless.",
+        "operationId": "coze_quick_generate_api_coze_quick_generate_post",
+        "parameters": [
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Coze-Plugin-Token"
+            }
+          },
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuickGeneratePluginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickGeneratePluginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CozePluginToken": []
+          }
+        ]
+      }
+    },
+    "/api/coze/start_deep_mode": {
+      "post": {
+        "summary": "Start Deep Mode",
+        "description": "Create a deep mode CheckIn session. Returns checkin_id for subsequent messages.",
+        "operationId": "start_deep_mode_api_coze_start_deep_mode_post",
+        "parameters": [
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Coze-Plugin-Token"
+            }
+          },
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartDeepModeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartDeepModeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CozePluginToken": []
+          }
+        ]
+      }
+    },
+    "/api/coze/deep_mode_message": {
+      "post": {
+        "summary": "Deep Mode Message",
+        "description": "Send a message in the deep mode discussion flow.",
+        "operationId": "deep_mode_message_api_coze_deep_mode_message_post",
+        "parameters": [
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Coze-Plugin-Token"
+            }
+          },
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeepModeMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeepModeMessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CozePluginToken": []
+          }
+        ]
+      }
+    },
+    "/api/coze/confirm_and_publish": {
+      "post": {
+        "summary": "Confirm And Publish",
+        "description": "Confirm content and publish. Updates streak and points.",
+        "operationId": "confirm_and_publish_api_coze_confirm_and_publish_post",
+        "parameters": [
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Coze-Plugin-Token"
+            }
+          },
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__routers__coze_plugin__ConfirmPublishRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmPublishResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CozePluginToken": []
+          }
+        ]
+      }
+    },
+    "/api/coze/user_stats": {
+      "get": {
+        "summary": "Get User Stats",
+        "description": "Return user streak, points, level, and today's completion status.",
+        "operationId": "get_user_stats_api_coze_user_stats_get",
+        "parameters": [
+          {
+            "name": "X-Coze-Plugin-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Coze-Plugin-Token"
+            }
+          },
+          {
+            "name": "X-Feishu-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserStatsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "CozePluginToken": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AchievementItem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "desc": {
+            "type": "string",
+            "title": "Desc"
+          },
+          "unlocked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unlocked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "name",
+          "desc"
+        ],
+        "title": "AchievementItem"
+      },
+      "AchievementsResponse": {
+        "properties": {
+          "achievements": {
+            "items": {
+              "$ref": "#/components/schemas/AchievementItem"
+            },
+            "type": "array",
+            "title": "Achievements"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "achievements",
+          "total"
+        ],
+        "title": "AchievementsResponse"
+      },
+      "CheckInStatus": {
+        "type": "string",
+        "enum": [
+          "topic_selected",
+          "discussing",
+          "draft_ready",
+          "pending",
+          "completed"
+        ],
+        "title": "CheckInStatus"
+      },
+      "ConfirmContentRequest": {
+        "properties": {
+          "checkin_id": {
+            "type": "integer",
+            "title": "Checkin Id"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkin_id",
+          "content"
+        ],
+        "title": "ConfirmContentRequest"
+      },
+      "ConfirmPublishResponse": {
+        "properties": {
+          "streak": {
+            "type": "integer",
+            "title": "Streak"
+          },
+          "points_earned": {
+            "type": "integer",
+            "title": "Points Earned"
+          },
+          "total_points": {
+            "type": "integer",
+            "title": "Total Points"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "newly_unlocked": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Newly Unlocked",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "streak",
+          "points_earned",
+          "total_points",
+          "level",
+          "message"
+        ],
+        "title": "ConfirmPublishResponse"
+      },
+      "DeepModeMessageRequest": {
+        "properties": {
+          "checkin_id": {
+            "type": "integer",
+            "title": "Checkin Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "angle": {
+            "type": "string",
+            "title": "Angle",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkin_id",
+          "message"
+        ],
+        "title": "DeepModeMessageRequest"
+      },
+      "DeepModeMessageResponse": {
+        "properties": {
+          "reply": {
+            "type": "string",
+            "title": "Reply"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "draft": {
+            "type": "string",
+            "title": "Draft",
+            "default": ""
+          },
+          "has_draft": {
+            "type": "boolean",
+            "title": "Has Draft",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "reply",
+          "status"
+        ],
+        "title": "DeepModeMessageResponse"
+      },
+      "GetHotTopicsResponse": {
+        "properties": {
+          "topics": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Topics"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topics",
+          "date"
+        ],
+        "title": "GetHotTopicsResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoginRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "LoginRequest"
+      },
+      "LoginResponse": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserStatusResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "user"
+        ],
+        "title": "LoginResponse"
+      },
+      "MessageRequest": {
+        "properties": {
+          "checkin_id": {
+            "type": "integer",
+            "title": "Checkin Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkin_id",
+          "message"
+        ],
+        "title": "MessageRequest"
+      },
+      "MessageResponse": {
+        "properties": {
+          "reply": {
+            "type": "string",
+            "title": "Reply"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckInStatus"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reply",
+          "status"
+        ],
+        "title": "MessageResponse"
+      },
+      "Platform": {
+        "type": "string",
+        "enum": [
+          "twitter",
+          "xiaohongshu",
+          "linkedin"
+        ],
+        "title": "Platform"
+      },
+      "PublishResponse": {
+        "properties": {
+          "streak": {
+            "type": "integer",
+            "title": "Streak"
+          },
+          "points_earned": {
+            "type": "integer",
+            "title": "Points Earned"
+          },
+          "total_points": {
+            "type": "integer",
+            "title": "Total Points"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "diamonds": {
+            "type": "integer",
+            "title": "Diamonds"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "newly_unlocked": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Newly Unlocked",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "streak",
+          "points_earned",
+          "total_points",
+          "level",
+          "diamonds",
+          "message"
+        ],
+        "title": "PublishResponse"
+      },
+      "QuickGeneratePluginRequest": {
+        "properties": {
+          "hot_topic": {
+            "type": "string",
+            "title": "Hot Topic"
+          },
+          "angle": {
+            "type": "string",
+            "title": "Angle"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "default": "xiaohongshu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hot_topic",
+          "angle"
+        ],
+        "title": "QuickGeneratePluginRequest"
+      },
+      "QuickGeneratePluginResponse": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "char_count": {
+            "type": "integer",
+            "title": "Char Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content",
+          "platform",
+          "char_count"
+        ],
+        "title": "QuickGeneratePluginResponse"
+      },
+      "QuickGenerateRequest": {
+        "properties": {
+          "hot_topic": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Hot Topic"
+          },
+          "angle": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Angle"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/Platform",
+            "default": "xiaohongshu"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hot_topic",
+          "angle"
+        ],
+        "title": "QuickGenerateRequest"
+      },
+      "QuickGenerateResponse": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/Platform"
+          },
+          "char_count": {
+            "type": "integer",
+            "title": "Char Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content",
+          "platform",
+          "char_count"
+        ],
+        "title": "QuickGenerateResponse"
+      },
+      "ReminderSettingsRequest": {
+        "properties": {
+          "reminder_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Time"
+          },
+          "reminder_enabled": {
+            "type": "boolean",
+            "title": "Reminder Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reminder_enabled"
+        ],
+        "title": "ReminderSettingsRequest"
+      },
+      "ReminderStatusResponse": {
+        "properties": {
+          "reminder_enabled": {
+            "type": "boolean",
+            "title": "Reminder Enabled"
+          },
+          "reminder_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Time"
+          },
+          "reminder_needed": {
+            "type": "boolean",
+            "title": "Reminder Needed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reminder_enabled",
+          "reminder_time",
+          "reminder_needed"
+        ],
+        "title": "ReminderStatusResponse"
+      },
+      "SelectTopicRequest": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Topic"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic"
+        ],
+        "title": "SelectTopicRequest"
+      },
+      "SelectTopicResponse": {
+        "properties": {
+          "checkin_id": {
+            "type": "integer",
+            "title": "Checkin Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckInStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkin_id",
+          "status"
+        ],
+        "title": "SelectTopicResponse"
+      },
+      "StartDeepModeRequest": {
+        "properties": {
+          "hot_topic": {
+            "type": "string",
+            "title": "Hot Topic"
+          },
+          "angle": {
+            "type": "string",
+            "title": "Angle"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hot_topic",
+          "angle"
+        ],
+        "title": "StartDeepModeRequest"
+      },
+      "StartDeepModeResponse": {
+        "properties": {
+          "checkin_id": {
+            "type": "integer",
+            "title": "Checkin Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "opening_message": {
+            "type": "string",
+            "title": "Opening Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkin_id",
+          "status",
+          "opening_message"
+        ],
+        "title": "StartDeepModeResponse"
+      },
+      "TopicCard": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "batch_id": {
+            "type": "string",
+            "title": "Batch Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "batch_id"
+        ],
+        "title": "TopicCard"
+      },
+      "TopicsResponse": {
+        "properties": {
+          "topics": {
+            "items": {
+              "$ref": "#/components/schemas/TopicCard"
+            },
+            "type": "array",
+            "title": "Topics"
+          },
+          "refresh_count": {
+            "type": "integer",
+            "title": "Refresh Count"
+          },
+          "max_refreshes": {
+            "type": "integer",
+            "title": "Max Refreshes",
+            "default": 3
+          }
+        },
+        "type": "object",
+        "required": [
+          "topics",
+          "refresh_count"
+        ],
+        "title": "TopicsResponse"
+      },
+      "UserStatsResponse": {
+        "properties": {
+          "streak": {
+            "type": "integer",
+            "title": "Streak"
+          },
+          "longest_streak": {
+            "type": "integer",
+            "title": "Longest Streak"
+          },
+          "points": {
+            "type": "integer",
+            "title": "Points"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "diamonds": {
+            "type": "integer",
+            "title": "Diamonds"
+          },
+          "today_completed": {
+            "type": "boolean",
+            "title": "Today Completed"
+          },
+          "achievements": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Achievements",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "streak",
+          "longest_streak",
+          "points",
+          "level",
+          "diamonds",
+          "today_completed"
+        ],
+        "title": "UserStatsResponse"
+      },
+      "UserStatusResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "streak": {
+            "type": "integer",
+            "title": "Streak"
+          },
+          "longest_streak": {
+            "type": "integer",
+            "title": "Longest Streak"
+          },
+          "points": {
+            "type": "integer",
+            "title": "Points"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "diamonds": {
+            "type": "integer",
+            "title": "Diamonds"
+          },
+          "reminder_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Time"
+          },
+          "reminder_enabled": {
+            "type": "boolean",
+            "title": "Reminder Enabled"
+          },
+          "last_checkin_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checkin Date"
+          },
+          "today_completed": {
+            "type": "boolean",
+            "title": "Today Completed"
+          },
+          "reminder_needed": {
+            "type": "boolean",
+            "title": "Reminder Needed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "streak",
+          "longest_streak",
+          "points",
+          "level",
+          "diamonds",
+          "reminder_time",
+          "reminder_enabled",
+          "last_checkin_date",
+          "today_completed"
+        ],
+        "title": "UserStatusResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WebLoginRequest": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "WebLoginRequest"
+      },
+      "app__routers__coze_plugin__ConfirmPublishRequest": {
+        "properties": {
+          "checkin_id": {
+            "type": "integer",
+            "title": "Checkin Id"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkin_id",
+          "content"
+        ],
+        "title": "ConfirmPublishRequest"
+      },
+      "app__schemas__ConfirmPublishRequest": {
+        "properties": {
+          "checkin_id": {
+            "type": "integer",
+            "title": "Checkin Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checkin_id"
+        ],
+        "title": "ConfirmPublishRequest"
+      }
+    },
+    "securitySchemes": {
+      "CozePluginToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Coze-Plugin-Token"
+      }
+    }
+  }
+}

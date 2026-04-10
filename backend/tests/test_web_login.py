@@ -1,11 +1,12 @@
 import pytest
 from app.models import User
 from app.routers.user import create_jwt_token
+from app.config import settings
 
 
 def test_web_login_correct_password(client, db):
     """Correct password returns token and user."""
-    response = client.post("/api/web_login", json={"password": "test123"})
+    response = client.post("/api/web_login", json={"password": settings.admin_password})
     assert response.status_code == 200
     data = response.json()
     assert "token" in data
@@ -21,8 +22,8 @@ def test_web_login_wrong_password(client, db):
 
 def test_web_login_idempotent(client, db):
     """Multiple logins with correct password return same user."""
-    client.post("/api/web_login", json={"password": "test123"})
-    client.post("/api/web_login", json={"password": "test123"})
+    client.post("/api/web_login", json={"password": settings.admin_password})
+    client.post("/api/web_login", json={"password": settings.admin_password})
 
     users = db.query(User).filter(User.openid == "web_admin").all()
     assert len(users) == 1
@@ -30,7 +31,7 @@ def test_web_login_idempotent(client, db):
 
 def test_web_login_token_works_for_user_status(client, db):
     """Token from web_login can access /api/user_status."""
-    resp = client.post("/api/web_login", json={"password": "test123"})
+    resp = client.post("/api/web_login", json={"password": settings.admin_password})
     token = resp.json()["token"]
 
     status_resp = client.get("/api/user_status", headers={"Authorization": f"Bearer {token}"})

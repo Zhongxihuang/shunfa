@@ -1,15 +1,15 @@
 """Coze plugin API router.
 
 These endpoints are called by Coze workflows as plugin actions.
-All requests carry the Feishu user_id in the X-Feishu-User-Id header,
-which maps to or creates a SQLite User record for streak/points tracking.
+Requests may include a Feishu user id header; when missing, the backend
+falls back to compatible identity headers or an anonymous Coze user.
 
 Endpoint prefix: /api/coze/
-Auth: X-Coze-Plugin-Token header (shared secret) + X-Feishu-User-Id header
+Auth: X-Coze-Plugin-Token header (shared secret) + optional user identity headers
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from datetime import date
@@ -18,26 +18,54 @@ from ..dependencies import get_db
 from ..models import User, CheckIn, CheckInStatus
 from ..config import settings
 from ..utils.time_utils import get_today_cst
-from ..services.content_service import quick_generate, process_message, confirm_content, confirm_publish
-from ..services.hot_topic_store import get_pending_topics, mark_as_pushed
+from ..services.content_service import quick_generate, process_message, confirm_content, confirm_publish, reset_checkin_for_new_topic
+from ..services.hot_topic_store import get_pending_topics
 from ..schemas import HotTopicRecord, Platform
 
 router = APIRouter(prefix="/coze")
 
+ANONYMOUS_COZE_USER = "anonymous"
+USER_HEADER_PREFIXES = (
+    ("X-Lark-User-Id", "feishu_user"),
+    ("X-User-Id", "feishu_user"),
+    ("X-Feishu-Open-Id", "feishu_openid"),
+    ("X-Lark-Open-Id", "feishu_openid"),
+    ("X-Open-Id", "feishu_openid"),
+    ("X-Coze-Conversation-Id", "coze_conversation"),
+    ("X-Conversation-Id", "coze_conversation"),
+    ("X-Coze-Chat-Id", "coze_chat"),
+    ("X-Chat-Id", "coze_chat"),
+    ("X-Request-Id", "coze_request"),
+)
+
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
+def _resolve_user_identity(request: Request, explicit_user_id: Optional[str]) -> str:
+    if explicit_user_id and explicit_user_id.strip():
+        return f"feishu_user:{explicit_user_id.strip()}"
+
+    for header_name, prefix in USER_HEADER_PREFIXES:
+        value = request.headers.get(header_name)
+        if value and value.strip():
+            return f"{prefix}:{value.strip()}"
+
+    return f"coze_anonymous:{ANONYMOUS_COZE_USER}"
+
+
 def get_coze_user(
-    x_feishu_user_id: str = Header(..., alias="X-Feishu-User-Id"),
+    request: Request,
+    x_feishu_user_id: Optional[str] = Header(None, alias="X-Feishu-User-Id"),
     x_coze_plugin_token: str = Header(..., alias="X-Coze-Plugin-Token"),
     db: Session = Depends(get_db),
 ) -> User:
     """Extract Feishu user ID from Coze request headers and look up/create User."""
+    if not settings.coze_plugin_token:
+        raise HTTPException(status_code=503, detail="Plugin auth is not configured")
     if x_coze_plugin_token != settings.coze_plugin_token:
         raise HTTPException(status_code=401, detail="Invalid plugin token")
 
-    # Use feishu_user_id as the openid for Coze users (prefixed to avoid collision)
-    openid = f"feishu:{x_feishu_user_id}"
+    openid = _resolve_user_identity(request, x_feishu_user_id)
     user = db.query(User).filter(User.openid == openid).first()
     if not user:
         user = User(openid=openid)
@@ -134,6 +162,8 @@ async def get_hot_topics(
             "index": i + 1,
             "hot_topic": t.hot_topic,
             "hot_source": t.hot_source,
+            "hot_url": t.hot_url,
+            "hot_summary": t.hot_summary,
             "ai_angle": t.ai_angle,
             "ai_counter_angle": t.ai_counter_angle,
             "score": t.score,
@@ -181,7 +211,7 @@ async def start_deep_mode(
 
     if existing:
         checkin = existing
-        checkin.topic = request.hot_topic
+        reset_checkin_for_new_topic(checkin, request.hot_topic, CheckInStatus.discussing)
         db.commit()
     else:
         checkin = CheckIn(

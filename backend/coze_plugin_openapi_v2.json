@@ -25,11 +25,11 @@
           {
             "name": "X-Feishu-User-Id",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "飞书用户ID，Coze自动注入"
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
           },
           {
             "name": "X-Coze-Plugin-Token",
@@ -62,6 +62,14 @@
                           },
                           "hot_source": {
                             "type": "string"
+                          },
+                          "hot_url": {
+                            "type": "string",
+                            "description": "原文链接"
+                          },
+                          "hot_summary": {
+                            "type": "string",
+                            "description": "文章摘要"
                           },
                           "ai_angle": {
                             "type": "string"
@@ -101,11 +109,11 @@
           {
             "name": "X-Feishu-User-Id",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "飞书用户ID，Coze自动注入"
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
           },
           {
             "name": "X-Coze-Plugin-Token",
@@ -185,11 +193,11 @@
           {
             "name": "X-Feishu-User-Id",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "飞书用户ID，Coze自动注入"
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
           },
           {
             "name": "X-Coze-Plugin-Token",
@@ -259,11 +267,11 @@
           {
             "name": "X-Feishu-User-Id",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "飞书用户ID，Coze自动注入"
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
           },
           {
             "name": "X-Coze-Plugin-Token",
@@ -341,11 +349,11 @@
           {
             "name": "X-Feishu-User-Id",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "飞书用户ID，Coze自动注入"
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
           },
           {
             "name": "X-Coze-Plugin-Token",
@@ -427,11 +435,11 @@
           {
             "name": "X-Feishu-User-Id",
             "in": "header",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "飞书用户ID，Coze自动注入"
+            "description": "首选的飞书用户ID；若未注入，后端会尝试兼容其他用户标识头并降级到匿名Coze用户"
           },
           {
             "name": "X-Coze-Plugin-Token",
@@ -486,7 +494,8 @@
   },
   "servers": [
     {
-      "url": "https://earl-stomatal-gladis.ngrok-free.dev"
+      "url": "https://your-railway-domain.up.railway.app",
+      "description": "Replace with the actual Railway production backend URL before importing into Coze"
     }
   ]
 }

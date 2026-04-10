@@ -40,6 +40,8 @@ class RawArticle(BaseModel):
 class ScoredTopic(BaseModel):
     hot_topic: str
     hot_source: str
+    hot_url: str = ""
+    hot_summary: str = ""
     topic_category: TopicCategory = TopicCategory.other
     ai_angle: str = ""
     ai_counter_angle: str = ""
@@ -117,7 +119,7 @@ class TopicsResponse(BaseModel):
 # Content schemas (used in Phase 3)
 class MessageRequest(BaseModel):
     checkin_id: int
-    message: str
+    message: str = Field(..., min_length=1, max_length=2000)
 
 
 class MessageResponse(BaseModel):
@@ -138,11 +140,22 @@ class SelectTopicResponse(BaseModel):
 
 class ConfirmContentRequest(BaseModel):
     checkin_id: int
-    content: str  # possibly edited by user
+    content: str = Field(..., min_length=1, max_length=5000)  # possibly edited by user
 
 
 class ConfirmPublishRequest(BaseModel):
     checkin_id: int
+
+
+class ContentFeedbackRequest(BaseModel):
+    checkin_id: int
+    feedback: str = Field(..., pattern="^(up|down)$")
+
+
+class ContentFeedbackResponse(BaseModel):
+    checkin_id: int
+    feedback: str
+    recorded: bool = True
 
 
 class PublishResponse(BaseModel):

@@ -39,7 +39,8 @@ async def run():
 
     # Step 3: Store to Bitable (Phase 2 — wired up after bitable_client is built)
     try:
-        from ..services.hot_topic_store import save_topics
+        from ..services.hot_topic_store import save_topics, mark_expired
+        await mark_expired(date.today())
         await save_topics(topics)
         logger.info(f"Saved {len(topics)} hot topics to Bitable")
     except ImportError:

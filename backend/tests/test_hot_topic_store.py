@@ -17,6 +17,8 @@ def _make_topic(score: int = 8, category: TopicCategory = TopicCategory.ai_model
     return ScoredTopic(
         hot_topic="DeepSeek V4 Released",
         hot_source="Hacker News",
+        hot_url="https://hn.com/item?id=123",
+        hot_summary="DeepSeek announced V4 with major cost improvements.",
         topic_category=category,
         ai_angle="国产AI性价比之战",
         ai_counter_angle="成本降低不等于质量提升",
@@ -73,6 +75,8 @@ async def test_save_topics_includes_date_in_fields(monkeypatch):
     assert records_arg[0]["date"] == "2026-04-02"
     assert records_arg[0]["score"] == 8
     assert records_arg[0]["status"] == "pending"
+    assert records_arg[0]["hot_url"] == "https://hn.com/item?id=123"
+    assert records_arg[0]["hot_summary"] == "DeepSeek announced V4 with major cost improvements."
 
 
 # ── get_pending_topics ────────────────────────────────────────────────────────
@@ -108,6 +112,9 @@ async def test_get_pending_topics_returns_records(monkeypatch):
     assert records[0].status == TopicStatus.pending
     assert records[0].record_id == "rec_1"
     assert records[0].topic_date is not None
+    assert records[0].hot_url == ""      # not in fixture fields → defaults to ""
+    assert records[0].hot_summary == ""  # not in fixture fields → defaults to ""
+    assert 'CurrentValue.[date]' in client.list_records.call_args.kwargs["filter_formula"]
 
 
 @pytest.mark.asyncio

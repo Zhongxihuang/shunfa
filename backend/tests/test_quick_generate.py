@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 from app.services.content_service import quick_generate, _format_for_platform
+from app.config import settings
 
 SAMPLE_XHS = (
     "DeepSeek V4定价出来了，比GPT-5便宜70%...\n"
@@ -148,8 +149,8 @@ def test_format_unknown_platform_unchanged():
 # ── API endpoint ──────────────────────────────────────────────────────────────
 
 def _get_test_token(client) -> str:
-    os.environ.setdefault("ADMIN_PASSWORD", "shunfa2024")
-    resp = client.post("/api/web_login", json={"password": "shunfa2024"})
+    os.environ.setdefault("ADMIN_PASSWORD", settings.admin_password)
+    resp = client.post("/api/web_login", json={"password": settings.admin_password})
     if resp.status_code == 200 and "token" in resp.json():
         return resp.json()["token"]
     return "invalid"
