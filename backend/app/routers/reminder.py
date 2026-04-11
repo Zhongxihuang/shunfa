@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from ..dependencies import get_db, get_current_user
 from ..models import User
-from ..services.reminder_service import check_reminder_needed, update_reminder_settings
+from ..services.reminder_service import check_reminder_needed, update_reminder_settings, send_due_reminders, is_wechat_reminder_configured
 
 router = APIRouter()
 
@@ -17,6 +17,14 @@ class ReminderStatusResponse(BaseModel):
     reminder_enabled: bool
     reminder_time: Optional[str]
     reminder_needed: bool  # True if user should be reminded right now
+    wechat_push_configured: bool = False
+
+
+class SendReminderResponse(BaseModel):
+    checked: int
+    sent: int
+    skipped: int
+    failed: int
 
 @router.post("/reminder", response_model=ReminderStatusResponse)
 async def set_reminder(
@@ -40,7 +48,8 @@ async def set_reminder(
     return ReminderStatusResponse(
         reminder_enabled=current_user.reminder_enabled,
         reminder_time=current_user.reminder_time,
-        reminder_needed=reminder_needed
+        reminder_needed=reminder_needed,
+        wechat_push_configured=is_wechat_reminder_configured(),
     )
 
 @router.get("/reminder_status", response_model=ReminderStatusResponse)
@@ -54,5 +63,18 @@ async def get_reminder_status(
     return ReminderStatusResponse(
         reminder_enabled=current_user.reminder_enabled,
         reminder_time=current_user.reminder_time,
-        reminder_needed=reminder_needed
+        reminder_needed=reminder_needed,
+        wechat_push_configured=is_wechat_reminder_configured(),
     )
+
+
+@router.post("/reminder/send_due", response_model=SendReminderResponse)
+async def trigger_due_reminders(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.openid != "web_admin":
+        raise HTTPException(status_code=403, detail="Only web admin can trigger reminder sends")
+
+    result = await send_due_reminders(db)
+    return SendReminderResponse(**result)

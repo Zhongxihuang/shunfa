@@ -40,6 +40,10 @@ class CheckIn(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     date = Column(Date, nullable=False, index=True)
     topic = Column(Text, nullable=False)
+    topic_source = Column(String, nullable=True)
+    topic_url = Column(Text, nullable=True)
+    topic_summary = Column(Text, nullable=True)
+    topic_published_at = Column(String, nullable=True)
     content = Column(Text, nullable=True)  # final published content
     conversation_history = Column(Text, nullable=True)  # JSON string
     status = Column(SAEnum(CheckInStatus), default=CheckInStatus.topic_selected, nullable=False)
@@ -80,4 +84,42 @@ class Achievement(Base):
     __table_args__ = (
         # 每个用户每个成就只能解锁一次
         UniqueConstraint("user_id", "achievement_type", name="uq_user_achievement"),
+    )
+
+
+class HotTopic(Base):
+    __tablename__ = "hot_topics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    topic_date = Column(Date, nullable=False, index=True)
+    rank = Column(Integer, default=0, nullable=False)
+    title = Column(Text, nullable=False)
+    summary = Column(Text, nullable=True)
+    source = Column(String, nullable=False)
+    url = Column(Text, nullable=False)
+    published_at = Column(String, nullable=True)
+    category = Column(String, nullable=False, default="other")
+    score = Column(Integer, default=0, nullable=False)
+    ai_angle = Column(Text, nullable=True)
+    ai_counter_angle = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("topic_date", "title", name="uq_hot_topics_date_title"),
+    )
+
+
+class ReminderDelivery(Base):
+    __tablename__ = "reminder_deliveries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    reminder_date = Column(Date, nullable=False, index=True)
+    channel = Column(String, nullable=False, default="wechat_subscribe")
+    status = Column(String, nullable=False, default="sent")
+    response_payload = Column(Text, nullable=True)
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "reminder_date", "channel", name="uq_reminder_delivery_user_date_channel"),
     )

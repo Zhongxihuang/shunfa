@@ -6,6 +6,12 @@ class Settings(BaseSettings):
     deepseek_api_key: str
     wechat_app_id: str = ""
     wechat_app_secret: str = ""
+    wechat_subscribe_template_id: str = ""
+    wechat_subscribe_page: str = "pages/index/index"
+    wechat_subscribe_thing_key: str = "thing1"
+    wechat_subscribe_time_key: str = "time2"
+    wechat_subscribe_phrase_key: str = "phrase3"
+    wechat_subscribe_project_key: str = ""
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 720
