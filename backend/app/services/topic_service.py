@@ -1,12 +1,12 @@
-import json
 import uuid
 from datetime import timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy.sql import func
 
-from ..models import TopicHistory, CheckIn, CheckInStatus
-from ..utils.time_utils import get_today_cst, get_now_cst
+from sqlalchemy.orm import Session
+
+from ..models import CheckIn, CheckInStatus, TopicHistory
+from ..utils.time_utils import get_now_cst, get_today_cst
 from .ai_service import chat_completion
+from .prompt_templates import prompts
 
 MAX_DAILY_REFRESHES = 3
 TOPICS_PER_BATCH = 3
@@ -86,17 +86,9 @@ async def _generate_topics_via_ai(exclude_topics: list[str]) -> list[str]:
     """Generate 3 writing topics via DeepSeek AI."""
     exclude_text = ""
     if exclude_topics:
-        exclude_text = f"\n\n请避免以下已出现过的选题：\n" + "\n".join(f"- {t}" for t in exclude_topics[:20])
+        exclude_text = "\n\n请避免以下已出现过的选题：\n" + "\n".join(f"- {t}" for t in exclude_topics[:20])
 
-    prompt = f"""生成 3 个能让目标读者觉得"这只有懂行的人才知道"的写作选题。
-
-要求：
-1. 每个选题必须是一个"内行洞察"或"圈内人才懂的角度"
-2. 选题要具体、有情绪点，让人看完想说"确实是这样"
-3. 长度 15-25 字，每行一个，不要编号
-4. 适合在小红书/朋友圈分享，普通话题不要{exclude_text}
-
-直接输出 3 个选题，每行一个，不要其他内容。"""
+    prompt = prompts.topic_generation_prompt.format(exclude_text=exclude_text)
 
     messages = [{"role": "user", "content": prompt}]
     response = await chat_completion(messages, temperature=0.9, max_tokens=200)

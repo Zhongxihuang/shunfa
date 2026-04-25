@@ -5,8 +5,8 @@ import httpx
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import User, CheckIn, CheckInStatus, ReminderDelivery
-from ..utils.time_utils import get_today_cst, get_now_cst, is_reminder_time_active
+from ..models import CheckIn, CheckInStatus, ReminderDelivery, User
+from ..utils.time_utils import get_now_cst, get_today_cst, is_reminder_time_active
 
 _WECHAT_ACCESS_TOKEN: str | None = None
 _WECHAT_ACCESS_TOKEN_EXPIRES_AT: datetime | None = None

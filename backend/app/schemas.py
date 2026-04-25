@@ -1,9 +1,9 @@
-from pydantic import BaseModel, Field
 from datetime import date, datetime
-from typing import Optional, List
 from enum import Enum
-from .models import CheckInStatus
 
+from pydantic import BaseModel, Field
+
+from .models import CheckInStatus
 
 # ── RSS / Hot Topic schemas ──────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ class RawArticle(BaseModel):
     link: str
     source: str
     summary: str = ""
-    published_date: Optional[str] = None
+    published_date: str | None = None
 
 
 class ScoredTopic(BaseModel):
@@ -42,6 +42,7 @@ class ScoredTopic(BaseModel):
     hot_source: str
     hot_url: str = ""
     hot_summary: str = ""
+    published_at: str | None = None
     topic_category: TopicCategory = TopicCategory.other
     ai_angle: str = ""
     ai_counter_angle: str = ""
@@ -51,7 +52,25 @@ class ScoredTopic(BaseModel):
 
 class HotTopicRecord(ScoredTopic):
     record_id: str = ""
-    topic_date: Optional[date] = None
+    topic_date: date | None = None
+
+
+class HotTopicListItem(BaseModel):
+    id: int
+    title: str
+    summary: str = ""
+    source: str
+    url: str
+    published_at: str | None = None
+    score: int
+    category: str
+    ai_angle: str = ""
+    ai_counter_angle: str = ""
+
+
+class HotTopicsResponse(BaseModel):
+    date: date
+    topics: list[HotTopicListItem]
 
 
 # ── Content mode schemas ─────────────────────────────────────────────────────
@@ -62,9 +81,11 @@ class ContentMode(str, Enum):
 
 
 class QuickGenerateRequest(BaseModel):
+    topic_id: int | None = None
     hot_topic: str = Field(..., min_length=1, max_length=200)
     angle: str = Field(..., min_length=1, max_length=300)
     platform: Platform = Platform.xiaohongshu
+    checkin_id: int | None = None
 
 
 class QuickGenerateResponse(BaseModel):
@@ -81,9 +102,9 @@ class UserStatusResponse(BaseModel):
     points: int
     level: int
     diamonds: int
-    reminder_time: Optional[str]
+    reminder_time: str | None
     reminder_enabled: bool
-    last_checkin_date: Optional[date]
+    last_checkin_date: date | None
     today_completed: bool
     reminder_needed: bool = False
 
@@ -111,7 +132,7 @@ class TopicCard(BaseModel):
 
 
 class TopicsResponse(BaseModel):
-    topics: List[TopicCard]
+    topics: list[TopicCard]
     refresh_count: int
     max_refreshes: int = 3
 
@@ -125,12 +146,13 @@ class MessageRequest(BaseModel):
 class MessageResponse(BaseModel):
     reply: str
     status: CheckInStatus
-    draft: Optional[str] = None
+    draft: str | None = None
 
 
 class SelectTopicRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=100)
-    batch_id: Optional[str] = None  # If from suggestion, provide batch_id to mark was_used accurately
+    batch_id: str | None = None  # If from suggestion, provide batch_id to mark was_used accurately
+    hot_topic_id: int | None = None
 
 
 class SelectTopicResponse(BaseModel):
@@ -165,16 +187,38 @@ class PublishResponse(BaseModel):
     level: int
     diamonds: int
     message: str  # celebratory message
-    newly_unlocked: List[dict] = []  # 本次新解锁的成就
+    newly_unlocked: list[dict] = []  # 本次新解锁的成就
 
 
 class AchievementItem(BaseModel):
     type: str
     name: str
     desc: str
-    unlocked_at: Optional[str] = None
+    unlocked_at: str | None = None
 
 
 class AchievementsResponse(BaseModel):
-    achievements: List[AchievementItem]
+    achievements: list[AchievementItem]
     total: int
+
+
+# ── My page schemas ────────────────────────────────────────────────────────────
+
+class CheckInHistoryItem(BaseModel):
+    id: int
+    date: date
+    topic: str
+    topic_source: str | None
+    content: str | None
+    status: str
+    points_earned: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CheckInHistoryResponse(BaseModel):
+    checkins: list[CheckInHistoryItem]
+    total: int
+    draft_count: int

@@ -1,7 +1,7 @@
 """Voice record storage — reads/writes the 发声记录 Bitable table."""
 
 from datetime import date
-from typing import List, Optional
+
 from pydantic import BaseModel
 
 from ..clients.bitable_client import BitableClient, get_bitable_client
@@ -11,7 +11,7 @@ from ..schemas import Platform
 
 class VoiceRecord(BaseModel):
     record_id: str = ""
-    date: Optional[date] = None
+    date: date | None = None
     user_id: str = ""
     hot_topic: str = ""
     angle: str = ""
@@ -79,7 +79,7 @@ def _fields_to_voice_record(record_id: str, fields: dict) -> VoiceRecord:
 
 async def save_voice_record(
     record: VoiceRecord,
-    client: Optional[BitableClient] = None,
+    client: BitableClient | None = None,
 ) -> str:
     """Save a single voice record. Returns the created record_id."""
     client = client or get_bitable_client()
@@ -90,8 +90,8 @@ async def save_voice_record(
 async def get_user_records(
     user_id: str,
     limit: int = 20,
-    client: Optional[BitableClient] = None,
-) -> List[VoiceRecord]:
+    client: BitableClient | None = None,
+) -> list[VoiceRecord]:
     """Fetch recent voice records for a user, newest first."""
     client = client or get_bitable_client()
     table_id = settings.bitable_voice_record_table_id
@@ -113,7 +113,7 @@ async def update_record_status(
     record_id: str,
     status: str,
     adopted: bool,
-    client: Optional[BitableClient] = None,
+    client: BitableClient | None = None,
 ) -> None:
     """Update status and adopted flag on an existing voice record."""
     client = client or get_bitable_client()

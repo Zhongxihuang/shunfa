@@ -1,16 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-import httpx
-from datetime import datetime, timedelta, timezone, date
-from jose import jwt
+from datetime import UTC, date, datetime, timedelta
 
-from ..dependencies import get_db, get_current_user
-from ..models import User, CheckIn
-from ..schemas import LoginRequest, LoginResponse, UserStatusResponse, AchievementsResponse, AchievementItem, WebLoginRequest
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from jose import jwt
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
 from ..config import settings
-from ..utils.time_utils import get_today_cst
+from ..dependencies import get_current_user, get_db
+from ..models import CheckIn, User
+from ..schemas import (
+    AchievementItem,
+    AchievementsResponse,
+    LoginRequest,
+    LoginResponse,
+    UserStatusResponse,
+    WebLoginRequest,
+)
 from ..services.reminder_service import check_reminder_needed
+from ..utils.time_utils import get_today_cst
 
 router = APIRouter()
 
@@ -43,7 +51,7 @@ async def get_wechat_openid(code: str) -> str:
 
 
 def create_jwt_token(user_id: int) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expire_hours)
+    expire = datetime.now(UTC) + timedelta(hours=settings.jwt_expire_hours)
     payload = {"sub": str(user_id), "exp": expire}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 

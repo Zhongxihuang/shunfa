@@ -32,7 +32,7 @@ def test_generate_content_starts_discussion(user, checkin, client, db):
     """Test that sending first message starts discussion."""
     token = create_jwt_token(user.id)
 
-    with patch("app.services.content_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
         mock_ai.return_value = "你在工作中有什么具体的突破想分享？是一次技术攻关，还是与人合作的突破？"
 
         response = client.post(
@@ -63,7 +63,7 @@ def test_generate_content_produces_draft(user, checkin, client, db):
     draft_content = "上周我终于解决了困扰团队三个月的bug。那一刻，我感受到了久违的成就感。"
     ai_response = f"好的！<<<DRAFT_START>>>{draft_content}<<<DRAFT_END>>>"
 
-    with patch("app.services.content_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
         mock_ai.return_value = ai_response
 
         response = client.post(
@@ -81,7 +81,7 @@ def test_conversation_history_persisted(user, checkin, client, db):
     """Test that conversation history is saved to CheckIn."""
     token = create_jwt_token(user.id)
 
-    with patch("app.services.content_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
         mock_ai.return_value = "能说说具体是什么突破吗？"
 
         client.post(
@@ -108,7 +108,7 @@ def test_confirm_content(user, checkin, client, db):
     checkin.content = "初稿内容"
     db.commit()
 
-    with patch("app.services.content_service._quality_check", new_callable=AsyncMock) as mock_qc:
+    with patch("app.services.draft_service._quality_check", new_callable=AsyncMock) as mock_qc:
         mock_qc.return_value = {"pass": True, "issues": []}
         response = client.post(
             "/api/confirm_content",
@@ -123,13 +123,32 @@ def test_confirm_content(user, checkin, client, db):
     assert updated.content == "用户修改后的内容"
 
 
+def test_get_checkin_returns_topic_snapshot(user, checkin, client, db):
+    token = create_jwt_token(user.id)
+    checkin.topic_source = "TechCrunch AI"
+    checkin.topic_url = "https://example.com/openai"
+    checkin.topic_summary = "OpenAI 新增中间价格带。"
+    checkin.topic_published_at = "2026-04-10T09:00:00Z"
+    db.commit()
+
+    response = client.get(
+        f"/api/checkin/{checkin.id}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["topic_source"] == "TechCrunch AI"
+    assert data["topic_url"] == "https://example.com/openai"
+
+
 def test_confirm_content_soft_signal_when_quality_fails(user, checkin, client, db):
     token = create_jwt_token(user.id)
     checkin.status = CheckInStatus.draft_ready
     checkin.content = "初稿内容"
     db.commit()
 
-    with patch("app.services.content_service._quality_check", new_callable=AsyncMock) as mock_qc:
+    with patch("app.services.draft_service._quality_check", new_callable=AsyncMock) as mock_qc:
         mock_qc.return_value = {"pass": False, "issues": ["缺少事实锚点"], "available": True}
         response = client.post(
             "/api/confirm_content",
@@ -245,7 +264,7 @@ def test_status_transition_completed_blocks_message(user, checkin, client, db):
     checkin.status = CheckInStatus.completed
     db.commit()
 
-    with patch("app.services.content_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
         response = client.post(
             "/api/generate_content",
             json={"checkin_id": checkin.id, "message": "再说点什么"},

@@ -494,8 +494,8 @@
   },
   "servers": [
     {
-      "url": "https://your-railway-domain.up.railway.app",
-      "description": "Replace with the actual Railway production backend URL before importing into Coze"
+      "url": "https://shunfa-production.up.railway.app",
+      "description": "Railway production backend URL"
     }
   ]
 }

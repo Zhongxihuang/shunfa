@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock
-from app.models import User, CheckIn, CheckInStatus, TopicHistory
+from app.models import User, CheckIn, CheckInStatus, TopicHistory, HotTopic
 from app.services.topic_service import generate_topics, MAX_DAILY_REFRESHES
 from app.utils.time_utils import get_today_cst
 
@@ -151,3 +151,69 @@ def test_select_topic_resets_stale_checkin_state(user, db, client):
     assert checkin.conversation_history is None
     assert checkin.content_approved is False
     assert checkin.content_feedback is None
+
+
+def test_select_hot_topic_snapshots_source_and_url(user, db, client):
+    from app.routers.user import create_jwt_token
+
+    token = create_jwt_token(user.id)
+    hot_topic = HotTopic(
+        topic_date=get_today_cst(),
+        rank=1,
+        title="OpenAI 新价格带",
+        summary="新增了 100 美元这一档。",
+        source="TechCrunch AI",
+        url="https://example.com/openai-pricing",
+        published_at="2026-04-10T09:00:00Z",
+        category="ai_model",
+        score=9,
+        ai_angle="AI 定价分层开始了",
+        ai_counter_angle="还是很贵",
+    )
+    db.add(hot_topic)
+    db.commit()
+    db.refresh(hot_topic)
+
+    response = client.post(
+        "/api/select_topic",
+        json={"topic": "忽略这个字符串", "hot_topic_id": hot_topic.id},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+    checkin = db.query(CheckIn).filter(CheckIn.user_id == user.id).first()
+    assert checkin.topic == "OpenAI 新价格带"
+    assert checkin.topic_source == "TechCrunch AI"
+    assert checkin.topic_url == "https://example.com/openai-pricing"
+    assert checkin.topic_summary == "新增了 100 美元这一档。"
+
+
+def test_select_topic_rejects_non_today_hot_topic(user, db, client):
+    from datetime import timedelta
+    from app.routers.user import create_jwt_token
+
+    token = create_jwt_token(user.id)
+    hot_topic = HotTopic(
+        topic_date=get_today_cst() - timedelta(days=1),
+        rank=1,
+        title="昨天的热点",
+        summary="这不是今天的热点。",
+        source="TechCrunch AI",
+        url="https://example.com/yesterday",
+        published_at="2026-04-09T09:00:00Z",
+        category="ai_model",
+        score=9,
+        ai_angle="昨天的判断",
+        ai_counter_angle="昨天的反方",
+    )
+    db.add(hot_topic)
+    db.commit()
+    db.refresh(hot_topic)
+
+    response = client.post(
+        "/api/select_topic",
+        json={"topic": "忽略", "hot_topic_id": hot_topic.id},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 404

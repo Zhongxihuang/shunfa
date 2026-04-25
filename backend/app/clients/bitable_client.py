@@ -7,10 +7,10 @@ Usage:
     record_id = await client.create_record(table_id, {"field": "value"})
 """
 
-import time
 import asyncio
 import logging
-from typing import Any, Optional
+import time
+from typing import Any
 
 import httpx
 
@@ -34,7 +34,7 @@ class BitableClient:
         self._app_id = app_id
         self._app_secret = app_secret
         self._app_token = app_token
-        self._token: Optional[str] = None
+        self._token: str | None = None
         self._token_expires_at: float = 0
         self._lock = asyncio.Lock()
 
@@ -119,7 +119,7 @@ class BitableClient:
         filter_formula: str = "",
         page_size: int = 20,
         page_token: str = "",
-        sort: Optional[list] = None,
+        sort: list | None = None,
     ) -> dict:
         """List records with optional filter formula. Returns raw API response data."""
         url = (

@@ -1,8 +1,9 @@
 """RSS aggregation service — fetches and parses articles from multiple AI news sources."""
 
 import asyncio
+import calendar
 import hashlib
-from typing import List
+from datetime import UTC, datetime
 
 import feedparser
 import httpx
@@ -11,7 +12,7 @@ from ..config import settings
 from ..schemas import RawArticle
 
 
-async def fetch_source(url: str, source_name: str) -> List[RawArticle]:
+async def fetch_source(url: str, source_name: str) -> list[RawArticle]:
     """Fetch and parse a single RSS source. Returns empty list on any error."""
     try:
         async with httpx.AsyncClient(timeout=settings.rss_fetch_timeout) as client:
@@ -22,7 +23,7 @@ async def fetch_source(url: str, source_name: str) -> List[RawArticle]:
         return []
 
     feed = feedparser.parse(content)
-    articles: List[RawArticle] = []
+    articles: list[RawArticle] = []
 
     for entry in feed.entries[: settings.rss_max_articles_per_source]:
         title = entry.get("title", "").strip()
@@ -31,6 +32,9 @@ async def fetch_source(url: str, source_name: str) -> List[RawArticle]:
         summary = entry.get("summary", entry.get("description", "")).strip()
         # Strip HTML tags from summary (basic)
         summary = _strip_html(summary)[:500]
+        # HN "Comments" or empty summary → use title as a meaningful fallback
+        if not summary or summary.lower() in ("comments", "read more", "read the article"):
+            summary = title
 
         articles.append(
             RawArticle(
@@ -38,32 +42,32 @@ async def fetch_source(url: str, source_name: str) -> List[RawArticle]:
                 link=entry.get("link", ""),
                 source=source_name,
                 summary=summary,
-                published_date=entry.get("published", None),
+                published_date=_parse_article_date(entry),
             )
         )
 
     return articles
 
 
-async def fetch_all_sources() -> List[RawArticle]:
+async def fetch_all_sources() -> list[RawArticle]:
     """Fetch all configured RSS sources in parallel and return deduplicated articles."""
     sources = settings.rss_sources
     source_names = [_url_to_source_name(url) for url in sources]
 
-    tasks = [fetch_source(url, name) for url, name in zip(sources, source_names)]
+    tasks = [fetch_source(url, name) for url, name in zip(sources, source_names, strict=False)]
     results = await asyncio.gather(*tasks)
 
-    all_articles: List[RawArticle] = []
+    all_articles: list[RawArticle] = []
     for batch in results:
         all_articles.extend(batch)
 
     return _deduplicate(all_articles)
 
 
-def _deduplicate(articles: List[RawArticle]) -> List[RawArticle]:
+def _deduplicate(articles: list[RawArticle]) -> list[RawArticle]:
     """Remove near-duplicate articles by title fingerprint."""
     seen: set = set()
-    unique: List[RawArticle] = []
+    unique: list[RawArticle] = []
     for article in articles:
         fingerprint = _title_fingerprint(article.title)
         if fingerprint not in seen:
@@ -87,13 +91,28 @@ def _url_to_source_name(url: str) -> str:
         "technologyreview": "MIT Tech Review",
         "theverge": "The Verge",
         "arstechnica": "Ars Technica",
-        "jiqizhixin": "机器之心",
+        "leiphone": "雷锋网",
         "36kr": "36Kr",
     }
     for key, name in mapping.items():
         if key in url:
             return name
     return url.split("/")[2]  # fallback: domain
+
+
+def _parse_article_date(entry) -> str | None:
+    """Extract article date as UTC ISO string from feedparser entry.
+
+    Uses feedparser's published_parsed (struct_time in UTC) for reliability.
+    Falls back to raw string only when struct_time is unavailable.
+    """
+    parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+    if parsed:
+        dt = datetime.fromtimestamp(calendar.timegm(parsed), tz=UTC)
+        return dt.isoformat().replace("+00:00", "Z")
+    # Fallback to raw string (less reliable)
+    raw = entry.get("published") or entry.get("updated")
+    return raw  # type: ignore[return-value]
 
 
 def _strip_html(text: str) -> str:

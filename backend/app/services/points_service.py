@@ -1,10 +1,10 @@
 import json
-from datetime import date
+
 from sqlalchemy.orm import Session
 
-from ..models import User, CheckIn
+from ..models import CheckIn, User
 from ..utils.time_utils import get_now_cst, is_reminder_time_active
-from .content_service import count_real_user_rounds
+from .discussion_service import count_real_user_rounds
 
 LEVEL_THRESHOLDS = [0, 100, 300, 700, 1500, 3100, 6300]
 
@@ -70,6 +70,8 @@ def apply_points_and_update_user(
     """
     Apply points to user and update level/diamonds.
     Returns the points breakdown and new user stats.
+
+    Note: Does NOT commit - caller controls the transaction boundary.
     """
     breakdown = calculate_points_earned(checkin, user)
     points_earned = breakdown["total"]
@@ -82,7 +84,8 @@ def apply_points_and_update_user(
     user.level = calculate_level(user.points)
     user.diamonds = calculate_diamonds(user.points)
 
-    db.commit()
+    # Flush to trigger constraint checks, but do NOT commit
+    db.flush()
 
     return {
         "points_earned": points_earned,

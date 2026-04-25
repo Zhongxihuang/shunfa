@@ -8,19 +8,26 @@ Endpoint prefix: /api/coze/
 Auth: X-Coze-Plugin-Token header (shared secret) + optional user identity headers
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
-from datetime import date
 
-from ..dependencies import get_db
-from ..models import User, CheckIn, CheckInStatus
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from ..config import settings
-from ..utils.time_utils import get_today_cst
-from ..services.content_service import quick_generate, process_message, confirm_content, confirm_publish, reset_checkin_for_new_topic
+from ..dependencies import get_db
+from ..models import CheckIn, CheckInStatus, User
+from ..services.content_service import confirm_publish
+from ..services.draft_service import (
+    confirm_content,
+    quick_generate,
+)
+from ..services.discussion_service import (
+    AUTO_SUGGEST_SENTINEL,
+    process_message,
+    reset_checkin_for_new_topic,
+)
 from ..services.hot_topic_store import get_pending_topics
-from ..schemas import HotTopicRecord, Platform
+from ..utils.time_utils import get_today_cst
 
 router = APIRouter(prefix="/coze")
 
@@ -41,7 +48,7 @@ USER_HEADER_PREFIXES = (
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-def _resolve_user_identity(request: Request, explicit_user_id: Optional[str]) -> str:
+def _resolve_user_identity(request: Request, explicit_user_id: str | None) -> str:
     if explicit_user_id and explicit_user_id.strip():
         return f"feishu_user:{explicit_user_id.strip()}"
 
@@ -55,7 +62,7 @@ def _resolve_user_identity(request: Request, explicit_user_id: Optional[str]) ->
 
 def get_coze_user(
     request: Request,
-    x_feishu_user_id: Optional[str] = Header(None, alias="X-Feishu-User-Id"),
+    x_feishu_user_id: str | None = Header(None, alias="X-Feishu-User-Id"),
     x_coze_plugin_token: str = Header(..., alias="X-Coze-Plugin-Token"),
     db: Session = Depends(get_db),
 ) -> User:
@@ -78,7 +85,7 @@ def get_coze_user(
 # ── Request / Response models ─────────────────────────────────────────────────
 
 class GetHotTopicsResponse(BaseModel):
-    topics: List[dict]
+    topics: list[dict]
     date: str
 
 
@@ -129,7 +136,7 @@ class ConfirmPublishResponse(BaseModel):
     total_points: int
     level: int
     message: str
-    newly_unlocked: List[dict] = []
+    newly_unlocked: list[dict] = []
 
 
 class UserStatsResponse(BaseModel):
@@ -139,7 +146,7 @@ class UserStatsResponse(BaseModel):
     level: int
     diamonds: int
     today_completed: bool
-    achievements: List[dict] = []
+    achievements: list[dict] = []
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -225,7 +232,6 @@ async def start_deep_mode(
         db.refresh(checkin)
 
     # Generate opening angle suggestions
-    from ..services.content_service import AUTO_SUGGEST_SENTINEL
     result = await process_message(
         checkin=checkin,
         user_message=AUTO_SUGGEST_SENTINEL,

@@ -1,12 +1,21 @@
 from datetime import date, datetime, timedelta
+
 import pytz
 
 CST = pytz.timezone("Asia/Shanghai")
 
 
 def get_today_cst() -> date:
-    """Get today's date in China Standard Time."""
-    return datetime.now(CST).date()
+    """Get today's date in China Standard Time.
+
+    Anchored to 08:00 CST as the logical day boundary — running the cron
+    at 20:00 or 03:00 both land on the same logical "today". This avoids
+    the UTC-midnight crossover (20:00 CST = 12:00 UTC = next UTC calendar day).
+    """
+    now_sh = datetime.now(CST)
+    if now_sh.hour < 8:
+        now_sh = now_sh - timedelta(days=1)
+    return now_sh.date()
 
 
 def get_now_cst() -> datetime:

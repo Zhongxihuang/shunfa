@@ -8,11 +8,48 @@ Uses DeepSeek to:
 
 import asyncio
 import json
-from typing import List
+from datetime import UTC, datetime, timedelta
 
-from .ai_service import chat_completion
 from ..config import settings
 from ..schemas import RawArticle, ScoredTopic, TopicCategory
+from .ai_service import chat_completion
+
+# Articles older than this are filtered out — keeps only recent hot topics
+MAX_ARTICLE_AGE_DAYS = 3
+
+MAX_SUMMARY_CHARS = 150  # Display-friendly summary length
+
+# Boost Chinese sources slightly to prioritize them, but not at the expense of quality
+# English articles compete on quality; Chinese articles get a modest edge
+SOURCE_BOOST: dict[str, int] = {
+    "雷锋网": 5,         # Chinese AI/Tech
+    "36Kr": 5,           # Chinese tech news
+    "Hacker News": -5,   # English content; push to bottom
+    "VentureBeat AI": 0,
+    "TechCrunch AI": 0,
+    "MIT Tech Review": 0,
+    "The Verge": 0,
+    "Ars Technica": 0,
+}
+
+
+def _is_recent(article: RawArticle) -> bool:
+    """Return True if article was published within MAX_ARTICLE_AGE_DAYS (UTC)."""
+    if not article.published_date:
+        return False
+    try:
+        raw = article.published_date.strip()
+        # Handle Z-suffix UTC
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        # Handle timezone offsets like +0800
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+    except ValueError:
+        return False
+    cutoff = datetime.now(UTC) - timedelta(days=MAX_ARTICLE_AGE_DAYS)
+    return dt >= cutoff
 
 
 SCORE_PROMPT = """你是一个社交媒体内容策略师，专注于AI行业内容。
@@ -98,7 +135,7 @@ def _infer_category(article: RawArticle) -> str:
     return TopicCategory.industry.value
 
 
-def _fallback_scores(articles: List[RawArticle]) -> List[dict]:
+def _fallback_scores(articles: list[RawArticle]) -> list[dict]:
     return [
         {
             "index": i,
@@ -116,7 +153,7 @@ def _default_angles(topic: str) -> dict:
     }
 
 
-async def score_articles(articles: List[RawArticle]) -> List[dict]:
+async def score_articles(articles: list[RawArticle]) -> list[dict]:
     """Batch score articles for discussion potential. Returns list of {index, score, category}."""
     if not articles:
         return []
@@ -164,7 +201,98 @@ async def generate_angles(topic: str, summary: str = "") -> dict:
         return _default_angles(topic)
 
 
-async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
+MAX_TITLE_CHARS = 40  # Short, news-style title limit
+
+
+TRANSLATE_TITLES_PROMPT = """将以下每条英文标题翻译为中文，保留新闻标题风格，{MaxChars}字以内。
+
+规则：
+- 英文 → 中文
+- 标题风格：简洁、有信息量
+- 每条输出为一行：[序号] 翻译后标题
+- 不要解释，不要空行，直接输出
+
+原文：
+{articles}
+"""
+
+TRANSLATE_PROMPT = """将以下每条英文摘要翻译为中文，并压缩到约{MaxChars}字（1-2句）。
+
+规则：
+- 英文 → 中文
+- 中文摘要 → 压缩保留核心事实
+- 每条输出为一行：[序号] 翻译后摘要
+- 不要解释，不要空行，直接输出
+
+原文：
+{articles}
+"""
+
+
+def _parse_translation_response(response: str, max_chars: int) -> dict[int, str]:
+    """Parse line-by-line '[idx] content' format into index→text dict."""
+    result: dict[int, str] = {}
+    for line in response.strip().split("\n"):
+        line = line.strip()
+        if not line or not line.startswith("["):
+            continue
+        bracket_end = line.index("]")
+        idx_str = line[1:bracket_end]
+        text = line[bracket_end + 1 :].strip()
+        try:
+            result[int(idx_str)] = text[:max_chars]
+        except ValueError:
+            pass
+    return result
+
+
+async def translate_titles(articles: list[RawArticle]) -> dict[int, str]:
+    """Batch-translate English titles to Chinese via DeepSeek.
+
+    Returns dict mapping original index → translated title.
+    """
+    articles_text = "\n".join(
+        f"[{i}] {a.title[:100]}" for i, a in enumerate(articles)
+    )
+    prompt = TRANSLATE_TITLES_PROMPT.format(
+        MaxChars=MAX_TITLE_CHARS,
+        articles=articles_text,
+    )
+    try:
+        response = await chat_completion(
+            [{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=4000,
+        )
+        return _parse_translation_response(response, MAX_TITLE_CHARS)
+    except Exception:
+        return {}
+
+
+async def translate_summaries(articles: list[RawArticle]) -> dict[int, str]:
+    """Batch-translate and truncate English summaries to Chinese via DeepSeek.
+
+    Returns dict mapping original index → translated summary.
+    """
+    articles_text = "\n".join(
+        f"[{i}] {a.summary[:300]}" for i, a in enumerate(articles)
+    )
+    prompt = TRANSLATE_PROMPT.format(
+        MaxChars=MAX_SUMMARY_CHARS,
+        articles=articles_text,
+    )
+    try:
+        response = await chat_completion(
+            [{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=8000,
+        )
+        return _parse_translation_response(response, MAX_SUMMARY_CHARS)
+    except Exception:
+        return {}
+
+
+async def score_and_filter(articles: list[RawArticle]) -> list[ScoredTopic]:
     """Score all articles, filter by threshold, then generate angles for qualifying ones.
 
     Returns list of ScoredTopic ordered by score descending.
@@ -172,6 +300,27 @@ async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
     if not articles:
         return []
 
+    # Filter out articles older than MAX_ARTICLE_AGE_DAYS days (UTC)
+    articles = [a for a in articles if _is_recent(a)]
+    if not articles:
+        return []
+
+    # Step 1: Translate ALL English titles and summaries to Chinese BEFORE scoring
+    # This ensures the scoring prompt (in Chinese) evaluates Chinese text,
+    # and all stored titles/summaries are Chinese for consistent UX
+    translated_titles = await translate_titles(articles)
+    for i, article in enumerate(articles):
+        if i in translated_titles:
+            article.title = translated_titles[i]
+
+    translated_summaries = await translate_summaries(articles)
+    for i, article in enumerate(articles):
+        if i in translated_summaries:
+            article.summary = translated_summaries[i]
+        elif len(article.summary) > MAX_SUMMARY_CHARS:
+            article.summary = article.summary[:MAX_SUMMARY_CHARS]
+
+    # Step 2: Score articles (now with Chinese summaries)
     scores = await score_articles(articles)
     threshold = settings.topic_score_threshold
 
@@ -197,13 +346,13 @@ async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
     qualifying.sort(key=lambda item: item[2], reverse=True)
     qualifying = qualifying[:MAX_ANGLE_GENERATION_TOPICS]
 
-    # Generate angles for each qualifying article
-    results: List[ScoredTopic] = []
+    # Step 3: Generate angles for each qualifying article (summary already Chinese)
+    results: list[ScoredTopic] = []
     angles_list = await asyncio.gather(
         *(generate_angles(article.title, article.summary) for _, article, _, _ in qualifying)
     )
 
-    for (i, article, score, category), angles in zip(qualifying, angles_list):
+    for (i, article, score, category), angles in zip(qualifying, angles_list, strict=False):
 
         try:
             cat = TopicCategory(category)
@@ -216,6 +365,7 @@ async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
                 hot_source=article.source,
                 hot_url=article.link,
                 hot_summary=article.summary,
+                published_at=article.published_date,
                 topic_category=cat,
                 ai_angle=angles["ai_angle"],
                 ai_counter_angle=angles["ai_counter_angle"],
@@ -223,5 +373,5 @@ async def score_and_filter(articles: List[RawArticle]) -> List[ScoredTopic]:
             )
         )
 
-    results.sort(key=lambda t: t.score, reverse=True)
+    results.sort(key=lambda t: (t.score + SOURCE_BOOST.get(t.hot_source, 0), t.hot_topic), reverse=True)
     return results

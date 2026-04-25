@@ -4,12 +4,11 @@ const auth = require('../../utils/auth');
 Page({
   data: {
     topics: [],
-    refreshCount: 0,
-    maxRefreshes: 3,
     loading: false,
-    selectedTopic: null,
-    customTopic: '',
-    showCustomInput: false
+    generating: false,
+    selectedTopicId: null,
+    emptyState: false,
+    loadError: false,
   },
 
   onLoad() {
@@ -22,69 +21,62 @@ Page({
 
   loadTopics() {
     this.setData({ loading: true });
-    api.post('/api/daily_topics')
+    api.get('/api/hot_topics/today')
       .then(data => {
         this.setData({
           topics: data.topics,
-          refreshCount: data.refresh_count,
-          maxRefreshes: data.max_refreshes,
-          loading: false
+          loading: false,
+          emptyState: !data.topics || data.topics.length === 0,
         });
       })
       .catch(err => {
-        this.setData({ loading: false });
+        this.setData({ loading: false, loadError: true, emptyState: true });
         const msg = err.data?.detail || '获取选题失败';
         wx.showToast({ title: msg, icon: 'none' });
       });
   },
 
-  onRefresh() {
-    if (this.data.refreshCount >= this.data.maxRefreshes) {
-      wx.showToast({ title: '今日换题次数已用完', icon: 'none' });
-      return;
-    }
-    this.loadTopics();
-  },
-
   onSelectTopic(e) {
-    // topic-card 组件通过 triggerEvent('select', { topic }) 传递
-    const topic = e.detail.topic;
-    this.setData({ selectedTopic: topic, customTopic: '' });
+    const selected = this.data.topics.find(item => item.id === e.detail.id) || null;
+    this.setData({
+      selectedTopicId: selected ? selected.id : null,
+    });
   },
 
   onConfirmTopic() {
-    let topic, batch_id;
-    if (this.data.selectedTopic) {
-      const selectedCard = this.data.topics.find(t => t.topic === this.data.selectedTopic);
-      topic = this.data.selectedTopic;
-      batch_id = selectedCard ? selectedCard.batch_id : null;
-    } else {
-      topic = this.data.customTopic.trim();
-      batch_id = null;
-    }
-
-    if (!topic) {
-      wx.showToast({ title: '请选择或输入一个选题', icon: 'none' });
+    const selected = this.data.topics.find(item => item.id === this.data.selectedTopicId);
+    if (!selected || this.data.generating) {
+      wx.showToast({ title: '请选择一个热点', icon: 'none' });
       return;
     }
 
-    const body = batch_id ? { topic, batch_id } : { topic };
-    api.post('/api/select_topic', body)
+    this.setData({ generating: true });
+
+    api.post('/api/select_topic', { topic: selected.title, hot_topic_id: selected.id })
       .then(data => {
+        return api.post('/api/quick_generate', {
+          topic_id: selected.id,
+          checkin_id: data.checkin_id,
+          hot_topic: selected.title,
+          angle: selected.ai_angle || '从行业从业者视角判断这条热点背后的真实变化',
+          platform: 'xiaohongshu'
+        }).then(result => ({ checkinId: data.checkin_id, result }));
+      })
+      .then(({ checkinId, result }) => {
+        wx.setStorageSync('current_draft', result.content);
         wx.navigateTo({
-          url: `/pages/discuss/discuss?checkin_id=${data.checkin_id}&topic=${encodeURIComponent(topic)}`
+          url: `/pages/preview/preview?checkin_id=${checkinId}&topic=${encodeURIComponent(selected.title)}`
         });
       })
       .catch(err => {
-        wx.showToast({ title: err.data?.detail || '选题失败', icon: 'none' });
+        wx.showToast({ title: err.data?.detail || '生成失败', icon: 'none' });
+      })
+      .finally(() => {
+        this.setData({ generating: false });
       });
   },
 
-  onCustomInput(e) {
-    this.setData({ customTopic: e.detail.value, selectedTopic: null });
-  },
-
-  onToggleCustomInput() {
-    this.setData({ showCustomInput: !this.data.showCustomInput });
+  onRetryLoad() {
+    this.loadTopics();
   }
 });

@@ -34,8 +34,11 @@ Page({
       .catch(err => {
         this.setData({ loading: false });
         if (!this.data.userInfo) {
-          // First time, try login
-          auth.login().then(() => this.loadUserStatus());
+          auth.login()
+            .then(() => this.loadUserStatus())
+            .catch(() => {
+              wx.showToast({ title: '登录失败，请稍后重试', icon: 'none' });
+            });
         }
       });
   },

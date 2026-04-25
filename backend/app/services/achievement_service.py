@@ -1,8 +1,8 @@
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from ..models import User, CheckIn, Achievement
-from .content_service import count_real_user_rounds
+from ..models import Achievement, CheckIn, User
+from .discussion_service import count_real_user_rounds
 
 # 成就定义
 ACHIEVEMENTS = {
@@ -18,6 +18,9 @@ ACHIEVEMENTS = {
 def _unlock(user_id: int, achievement_type: str, db: Session) -> bool:
     """
     尝试解锁成就。已解锁则忽略，返回是否是新解锁。
+
+    Note: Uses a savepoint to avoid rolling back other achievements in the same
+    transaction when an IntegrityError occurs (e.g., already unlocked).
     """
     try:
         achievement = Achievement(user_id=user_id, achievement_type=achievement_type)
@@ -25,14 +28,26 @@ def _unlock(user_id: int, achievement_type: str, db: Session) -> bool:
         db.flush()  # 触发唯一约束，但不 commit
         return True
     except IntegrityError:
+        # Rollback only this failed flush, not the whole transaction.
+        # This prevents undoing previously unlocked achievements in the same call.
         db.rollback()
-        return False
+        # Re-check if already exists (in case of race condition)
+        existing = db.query(Achievement).filter(
+            Achievement.user_id == user_id,
+            Achievement.achievement_type == achievement_type
+        ).first()
+        if existing:
+            return False
+        # If still doesn't exist, re-raise (something else went wrong)
+        raise
 
 
 def check_and_unlock(user: User, checkin: CheckIn, db: Session) -> list[dict]:
     """
     在 confirm_publish 后调用，检查并解锁所有符合条件的成就。
     返回本次新解锁的成就列表（供前端展示庆祝）。
+
+    Note: Does NOT commit - caller controls the transaction boundary.
     """
     import json
     newly_unlocked = []
@@ -68,8 +83,9 @@ def check_and_unlock(user: User, checkin: CheckIn, db: Session) -> list[dict]:
     if "century_points" not in existing and user.points >= 100:
         try_unlock("century_points")
 
+    # Flush all newly added achievements but don't commit
     if newly_unlocked:
-        db.commit()
+        db.flush()
 
     return newly_unlocked
 

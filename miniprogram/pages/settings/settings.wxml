@@ -1,39 +1,52 @@
 <view class="container">
-  <view class="header">
-    <text class="title">提醒设置</text>
+  <view wx:if="{{loading}}" class="loading-state">
+    <view class="loading-spinner"></view>
+    <text>加载中...</text>
   </view>
 
-  <view class="settings-card">
-    <view class="setting-row">
-      <text class="setting-label">开启每日提醒</text>
-      <switch
-        checked="{{reminderEnabled}}"
-        bindchange="onToggleReminder"
-        color="#07c160"
-      />
+  <block wx:else>
+    <view class="header paper-card">
+      <view class="header__topline">
+        <text class="settings-kicker">提醒与节律</text>
+        <text class="header__status">{{reminderEnabled ? '已开启' : '未开启'}}</text>
+      </view>
+      <text class="title">提醒设置</text>
+      <text class="subtitle">把顺发变成一个固定动作。到时间还没发文时，系统会轻轻提醒你继续写。</text>
     </view>
 
-    <view wx:if="{{reminderEnabled}}" class="setting-row">
-      <text class="setting-label">提醒时间</text>
-      <picker
-        mode="time"
-        value="{{reminderTime}}"
-        bindchange="onTimeChange"
-      >
-        <text class="time-display">{{reminderTime}}</text>
-      </picker>
+    <view class="settings-card paper-card">
+      <view class="setting-row">
+        <view class="setting-copy">
+          <text class="setting-label">开启每日提醒</text>
+          <text class="setting-desc">建议放在你最容易拖延写作的那段时间。</text>
+        </view>
+        <switch checked="{{reminderEnabled}}" bindchange="onToggleReminder" color="var(--color-accent)" />
+      </view>
+
+      <view wx:if="{{reminderEnabled}}" class="setting-row">
+        <view class="setting-copy">
+          <text class="setting-label">提醒时间</text>
+          <text class="setting-desc">建议留给自己 10-20 分钟起稿，而不是临睡前补作业。</text>
+        </view>
+        <picker mode="time" value="{{reminderTime}}" bindchange="onTimeChange">
+          <text class="time-display">{{reminderTime}}</text>
+        </picker>
+      </view>
     </view>
-  </view>
 
-  <button
-    class="save-btn {{saving ? 'saving' : ''}}"
-    bindtap="onSave"
-    disabled="{{saving}}"
-  >
-    {{saving ? '保存中...' : '保存设置'}}
-  </button>
+    <button
+      class="btn-primary save-btn {{saving ? 'saving' : ''}}"
+      bindtap="onSave"
+      disabled="{{saving}}"
+    >
+      {{saving ? '保存中...' : '保存设置'}}
+    </button>
 
-  <view class="note">
-    <text>💡 提醒在 App 内生效，打开顺发时若在提醒时间后2小时内且未打卡，将提示你</text>
-  </view>
+    <view class="note note-card">
+      <text class="note__label">当前说明</text>
+      <text class="note__text">
+        {{wechatPushConfigured ? '当前服务端已支持微信订阅消息发送；模板和授权配置完成后，会按提醒时间推送。' : '当前还没配好微信订阅消息模板，保存后只会先记录提醒时间。'}}
+      </text>
+    </view>
+  </block>
 </view>

@@ -1,11 +1,6 @@
 /* ===========================
    ANIMATIONS (local to discuss)
    =========================== */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(16rpx); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .container {
   display: flex;
   flex-direction: column;
@@ -24,7 +19,7 @@
 .topic-label {
   display: block;
   font-size: 22rpx;
-  color: var(--color-text-hint);
+  color: var(--color-ink-muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 2rpx;
@@ -34,7 +29,7 @@
 .topic-text {
   display: block;
   font-size: 32rpx;
-  color: var(--color-text-primary);
+  color: var(--color-ink);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -92,12 +87,12 @@
 }
 
 .message-item.assistant .message-text {
-  color: var(--color-text-primary);
+  color: var(--color-ink);
   font-size: 30rpx;
 }
 
 .message-item.assistant .message-time {
-  color: var(--color-text-hint);
+  color: var(--color-ink-muted);
 }
 
 .message-text {
@@ -128,7 +123,7 @@
   width: 10rpx;
   height: 10rpx;
   border-radius: 50%;
-  background: var(--color-text-hint);
+  background: var(--color-ink-muted);
   animation: typingPulse 1.2s ease-in-out infinite;
 }
 
@@ -181,7 +176,7 @@
 }
 .send-btn::after { border: none; }
 .send-btn.disabled {
-  background: #e0e0e0;
+  background: var(--color-surface-muted);
   box-shadow: none;
-  color: #aaa;
+  color: var(--color-ink-muted);
 }

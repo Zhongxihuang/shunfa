@@ -5,7 +5,9 @@
     "pages/discuss/discuss",
     "pages/preview/preview",
     "pages/profile/profile",
-    "pages/settings/settings"
+    "pages/settings/settings",
+    "pages/history/history",
+    "pages/drafts/drafts"
   ],
   "tabBar": {
     "color": "#999999",

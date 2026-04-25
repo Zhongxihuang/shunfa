@@ -4,7 +4,8 @@ App({
   globalData: {
     userInfo: null,
     token: null,
-    baseUrl: config.baseUrl
+    baseUrl: config.baseUrl,
+    reminderTemplateId: config.reminderTemplateId || ''
   },
   onLaunch() {
     // Check login status on launch

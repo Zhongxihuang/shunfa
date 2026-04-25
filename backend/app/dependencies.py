@@ -1,11 +1,12 @@
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from typing import Generator
-from jose import jwt, JWTError
+from collections.abc import Generator
 
-from .database import SessionLocal
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
 from .config import settings
+from .database import SessionLocal
 
 security = HTTPBearer()
 

@@ -4,16 +4,20 @@ Page({
   data: {
     checkinId: null,
     topic: '',
+    topicSource: '',
+    topicUrl: '',
+    topicSummary: '',
     content: '',
     originalDraft: '',
     step: 'preview',  // 'preview' | 'quality_check' | 'quality_result' | 'publishing'
     qualityPass: null,
     qualityIssues: [],
-    submitting: false
+    submitting: false,
+    feedbackSent: false
   },
 
   onLoad(options) {
-    const checkinId = parseInt(options.checkin_id);
+    const checkinId = parseInt(options.checkin_id || 0);
     const draft = wx.getStorageSync('current_draft') || '';
     const topicFromUrl = decodeURIComponent(options.topic || '');
 
@@ -27,9 +31,15 @@ Page({
     // Fetch topic from API (authoritative source)
     api.get(`/api/checkin/${checkinId}`)
       .then(data => {
-        if (data.topic) {
-          this.setData({ topic: data.topic });
-        }
+        this.setData({
+          topic: data.topic || topicFromUrl,
+          topicSource: data.topic_source || '',
+          topicUrl: data.topic_url || '',
+          topicSummary: data.topic_summary || '',
+          content: data.content || draft,
+          originalDraft: data.content || draft,
+          feedbackSent: data.content_feedback === 'down'
+        });
       })
       .catch(() => {
         // Fall back to URL topic which is already set
@@ -42,6 +52,14 @@ Page({
 
   onRegenerate() {
     wx.navigateBack();
+  },
+
+  onCopySourceLink() {
+    if (!this.data.topicUrl) return;
+    wx.setClipboardData({
+      data: this.data.topicUrl,
+      success: () => wx.showToast({ title: '链接已复制', icon: 'none' })
+    });
   },
 
   // Step 1: Quality check
@@ -94,6 +112,21 @@ Page({
     .catch(err => {
       this.setData({ submitting: false, step: 'quality_result' });
       wx.showToast({ title: err.data && err.data.detail || '发布失败', icon: 'none' });
+    });
+  },
+
+  onSendFeedback() {
+    if (this.data.feedbackSent || !this.data.checkinId) return;
+    api.post('/api/content_feedback', {
+      checkin_id: this.data.checkinId,
+      feedback: 'down'
+    })
+    .then(() => {
+      this.setData({ feedbackSent: true });
+      wx.showToast({ title: '已记录反馈', icon: 'success' });
+    })
+    .catch(() => {
+      wx.showToast({ title: '反馈发送失败', icon: 'none' });
     });
   },
 

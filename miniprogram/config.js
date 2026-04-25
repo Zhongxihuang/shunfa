@@ -1,13 +1,22 @@
-// Environment configuration
-// To switch environment: change ENV to 'production', then recompile
-const ENV = 'development';
+const getEnv = () => {
+  try {
+    const envVersion = wx.getAccountInfoSync().miniProgram.envVersion;
+    return envVersion === 'release' ? 'production' : 'development';
+  } catch (err) {
+    return 'development';
+  }
+};
+
+const ENV = getEnv();
 
 const configs = {
   development: {
-    baseUrl: 'http://localhost:8000',
+    baseUrl: 'http://127.0.0.1:8080',
+    reminderTemplateId: 'JVoKTiV5hVsvD916S3Ma5AbcgW7QRGGR6dYrPItzpzM',
   },
   production: {
-    baseUrl: 'https://api.your-domain.com',  // Replace with real domain before deploying
+    baseUrl: 'https://shunfa-production.up.railway.app',
+    reminderTemplateId: 'JVoKTiV5hVsvD916S3Ma5AbcgW7QRGGR6dYrPItzpzM',
   }
 };
 

@@ -1,21 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import Optional
-from pydantic import BaseModel
 
-from ..dependencies import get_db, get_current_user
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from ..dependencies import get_current_user, get_db
 from ..models import User
-from ..services.reminder_service import check_reminder_needed, update_reminder_settings, send_due_reminders, is_wechat_reminder_configured
+from ..services.reminder_service import (
+    check_reminder_needed,
+    is_wechat_reminder_configured,
+    send_due_reminders,
+    update_reminder_settings,
+)
 
 router = APIRouter()
 
 class ReminderSettingsRequest(BaseModel):
-    reminder_time: Optional[str] = None  # HH:MM or null to clear
+    reminder_time: str | None = None  # HH:MM or null to clear
     reminder_enabled: bool
 
 class ReminderStatusResponse(BaseModel):
     reminder_enabled: bool
-    reminder_time: Optional[str]
+    reminder_time: str | None
     reminder_needed: bool  # True if user should be reminded right now
     wechat_push_configured: bool = False
 

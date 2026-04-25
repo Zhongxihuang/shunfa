@@ -1,62 +1,52 @@
 .streak-badge {
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  padding: 20rpx 28rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-bg-card);
-  box-shadow: var(--shadow-card);
+  gap: 12rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 28rpx;
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(246, 241, 233, 0.98) 100%);
+  border: 2rpx solid rgba(182, 172, 153, 0.52);
+  box-shadow: 0 8rpx 24rpx rgba(43, 35, 24, 0.06);
   flex: 1;
 }
 
-/* Tier: Normal (1-2 days) */
-.badge-normal .streak-number { color: #fab005; }
+.badge-normal {
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(248, 244, 235, 0.98));
+}
+.badge-normal .streak-number { color: var(--color-ink); }
 
-/* Tier: Rare (3-6 days) */
 .badge-rare {
-  background: linear-gradient(135deg, #e8fff0, #d0f5de);
-  border: 1.5rpx solid rgba(7, 193, 96, 0.25);
+  background: linear-gradient(180deg, rgba(232, 238, 228, 0.96), rgba(250, 248, 242, 0.98));
+  border-color: rgba(29, 143, 87, 0.18);
 }
-.badge-rare .streak-number { color: var(--color-primary); }
+.badge-rare .streak-number { color: var(--color-primary-dark); }
 
-/* Tier: Epic (7-29 days) */
 .badge-epic {
-  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-  border: 1.5rpx solid rgba(30, 100, 250, 0.25);
-  animation: subtleGlow 3s ease-in-out infinite;
+  background: linear-gradient(180deg, rgba(245, 240, 231, 0.98), rgba(238, 232, 221, 0.98));
+  border-color: rgba(182, 172, 153, 0.7);
 }
-.badge-epic .streak-number { color: #1565c0; }
+.badge-epic .streak-number { color: var(--color-ink); }
 
-/* Tier: Legendary (30+ days) */
 .badge-legendary {
-  background: linear-gradient(135deg, #fff8e1, #ffe082, #ffd54f);
-  border: 1.5rpx solid rgba(255, 160, 0, 0.4);
-  box-shadow: 0 4rpx 24rpx rgba(255, 160, 0, 0.3);
-  animation: legendaryGlow 2s ease-in-out infinite;
+  background: linear-gradient(180deg, rgba(230, 237, 227, 0.98), rgba(242, 239, 232, 0.98));
+  border-color: rgba(29, 143, 87, 0.24);
+  box-shadow: 0 10rpx 28rpx rgba(29, 143, 87, 0.08);
 }
-.badge-legendary .streak-number { color: #e65100; font-weight: 800; }
-
-@keyframes subtleGlow {
-  0%, 100% { box-shadow: var(--shadow-card); }
-  50% { box-shadow: 0 4rpx 20rpx rgba(30, 100, 250, 0.2); }
-}
-
-@keyframes legendaryGlow {
-  0%, 100% { box-shadow: 0 4rpx 24rpx rgba(255, 160, 0, 0.3); }
-  50% { box-shadow: 0 4rpx 36rpx rgba(255, 160, 0, 0.5); }
-}
+.badge-legendary .streak-number { color: var(--color-primary-dark); }
 
 .streak-number {
-  font-size: 44rpx;
-  font-weight: 800;
+  font-size: 40rpx;
+  font-weight: 600;
   line-height: 1;
+  font-family: var(--font-family-display);
 }
 .streak-label {
-  font-size: 24rpx;
-  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  color: var(--color-ink-soft);
   font-weight: 500;
 }
 .fire {
-  font-size: 36rpx;
+  font-size: 32rpx;
   line-height: 1;
+  opacity: 0.88;
 }

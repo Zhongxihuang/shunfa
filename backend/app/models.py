@@ -1,7 +1,21 @@
-from sqlalchemy import Column, Integer, String, Date, Text, Boolean, DateTime, Enum as SAEnum, ForeignKey, UniqueConstraint
+import enum
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import enum
+
 from .database import Base
 
 
@@ -37,7 +51,7 @@ class CheckIn(Base):
     __tablename__ = "checkins"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     date = Column(Date, nullable=False, index=True)
     topic = Column(Text, nullable=False)
     topic_source = Column(String, nullable=True)
@@ -57,12 +71,19 @@ class CheckIn(Base):
 
     user = relationship("User", back_populates="checkins")
 
+    __table_args__ = (
+        # Prevent duplicate checkins for same user on same date
+        UniqueConstraint("user_id", "date", name="uq_checkin_user_date"),
+        # Composite indexes for common query patterns
+        Index("ix_checkins_user_date_status", "user_id", "date", "status"),
+    )
+
 
 class TopicHistory(Base):
     __tablename__ = "topic_history"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     topic = Column(Text, nullable=False)
     batch_id = Column(String, nullable=False)  # UUID for grouping topics shown together
     was_used = Column(Boolean, default=False, nullable=False)
@@ -70,12 +91,17 @@ class TopicHistory(Base):
 
     user = relationship("User", back_populates="topic_history")
 
+    __table_args__ = (
+        Index("ix_topic_history_user_topic_batch", "user_id", "topic", "batch_id"),
+        Index("ix_topic_history_user_topic_created", "user_id", "topic", "created_at"),
+    )
+
 
 class Achievement(Base):
     __tablename__ = "achievements"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     achievement_type = Column(String, nullable=False)
     unlocked_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -113,7 +139,7 @@ class ReminderDelivery(Base):
     __tablename__ = "reminder_deliveries"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     reminder_date = Column(Date, nullable=False, index=True)
     channel = Column(String, nullable=False, default="wechat_subscribe")
     status = Column(String, nullable=False, default="sent")

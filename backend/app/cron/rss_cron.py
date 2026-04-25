@@ -9,10 +9,10 @@ Or schedule with system cron:
 
 import asyncio
 import logging
-from datetime import date
 
-from ..services.rss_service import fetch_all_sources
 from ..services.hot_topic_service import score_and_filter
+from ..services.rss_service import fetch_all_sources
+from ..utils.time_utils import get_today_cst
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,10 +37,16 @@ async def run():
         logger.warning("No qualifying topics found today")
         return
 
-    # Step 3: Store to Bitable (Phase 2 — wired up after bitable_client is built)
+    # Step 3: Store to local SQLite for the mini program MVP
+    from ..services.local_hot_topic_store import replace_topics_for_date
+    today = get_today_cst()
+    replace_topics_for_date(topics, today)
+    logger.info(f"Saved {len(topics)} hot topics to SQLite")
+
+    # Step 4: Optionally mirror to Bitable for legacy Coze flows
     try:
-        from ..services.hot_topic_store import save_topics, mark_expired
-        await mark_expired(date.today())
+        from ..services.hot_topic_store import mark_expired, save_topics
+        await mark_expired(today)
         await save_topics(topics)
         logger.info(f"Saved {len(topics)} hot topics to Bitable")
     except ImportError:

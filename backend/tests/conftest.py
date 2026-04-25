@@ -1,8 +1,14 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
+os.environ.setdefault("DEEPSEEK_API_KEY", "test-deepseek-key")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret")
+os.environ.setdefault("ADMIN_PASSWORD", "test123")
+os.environ.setdefault("COZE_PLUGIN_TOKEN", "shunfa-coze-token")
 
 from app.main import app
 from app.database import Base

@@ -1,21 +1,46 @@
 <view class="container">
-  <view class="header">
-    <text class="title">预览初稿</text>
-    <text class="subtitle">你可以在发布前修改内容 ✏️</text>
+  <view class="header paper-card">
+    <view class="header__topline">
+      <text class="eyebrow">草稿</text>
+      <text class="pill">{{step === 'preview' ? '待确认' : step === 'quality_result' ? '已给出提示' : '处理中'}}</text>
+    </view>
+    <text class="header__title">把这一条整理顺，再决定发不发</text>
+    <text class="header__subtitle">素材和链接都已经保留下来。这里不需要再追信息，只需要把判断写清楚。</text>
   </view>
 
-  <!-- Post Preview Card -->
-  <view class="post-preview">
-    <text class="post-preview__topic"># {{topic}}</text>
+  <view class="post-preview paper-card">
+    <view class="post-preview__heading">
+      <text class="section-label">主题</text>
+      <text class="post-preview__topic">{{topic}}</text>
+    </view>
+
+    <view wx:if="{{topicSource || topicUrl || topicSummary}}" class="post-preview__fact-card soft-card">
+      <view class="post-preview__fact-header">
+        <text class="post-preview__fact-title">参考信息</text>
+        <text wx:if="{{topicSource}}" class="pill pill-accent">{{topicSource}}</text>
+      </view>
+      <text wx:if="{{topicSummary}}" class="post-preview__fact-summary">{{topicSummary}}</text>
+      <view wx:if="{{topicUrl}}" class="post-preview__fact-link-row">
+        <text class="post-preview__fact-link-label">原文链接已保留</text>
+        <text class="btn-text" catchtap="onCopySourceLink">复制链接</text>
+      </view>
+    </view>
+
     <text class="post-preview__content">{{content || '...'}}</text>
     <view class="post-preview__footer">
-      <text class="post-preview__time">刚刚</text>
-      <text class="post-preview__platform">小红书 · 顺发</text>
+      <text class="post-preview__time">顺发起稿</text>
+      <text class="post-preview__platform">可发布文本</text>
     </view>
   </view>
 
-  <!-- Editable area (only in preview step) -->
-  <view wx:if="{{step === 'preview' || step === 'quality_check'}}" class="draft-area">
+  <view wx:if="{{step === 'preview' || step === 'quality_check'}}" class="draft-area paper-card">
+    <view class="draft-area__header">
+      <view>
+        <text class="draft-area__title">正文修改区</text>
+        <text class="draft-area__hint">保留观点，不用把语气磨平。</text>
+      </view>
+      <text class="{{content.length < 140 || content.length > 220 ? 'count-warning' : 'count-ok'}}">{{content.length}} 字</text>
+    </view>
     <textarea
       class="draft-input"
       value="{{content}}"
@@ -25,63 +50,58 @@
       maxlength="500"
       disabled="{{step === 'quality_check'}}"
     />
-    <view class="char-count">
-      <text class="{{content.length < 140 || content.length > 220 ? 'count-warning' : 'count-ok'}}">
-        {{content.length}} 字
-      </text>
-      <text class="count-hint">建议 140-220 字</text>
-    </view>
+    <text class="count-hint">建议 140-220 字，够短，也够有判断。</text>
   </view>
 
-  <!-- Quality Check Result -->
   <view wx:if="{{step === 'quality_result'}}" class="quality-card quality-card--{{qualityPass ? 'pass' : 'fail'}}">
-    <view wx:if="{{qualityPass}}" class="quality-header quality-header--pass">
-      <text class="quality-icon">✅</text>
-      <text class="quality-title">内容质量良好</text>
-    </view>
-    <view wx:if="{{!qualityPass}}" class="quality-header quality-header--fail">
-      <text class="quality-icon">💡</text>
-      <text class="quality-title">内容可以更好</text>
+    <view class="quality-header">
+      <text class="quality-title">{{qualityPass ? '这版已经能发' : '这版还可以再收一收'}}</text>
+      <text class="pill {{qualityPass ? 'pill-accent' : ''}}">{{qualityPass ? '可发布' : '建议再改'}}</text>
     </view>
 
     <view wx:if="{{qualityIssues.length > 0}}" class="quality-issues">
-      <text class="quality-issue-label">建议优化：</text>
-      <text wx:for="{{qualityIssues}}" wx:key="index" class="quality-issue">· {{item}}</text>
+      <text class="quality-issue-label">编辑提示</text>
+      <text wx:for="{{qualityIssues}}" wx:key="index" class="quality-issue">{{item}}</text>
     </view>
 
     <view class="quality-actions">
-      <button class="btn-ghost-small" bindtap="onBackToEdit">返回修改</button>
+      <button class="btn-secondary quality-actions__secondary" bindtap="onBackToEdit">返回修改</button>
       <button
-        class="btn-primary-small {{submitting ? 'loading' : ''}}"
+        wx:if="{{!qualityPass}}"
+        class="btn-secondary quality-actions__secondary"
+        bindtap="onSendFeedback"
+        disabled="{{feedbackSent}}"
+      >
+        {{feedbackSent ? '已记为一般' : '记为一般'}}
+      </button>
+      <button
+        class="btn-primary quality-actions__primary {{submitting ? 'quality-actions__primary--loading' : ''}}"
         bindtap="onPublish"
         disabled="{{submitting}}"
       >
-        {{submitting ? '发布中...' : '仍然发布'}}
+        {{submitting ? '发布中...' : '照样发布'}}
       </button>
     </view>
   </view>
 
-  <!-- Step: Quality check loading -->
-  <view wx:if="{{step === 'quality_check'}}" class="quality-loading">
+  <view wx:if="{{step === 'quality_check'}}" class="quality-loading paper-card">
     <view class="loading-spinner"></view>
-    <text class="quality-loading-text">AI 评估中...</text>
+    <text class="quality-loading-text">正在看这版有没有跑偏...</text>
   </view>
 
-  <!-- Step: Publishing -->
-  <view wx:if="{{step === 'publishing'}}" class="quality-loading">
+  <view wx:if="{{step === 'publishing'}}" class="quality-loading paper-card">
     <view class="loading-spinner"></view>
-    <text class="quality-loading-text">发布中...</text>
+    <text class="quality-loading-text">正在签发这条内容...</text>
   </view>
 
-  <!-- Primary CTA (preview step only) -->
   <view wx:if="{{step === 'preview'}}" class="actions">
-    <button class="btn-secondary" bindtap="onRegenerate">← 返回修改</button>
+    <button class="btn-secondary actions__secondary" bindtap="onRegenerate">返回上一步</button>
     <button
-      class="btn-primary {{submitting ? 'loading' : ''}}"
+      class="btn-primary actions__primary {{submitting ? 'actions__primary--loading' : ''}}"
       bindtap="onCheckQuality"
       disabled="{{submitting || !content}}"
     >
-      {{submitting ? '评估中...' : '🚀 确认发布'}}
+      {{submitting ? '评估中...' : '确认发布'}}
     </button>
   </view>
 </view>

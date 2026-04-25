@@ -14,7 +14,7 @@ Page({
 
   onLoad(options) {
     this.setData({
-      checkinId: parseInt(options.checkin_id),
+      checkinId: parseInt(options.checkin_id || 0),
       topic: decodeURIComponent(options.topic || '')
     });
 
@@ -74,7 +74,7 @@ Page({
     })
     .catch(err => {
       this.setData({ loading: false });
-      this.addMessage('assistant', '抱歉，出了点问题，请重试～');
+      wx.showToast({ title: '消息发送失败，请重试', icon: 'none' });
     });
   }
 });

@@ -1,0 +1,117 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=development
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-test_key}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev_secret_key_change_in_production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-shunfa}:${POSTGRES_PASSWORD:-shunfa}@postgres:5432/${POSTGRES_DB:-shunfa}
+      - WECHAT_APP_ID=${WECHAT_APP_ID:-}
+      - WECHAT_APP_SECRET=${WECHAT_APP_SECRET:-}
+      - WECHAT_SUBSCRIBE_TEMPLATE_ID=${WECHAT_SUBSCRIBE_TEMPLATE_ID:-}
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      # Mount source code for hot reload during development
+      - .:/app
+    depends_on:
+      - mock-wechat
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/health').raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-shunfa}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-shunfa}
+      - POSTGRES_DB=${POSTGRES_DB:-shunfa}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shunfa} -d ${POSTGRES_DB:-shunfa}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Celery worker (optional — enable with docker-compose --profile celery)
+  celeryworker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A celery_app worker --loglevel=info
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-shunfa}:${POSTGRES_PASSWORD:-shunfa}@postgres:5432/${POSTGRES_DB:-shunfa}
+      - REDIS_URL=redis://redis:6379/0
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-test_key}
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - postgres
+    profiles:
+      - celery
+
+  # Celery beat scheduler (optional — enable with docker-compose --profile celery)
+  celerybeat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A celery_app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    profiles:
+      - celery
+
+  # Mock WeChat API for local development (optional)
+  mock-wechat:
+    image: mockserver/mockserver:5.15.0
+    ports:
+      - "1080:1080"
+    environment:
+      - MOCKSERVER_INITIALIZATION_JSON_PATH=/config/init.json
+    volumes:
+      - ./scripts/mock-wechat.json:/config/init.json:ro
+
+  # Mock DeepSeek API for testing (optional)
+  mock-deepseek:
+    image: mockserver/mockserver:5.15.0
+    ports:
+      - "1081:1080"
+    environment:
+      - MOCKSERVER_INITIALIZATION_JSON_PATH=/config/init.json
+    volumes:
+      - ./scripts/mock-deepseek.json:/config/init.json:ro
+
+volumes:
+  postgres_data:
+  redis_data:

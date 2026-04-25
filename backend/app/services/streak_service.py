@@ -1,8 +1,9 @@
 from datetime import date
+
 from sqlalchemy.orm import Session
 
 from ..models import User
-from ..utils.time_utils import get_today_cst, is_consecutive_day
+from ..utils.time_utils import is_consecutive_day
 
 
 def calculate_and_update_streak(user: User, today: date, db: Session) -> int:

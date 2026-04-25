@@ -9,7 +9,7 @@
         <text class="level-label">Lv.{{level}}</text>
       </view>
     </view>
-    <text class="points-text">{{points}} / {{nextLevelPoints}} pts</text>
+    <text class="points-text">{{points}} / {{nextLevelPoints}} 积分</text>
   </view>
   <view class="progress-bar">
     <view class="progress-fill" style="width: {{progressPercent}}%"></view>

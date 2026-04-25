@@ -1,12 +1,10 @@
 """Hot topic storage — reads/writes the 热点库 Bitable table."""
 
 from datetime import date
-from typing import List, Optional
 
 from ..clients.bitable_client import BitableClient, get_bitable_client
 from ..config import settings
-from ..schemas import ScoredTopic, HotTopicRecord, TopicCategory, TopicStatus
-
+from ..schemas import HotTopicRecord, ScoredTopic, TopicCategory, TopicStatus
 
 # Bitable column names must match the actual table column names exactly.
 # Adjust these if the Bitable table uses different Chinese column headers.
@@ -22,7 +20,7 @@ COL_SCORE = "score"
 COL_STATUS = "status"
 
 
-def _topic_to_fields(topic: ScoredTopic, topic_date: Optional[date] = None) -> dict:
+def _topic_to_fields(topic: ScoredTopic, topic_date: date | None = None) -> dict:
     d = topic_date or date.today()
     return {
         COL_DATE: d.isoformat(),
@@ -73,10 +71,10 @@ def _fields_to_record(record_id: str, fields: dict) -> HotTopicRecord:
 
 
 async def save_topics(
-    topics: List[ScoredTopic],
-    topic_date: Optional[date] = None,
-    client: Optional[BitableClient] = None,
-) -> List[str]:
+    topics: list[ScoredTopic],
+    topic_date: date | None = None,
+    client: BitableClient | None = None,
+) -> list[str]:
     """Batch save scored topics to the hot topic Bitable table.
 
     Returns list of created record_ids.
@@ -92,9 +90,9 @@ async def save_topics(
 
 async def get_pending_topics(
     limit: int = 5,
-    topic_date: Optional[date] = None,
-    client: Optional[BitableClient] = None,
-) -> List[HotTopicRecord]:
+    topic_date: date | None = None,
+    client: BitableClient | None = None,
+) -> list[HotTopicRecord]:
     """Fetch pending hot topics ordered by score descending.
 
     The Bitable filter formula syntax:
@@ -121,8 +119,8 @@ async def get_pending_topics(
 
 
 async def mark_as_pushed(
-    record_ids: List[str],
-    client: Optional[BitableClient] = None,
+    record_ids: list[str],
+    client: BitableClient | None = None,
 ) -> None:
     """Mark given records as pushed."""
     if not record_ids:
@@ -138,7 +136,7 @@ async def mark_as_pushed(
 
 async def mark_expired(
     before_date: date,
-    client: Optional[BitableClient] = None,
+    client: BitableClient | None = None,
 ) -> None:
     """Mark all pending records older than before_date as expired."""
     client = client or get_bitable_client()
