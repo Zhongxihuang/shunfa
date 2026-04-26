@@ -157,7 +157,8 @@
 }
 
 .count-ok,
-.count-warning {
+.count-warning,
+.count-over-limit {
   font-size: 24rpx;
   font-weight: 600;
 }
@@ -168,6 +169,14 @@
 
 .count-warning {
   color: var(--color-danger);
+}
+
+.count-over-limit {
+  color: #fff;
+  background: var(--color-danger);
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  font-weight: 700;
 }
 
 .count-hint {

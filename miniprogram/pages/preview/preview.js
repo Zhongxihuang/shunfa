@@ -9,45 +9,54 @@ Page({
     topicSummary: '',
     content: '',
     originalDraft: '',
+    topicLoading: true,  // show loading until API returns authoritative topic
     step: 'preview',  // 'preview' | 'quality_check' | 'quality_result' | 'publishing'
     qualityPass: null,
     qualityIssues: [],
     submitting: false,
-    feedbackSent: false
+    feedbackSent: false,
+    charCount: 0
   },
 
   onLoad(options) {
     const checkinId = parseInt(options.checkin_id || 0);
     const draft = wx.getStorageSync('current_draft') || '';
-    const topicFromUrl = decodeURIComponent(options.topic || '');
 
     this.setData({
       checkinId,
       content: draft,
       originalDraft: draft,
-      topic: topicFromUrl  // temporary; will be replaced by API if available
+      charCount: (draft || '').length,
+      topic: '',
+      topicLoading: true
     });
 
-    // Fetch topic from API (authoritative source)
+    // Fetch authoritative topic from API
     api.get(`/api/checkin/${checkinId}`)
       .then(data => {
         this.setData({
-          topic: data.topic || topicFromUrl,
+          topic: data.topic || '',
           topicSource: data.topic_source || '',
           topicUrl: data.topic_url || '',
           topicSummary: data.topic_summary || '',
           content: data.content || draft,
           originalDraft: data.content || draft,
-          feedbackSent: data.content_feedback === 'down'
+          charCount: (data.content || draft || '').length,
+          feedbackSent: data.content_feedback === 'down',
+          topicLoading: false
         });
       })
       .catch(() => {
-        // Fall back to URL topic which is already set
+        this.setData({ topicLoading: false });
       });
   },
 
   onContentChange(e) {
-    this.setData({ content: e.detail.value });
+    const content = e.detail.value;
+    this.setData({
+      content,
+      charCount: content.length
+    });
   },
 
   onRegenerate() {

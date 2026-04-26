@@ -41,6 +41,7 @@ class User(Base):
     reminder_enabled = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_checkin_date = Column(Date, nullable=True)
+    token_version = Column(Integer, default=0, nullable=False)  # 递增可撤销泄露的token
 
     checkins = relationship("CheckIn", back_populates="user", lazy="selectin")
     topic_history = relationship("TopicHistory", back_populates="user", lazy="selectin")

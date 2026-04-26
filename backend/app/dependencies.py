@@ -27,6 +27,7 @@ def get_current_user(
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         user_id = int(payload.get("sub"))
+        token_version = payload.get("tv", 0)
     except (JWTError, ValueError, TypeError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -34,5 +35,7 @@ def get_current_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    if user.token_version != token_version:
+        raise HTTPException(status_code=401, detail="Token has been revoked")
 
     return user

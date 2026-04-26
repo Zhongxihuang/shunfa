@@ -34,11 +34,21 @@ Page({
       .catch(err => {
         this.setData({ loading: false });
         if (!this.data.userInfo) {
-          auth.login()
-            .then(() => this.loadUserStatus())
-            .catch(() => {
-              wx.showToast({ title: '登录失败，请稍后重试', icon: 'none' });
-            });
+          wx.showModal({
+            title: '登录失败',
+            content: '无法获取登录状态，请检查网络后重试',
+            confirmText: '重新登录',
+            cancelText: '取消',
+            success: res => {
+              if (res.confirm) {
+                auth.login()
+                  .then(() => this.loadUserStatus())
+                  .catch(() => {
+                    wx.showToast({ title: '登录失败，请稍后重试', icon: 'none' });
+                  });
+              }
+            }
+          });
         }
       });
   },

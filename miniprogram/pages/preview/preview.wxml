@@ -8,7 +8,12 @@
     <text class="header__subtitle">素材和链接都已经保留下来。这里不需要再追信息，只需要把判断写清楚。</text>
   </view>
 
-  <view class="post-preview paper-card">
+  <view wx:if="{{topicLoading}}" class="post-preview paper-card">
+    <view class="loading-spinner" style="margin: 32rpx auto;"></view>
+    <text style="display:block;text-align:center;color:#999;font-size:28rpx;">正在加载...</text>
+  </view>
+
+  <view wx:elif="{{topic}}" class="post-preview paper-card">
     <view class="post-preview__heading">
       <text class="section-label">主题</text>
       <text class="post-preview__topic">{{topic}}</text>
@@ -39,7 +44,9 @@
         <text class="draft-area__title">正文修改区</text>
         <text class="draft-area__hint">保留观点，不用把语气磨平。</text>
       </view>
-      <text class="{{content.length < 140 || content.length > 220 ? 'count-warning' : 'count-ok'}}">{{content.length}} 字</text>
+      <text wx:if="{{charCount > 5000}}" class="count-over-limit">{{charCount}} / 5000</text>
+      <text wx:elif="{{charCount < 140 || charCount > 220}}" class="count-warning">{{charCount}} 字</text>
+      <text wx:else class="count-ok">{{charCount}} 字</text>
     </view>
     <textarea
       class="draft-input"
@@ -47,10 +54,10 @@
       bindinput="onContentChange"
       placeholder="编辑你的内容..."
       auto-height="true"
-      maxlength="500"
+      maxlength="5000"
       disabled="{{step === 'quality_check'}}"
     />
-    <text class="count-hint">建议 140-220 字，够短，也够有判断。</text>
+    <text class="count-hint">建议 140-220 字，够短，也够有判断。最多 5000 字。</text>
   </view>
 
   <view wx:if="{{step === 'quality_result'}}" class="quality-card quality-card--{{qualityPass ? 'pass' : 'fail'}}">
@@ -99,7 +106,7 @@
     <button
       class="btn-primary actions__primary {{submitting ? 'actions__primary--loading' : ''}}"
       bindtap="onCheckQuality"
-      disabled="{{submitting || !content}}"
+      disabled="{{submitting || !content || charCount > 5000}}"
     >
       {{submitting ? '评估中...' : '确认发布'}}
     </button>

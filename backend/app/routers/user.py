@@ -50,9 +50,9 @@ async def get_wechat_openid(code: str) -> str:
     return openid
 
 
-def create_jwt_token(user_id: int) -> str:
+def create_jwt_token(user_id: int, token_version: int = 0) -> str:
     expire = datetime.now(UTC) + timedelta(hours=settings.jwt_expire_hours)
-    payload = {"sub": str(user_id), "exp": expire}
+    payload = {"sub": str(user_id), "tv": token_version, "exp": expire}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
@@ -83,7 +83,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             db.rollback()
             user = db.query(User).filter(User.openid == openid).first()
 
-    token = create_jwt_token(user.id)
+    token = create_jwt_token(user.id, user.token_version)
     today = get_today_cst()
 
     user_status = UserStatusResponse(
@@ -122,7 +122,7 @@ async def web_login(request: WebLoginRequest, db: Session = Depends(get_db)):
             db.rollback()
             user = db.query(User).filter(User.openid == openid).first()
 
-    token = create_jwt_token(user.id)
+    token = create_jwt_token(user.id, user.token_version)
     today = get_today_cst()
 
     user_status = UserStatusResponse(
@@ -174,4 +174,36 @@ async def get_user_status(
         last_checkin_date=current_user.last_checkin_date,
         today_completed=get_user_today_status(current_user, today, db),
         reminder_needed=check_reminder_needed(current_user, db)
+    )
+
+
+from pydantic import BaseModel
+
+
+class RevokeTokenRequest(BaseModel):
+    user_id: int
+    admin_password: str
+
+
+class RevokeTokenResponse(BaseModel):
+    revoked_user_id: int
+    new_token_version: int
+
+
+@router.post("/revoke_token", response_model=RevokeTokenResponse)
+async def revoke_token(request: RevokeTokenRequest, db: Session = Depends(get_db)):
+    """Admin endpoint to revoke a user's tokens by incrementing their token_version."""
+    if settings.admin_password and request.admin_password != settings.admin_password:
+        raise HTTPException(status_code=403, detail="Invalid admin password")
+
+    user = db.query(User).filter(User.id == request.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.token_version += 1
+    db.commit()
+
+    return RevokeTokenResponse(
+        revoked_user_id=user.id,
+        new_token_version=user.token_version
     )
