@@ -1,5 +1,4 @@
-const LEVEL_THRESHOLDS = [0, 100, 300, 700, 1500, 3100, 6300];
-const LEVEL_NAMES = ['新手', '写手', '表达者', '创作者', '影响者', '大V', '传奇'];
+const { LEVEL_THRESHOLDS, LEVEL_NAMES } = require('../../constants/levels');
 
 Component({
   properties: {

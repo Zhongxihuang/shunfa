@@ -79,12 +79,29 @@ Page({
     })
     .catch((err) => {
       this.setData({ saving: false });
-      const isSubscribeError = !!(err && (err.message === 'subscribe_rejected' || err.message === 'ban' || err.message === 'reject' || err.message === 'TEMPLATE_TYPE_BAN' || err.message === 'service_not_subscribe' || err.message === 'miniprogram_not_subscribe'));
+      const errMsg = err && err.message ? err.message : '';
+      const isSubscribeError = !!(
+        err &&
+        (errMsg === 'subscribe_rejected' || errMsg === 'ban' || errMsg === 'reject' ||
+         errMsg === 'TEMPLATE_TYPE_BAN' || errMsg === 'service_not_subscribe' ||
+         errMsg === 'miniprogram_not_subscribe' ||
+         errMsg.includes('cancel') || errMsg.includes('fail') || errMsg.includes('auth'))
+      );
       if (isSubscribeError && this.data.reminderEnabled && app.globalData.reminderTemplateId) {
         this.setData({ reminderEnabled: false });
       }
       if (isSubscribeError) {
-        wx.showToast({ title: '未完成订阅授权', icon: 'none' });
+        let tip = '未完成订阅授权';
+        if (errMsg.includes('cancel')) {
+          tip = '用户取消授权';
+        } else if (errMsg.includes('TEMPLATE_TYPE_BAN') || errMsg.includes('ban')) {
+          tip = '订阅消息模板已失效';
+        } else if (errMsg.includes('reject')) {
+          tip = '用户拒绝了授权';
+        } else if (errMsg.includes('auth')) {
+          tip = '未获得授权权限';
+        }
+        wx.showToast({ title: tip, icon: 'none' });
         return;
       }
       wx.showToast({ title: err.data && err.data.detail || '保存失败', icon: 'none' });
