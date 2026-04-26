@@ -5,11 +5,13 @@ import httpx
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..logging_config import get_logger
 from ..models import CheckIn, CheckInStatus, ReminderDelivery, User
 from ..utils.time_utils import get_now_cst, get_today_cst, is_reminder_time_active
 
 _WECHAT_ACCESS_TOKEN: str | None = None
 _WECHAT_ACCESS_TOKEN_EXPIRES_AT: datetime | None = None
+logger = get_logger("reminder")
 
 def check_reminder_needed(user: User, db: Session) -> bool:
     """
@@ -157,6 +159,7 @@ async def send_wechat_reminder(user: User, db: Session) -> dict:
         data = response.json()
 
     status = "sent" if data.get("errcode", 0) == 0 else "failed"
+    reason = None if status == "sent" else "wechat_failed"
     delivery = existing or ReminderDelivery(
         user_id=user.id,
         reminder_date=get_today_cst(),
@@ -169,10 +172,22 @@ async def send_wechat_reminder(user: User, db: Session) -> dict:
         db.add(delivery)
     db.commit()
 
+    if status == "failed":
+        logger.warning(
+            "WeChat reminder failed for user_id=%s openid=%s template_id=%s errcode=%s errmsg=%s payload_keys=%s",
+            user.id,
+            user.openid,
+            settings.wechat_subscribe_template_id,
+            data.get("errcode"),
+            data.get("errmsg"),
+            sorted(payload["data"].keys()),
+        )
+
     return {
         "sent": status == "sent",
         "status": status,
-        "reason": None if status == "sent" else data.get("errmsg", "send_failed"),
+        "reason": reason,
+        "error_message": None if status == "sent" else data.get("errmsg", "send_failed"),
     }
 
 
@@ -185,12 +200,20 @@ async def send_due_reminders(db: Session) -> dict:
     sent = 0
     skipped = 0
     failed = 0
+    reason_counts: dict[str, int] = {}
 
     for user in users:
         try:
             result = await send_wechat_reminder(user, db)
-        except Exception:
+        except Exception as exc:
+            logger.exception(
+                "Unexpected reminder send error for user_id=%s openid=%s: %s",
+                user.id,
+                user.openid,
+                exc,
+            )
             failed += 1
+            reason_counts["exception"] = reason_counts.get("exception", 0) + 1
             continue
 
         if result["status"] == "sent":
@@ -200,9 +223,22 @@ async def send_due_reminders(db: Session) -> dict:
         else:
             skipped += 1
 
+        reason = result.get("reason") or result["status"]
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+    logger.info(
+        "Reminder send sweep finished: checked=%s sent=%s skipped=%s failed=%s reason_counts=%s",
+        len(users),
+        sent,
+        skipped,
+        failed,
+        reason_counts,
+    )
+
     return {
         "sent": sent,
         "skipped": skipped,
         "failed": failed,
         "checked": len(users),
+        "reason_counts": reason_counts,
     }

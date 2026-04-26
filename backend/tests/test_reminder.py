@@ -47,7 +47,13 @@ def test_trigger_due_reminders_for_web_admin(client, db):
 
     token = create_jwt_token(admin.id)
     with patch("app.routers.reminder.send_due_reminders", new_callable=AsyncMock) as mock_send:
-        mock_send.return_value = {"checked": 2, "sent": 1, "skipped": 1, "failed": 0}
+        mock_send.return_value = {
+            "checked": 2,
+            "sent": 1,
+            "skipped": 1,
+            "failed": 0,
+            "reason_counts": {"sent": 1, "not_due": 1},
+        }
         response = client.post(
             "/api/reminder/send_due",
             headers={"Authorization": f"Bearer {token}"},
@@ -55,6 +61,7 @@ def test_trigger_due_reminders_for_web_admin(client, db):
 
     assert response.status_code == 200
     assert response.json()["sent"] == 1
+    assert response.json()["reason_counts"] == {"sent": 1, "not_due": 1}
 
 
 @pytest.mark.asyncio
@@ -133,3 +140,28 @@ async def test_send_wechat_reminder_records_delivery(db):
             settings.wechat_subscribe_phrase_key,
             settings.wechat_subscribe_project_key,
         ) = original_values
+
+
+@pytest.mark.asyncio
+async def test_send_due_reminders_aggregates_reason_counts(db):
+    user = User(openid="wechat_reason_user", reminder_enabled=True, reminder_time="21:00")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    with patch("app.services.reminder_service.send_wechat_reminder", new_callable=AsyncMock) as mock_send:
+        mock_send.return_value = {
+            "sent": False,
+            "status": "skipped",
+            "reason": "not_due",
+            "error_message": None,
+        }
+        result = await reminder_service.send_due_reminders(db)
+
+    assert result == {
+        "checked": 1,
+        "sent": 0,
+        "skipped": 1,
+        "failed": 0,
+        "reason_counts": {"not_due": 1},
+    }

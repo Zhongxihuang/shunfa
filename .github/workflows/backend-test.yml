@@ -1,4 +1,4 @@
-name: Test & Lint
+name: Backend Test & Lint
 
 on:
   push:
@@ -34,6 +34,15 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pytest-cov httpx
+
+      - name: Run migration smoke test
+        env:
+          DEEPSEEK_API_KEY: test_key
+          WECHAT_APP_ID: test_app
+          WECHAT_APP_SECRET: test_secret
+          JWT_SECRET_KEY: test_secret_key_123456789
+        run: |
+          pytest tests/test_migrations.py -v
 
       - name: Run tests with coverage
         env:

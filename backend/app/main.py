@@ -8,8 +8,6 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from alembic import command
-from alembic.config import Config
 from app.config import settings
 from app.dependencies import get_db
 from app.logging_config import get_logger, setup_logging
@@ -41,6 +39,9 @@ async def lifespan(app: FastAPI):
 
     # Development: auto-upgrade to latest migration
     if settings.environment == "development":
+        from alembic import command
+        from alembic.config import Config
+
         logger.debug("Running database migrations...")
         alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
         command.upgrade(alembic_cfg, "head")

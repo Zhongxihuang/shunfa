@@ -30,6 +30,7 @@ class SendReminderResponse(BaseModel):
     sent: int
     skipped: int
     failed: int
+    reason_counts: dict[str, int] = {}
 
 @router.post("/reminder", response_model=ReminderStatusResponse)
 async def set_reminder(
