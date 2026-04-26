@@ -34,3 +34,14 @@ miniprogram/project.private.config.json
 # Claude Code
 .claude/
 CLAUDE.md
+
+# Web portfolio (separate Next.js project)
+web/
+
+# Playwright MCP config
+.playwright-mcp/
+
+# Scripts (non-essential utilities)
+docs/
+backend/scripts/inspect_reminder_deliveries.py
+backend/scripts/smoke_test_reminder_flow.py
