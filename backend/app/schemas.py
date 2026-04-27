@@ -222,3 +222,23 @@ class CheckInHistoryResponse(BaseModel):
     checkins: list[CheckInHistoryItem]
     total: int
     draft_count: int
+
+
+# ── Stats schemas ────────────────────────────────────────────────────────────
+
+class DailyStatsItem(BaseModel):
+    date: date
+    total: int
+    approved: int
+    approval_rate: float
+
+
+class StatsSummary(BaseModel):
+    total: int
+    approved: int
+    approval_rate: float
+
+
+class StatsResponse(BaseModel):
+    last_30_days: list[DailyStatsItem]
+    summary: StatsSummary

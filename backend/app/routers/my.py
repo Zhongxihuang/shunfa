@@ -1,10 +1,20 @@
 
+from datetime import date, timedelta
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_current_user, get_db
 from ..models import CheckIn, CheckInStatus, User
-from ..schemas import CheckInHistoryItem, CheckInHistoryResponse
+from ..schemas import (
+    CheckInHistoryItem,
+    CheckInHistoryResponse,
+    DailyStatsItem,
+    StatsResponse,
+    StatsSummary,
+)
+from ..utils.time_utils import get_today_cst
 
 router = APIRouter()
 
@@ -65,3 +75,61 @@ async def get_my_checkins(
         total=total,
         draft_count=draft_count,
     )
+
+
+@router.get("/my/stats", response_model=StatsResponse)
+async def get_my_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取当前用户近 30 天的内容质量统计（通过率趋势）。"""
+    today = get_today_cst()
+    thirty_days_ago = today - timedelta(days=30)
+
+    # Query completed checkins in last 30 days
+    checkins = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.user_id == current_user.id,
+            CheckIn.date >= thirty_days_ago,
+            CheckIn.date <= today,
+        )
+        .order_by(CheckIn.date)
+        .all()
+    )
+
+    # Aggregate by date
+    daily_totals: dict[date, int] = {}
+    daily_approved: dict[date, int] = {}
+    for c in checkins:
+        d = c.date
+        daily_totals[d] = daily_totals.get(d, 0) + 1
+        if c.content_approved:
+            daily_approved[d] = daily_approved.get(d, 0) + 1
+
+    # Fill in all 30 days, even with 0 values
+    last_30_days = []
+    for i in range(30):
+        d = thirty_days_ago + timedelta(days=i)
+        total = daily_totals.get(d, 0)
+        approved = daily_approved.get(d, 0)
+        approval_rate = (approved / total) if total > 0 else 0.0
+        last_30_days.append(
+            DailyStatsItem(
+                date=d,
+                total=total,
+                approved=approved,
+                approval_rate=round(float(approval_rate), 2),
+            )
+        )
+
+    # Summary
+    total_all = sum(daily_totals.values())
+    approved_all = sum(daily_approved.values())
+    summary = StatsSummary(
+        total=total_all,
+        approved=approved_all,
+        approval_rate=round(float(approved_all / total_all), 2) if total_all > 0 else 0.0,
+    )
+
+    return StatsResponse(last_30_days=last_30_days, summary=summary)
