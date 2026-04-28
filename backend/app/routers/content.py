@@ -94,6 +94,18 @@ def get_checkin_or_404(checkin_id: int, user_id: int, db: Session) -> CheckIn:
         raise HTTPException(status_code=404, detail="CheckIn not found")
     return checkin
 
+
+def get_checkin_for_update(checkin_id: int, user_id: int, db: Session) -> CheckIn:
+    """Fetch checkin with row lock to prevent concurrent updates (e.g. double-publish)."""
+    checkin = db.query(CheckIn).filter(
+        CheckIn.id == checkin_id,
+        CheckIn.user_id == user_id
+    ).with_for_update().first()
+    if not checkin:
+        raise HTTPException(status_code=404, detail="CheckIn not found")
+    return checkin
+
+
 @router.post("/generate_content", response_model=MessageResponse)
 async def generate_content(
     request: MessageRequest,
@@ -184,7 +196,7 @@ async def confirm_publish_endpoint(
     db: Session = Depends(get_db)
 ):
     """User confirms publish. Final step."""
-    checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
+    checkin = get_checkin_for_update(request.checkin_id, current_user.id, db)
 
     try:
         result = await confirm_publish(checkin, db, current_user)

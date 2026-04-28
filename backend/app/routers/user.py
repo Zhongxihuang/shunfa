@@ -1,14 +1,15 @@
 from datetime import UTC, date, datetime, timedelta
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import jwt
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..dependencies import get_current_user, get_db
+from ..dependencies import get_admin_user, get_current_user, get_db
 from ..models import CheckIn, User
+from ..rate_limit import limiter
 from ..schemas import (
     AchievementItem,
     AchievementsResponse,
@@ -182,7 +183,6 @@ from pydantic import BaseModel
 
 class RevokeTokenRequest(BaseModel):
     user_id: int
-    admin_password: str
 
 
 class RevokeTokenResponse(BaseModel):
@@ -191,12 +191,16 @@ class RevokeTokenResponse(BaseModel):
 
 
 @router.post("/revoke_token", response_model=RevokeTokenResponse)
-async def revoke_token(request: RevokeTokenRequest, db: Session = Depends(get_db)):
-    """Admin endpoint to revoke a user's tokens by incrementing their token_version."""
-    if settings.admin_password and request.admin_password != settings.admin_password:
-        raise HTTPException(status_code=403, detail="Invalid admin password")
-
-    user = db.query(User).filter(User.id == request.user_id).first()
+@limiter.limit("5/minute")
+async def revoke_token(
+    request: Request,
+    revoke_req: RevokeTokenRequest,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Admin endpoint to revoke a user's tokens by incrementing their token_version.
+    Requires admin JWT auth (web_admin user). Rate limited to 5/minute."""
+    user = db.query(User).filter(User.id == revoke_req.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
