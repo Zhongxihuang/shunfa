@@ -495,3 +495,39 @@
     transform: translateY(0);
   }
 }
+
+.error-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+  margin: 24rpx;
+  padding: 60rpx 32rpx;
+  text-align: center;
+}
+
+.error-panel__title {
+  font-size: 36rpx;
+  font-weight: 650;
+  color: var(--color-ink);
+  font-family: var(--font-family-display);
+}
+
+.error-panel__desc {
+  font-size: 28rpx;
+  color: var(--color-ink-soft);
+  line-height: 1.6;
+}
+
+.error-panel__btn {
+  margin-top: 16rpx;
+  padding: 0 48rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  background: var(--color-ink);
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: none;
+}

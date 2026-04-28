@@ -51,6 +51,7 @@ Page({
     const text = this.data.inputText.trim();
     if (!text || this.data.loading) return;
 
+    // Show user message optimistically first
     this.addMessage('user', text);
     this.setData({ inputText: '', loading: true });
 
@@ -73,7 +74,10 @@ Page({
       }
     })
     .catch(err => {
+      // Remove the user message that was added optimistically on failure
       this.setData({ loading: false });
+      const messages = this.data.messages.slice(0, -1);
+      this.setData({ messages });
       wx.showToast({ title: '消息发送失败，请重试', icon: 'none' });
     });
   }

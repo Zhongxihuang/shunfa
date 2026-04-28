@@ -15,7 +15,7 @@ Page({
   },
 
   loadProfile() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, error: false });
     auth.ensureLoggedIn()
       .then(() => Promise.all([
         api.get('/api/user_status'),
@@ -32,7 +32,11 @@ Page({
           loading: false
         });
       })
-      .catch(() => this.setData({ loading: false }));
+      .catch(() => this.setData({ loading: false, error: true }));
+  },
+
+  onRetryLoad() {
+    this.loadProfile();
   },
 
   onGoSettings() {

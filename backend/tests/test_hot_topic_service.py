@@ -12,7 +12,7 @@ from app.services.hot_topic_service import (
 from app.schemas import RawArticle, TopicCategory
 
 # Use UTC ISO format so _is_recent() passes the 3-day filter in tests
-RECENT_DATE = "2026-04-11T10:00:00Z"
+RECENT_DATE = "2026-04-26T10:00:00Z"
 
 
 SAMPLE_ARTICLES = [
