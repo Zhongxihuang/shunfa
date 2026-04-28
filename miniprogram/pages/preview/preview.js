@@ -9,7 +9,8 @@ Page({
     topicSummary: '',
     content: '',
     originalDraft: '',
-    topicLoading: true,  // show loading until API returns authoritative topic
+    topicLoading: true,
+    topicError: false,
     step: 'preview',  // 'preview' | 'quality_check' | 'quality_result' | 'publishing'
     qualityPass: null,
     qualityIssues: [],
@@ -28,7 +29,8 @@ Page({
       originalDraft: draft,
       charCount: (draft || '').length,
       topic: '',
-      topicLoading: true
+      topicLoading: true,
+      topicError: false
     });
 
     // Fetch authoritative topic from API
@@ -47,7 +49,7 @@ Page({
         });
       })
       .catch(() => {
-        this.setData({ topicLoading: false });
+        this.setData({ topicLoading: false, topicError: true });
       });
   },
 
@@ -57,6 +59,36 @@ Page({
       content,
       charCount: content.length
     });
+  },
+
+  onRetryLoad() {
+    const { checkinId } = this.data;
+    const draft = wx.getStorageSync('current_draft') || '';
+    this.setData({
+      topicLoading: true,
+      topicError: false,
+      content: draft,
+      originalDraft: draft,
+      charCount: (draft || '').length,
+      topic: ''
+    });
+    api.get(`/api/checkin/${checkinId}`)
+      .then(data => {
+        this.setData({
+          topic: data.topic || '',
+          topicSource: data.topic_source || '',
+          topicUrl: data.topic_url || '',
+          topicSummary: data.topic_summary || '',
+          content: data.content || draft,
+          originalDraft: data.content || draft,
+          charCount: (data.content || draft || '').length,
+          feedbackSent: data.content_feedback === 'down',
+          topicLoading: false
+        });
+      })
+      .catch(() => {
+        this.setData({ topicLoading: false, topicError: true });
+      });
   },
 
   onRegenerate() {

@@ -23,19 +23,31 @@ async def get_today_hot_topics(
     )
 
 
-@router.post("/hot_topics/refresh", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/hot_topics/refresh")
 async def refresh_hot_topics(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Trigger an async hot topics refresh via Celery task.
-    Returns immediately — the actual refresh runs in the background.
+    Trigger a hot topics refresh. Runs synchronously and returns the result.
+    Falls back to direct execution when Celery is not available.
     """
-    from app.tasks.celery_tasks import fetch_hot_topics
+    try:
+        from app.tasks.celery_tasks import fetch_hot_topics
+        task = fetch_hot_topics.delay()
+        return {
+            "message": "热点刷新任务已提交",
+            "task_id": task.id,
+            "async": True,
+        }
+    except Exception:
+        # Celery not available — run synchronously
+        import asyncio
+        from app.tasks.celery_tasks import fetch_hot_topics as sync_fetch
 
-    task = fetch_hot_topics.delay()
-    return {
-        "message": "热点刷新任务已提交",
-        "task_id": task.id,
-    }
+        result = asyncio.run(sync_fetch())
+        return {
+            "message": "热点刷新已完成",
+            "result": result,
+            "async": False,
+        }

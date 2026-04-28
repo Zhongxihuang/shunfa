@@ -13,6 +13,12 @@
     <text style="display:block;text-align:center;color:#999;font-size:28rpx;">正在加载...</text>
   </view>
 
+  <view wx:elif="{{topicError}}" class="error-banner paper-card">
+    <text class="error-banner__title">加载失败</text>
+    <text class="error-banner__desc">话题信息加载失败，请检查网络后重试</text>
+    <button class="error-banner__btn" bindtap="onRetryLoad">重新加载</button>
+  </view>
+
   <view wx:elif="{{topic}}" class="post-preview paper-card">
     <view class="post-preview__heading">
       <text class="section-label">主题</text>
@@ -38,7 +44,7 @@
     </view>
   </view>
 
-  <view wx:if="{{step === 'preview' || step === 'quality_check'}}" class="draft-area paper-card">
+  <view wx:if="{{(step === 'preview' || step === 'quality_check') && !topicLoading && !topicError}}" class="draft-area paper-card">
     <view class="draft-area__header">
       <view>
         <text class="draft-area__title">正文修改区</text>
