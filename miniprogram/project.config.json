@@ -49,7 +49,7 @@
   },
   "compileType": "miniprogram",
   "libVersion": "3.2.4",
-  "appid": "wxe4153d38a954fb22",
+  "appid": "YOUR_WECHAT_APPID",
   "projectname": "shunfa",
   "isGameTourist": false,
   "condition": {},

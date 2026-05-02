@@ -41,7 +41,10 @@ class User(Base):
     reminder_enabled = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_checkin_date = Column(Date, nullable=True)
-    token_version = Column(Integer, default=0, nullable=False)  # 递增可撤销泄露的token
+    token_version = Column(Integer, default=0, nullable=False)
+    username = Column(String(100), unique=True, nullable=True, index=True)
+    password_hash = Column(String(256), nullable=True)
+    deepseek_api_key = Column(String(512), nullable=True)  # encrypted via Fernet
 
     checkins = relationship("CheckIn", back_populates="user", lazy="selectin")
     topic_history = relationship("TopicHistory", back_populates="user", lazy="selectin")

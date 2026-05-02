@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -54,6 +54,7 @@ def get_admin_user(
     except (JWTError, ValueError, TypeError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
+    from .models import User
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -63,3 +64,36 @@ def get_admin_user(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     return user
+
+
+async def get_resolved_api_key(
+    request: Request,
+    current_user=Depends(get_current_user),
+) -> str:
+    """
+    Resolve the DeepSeek API key for a user request using three-tier priority:
+      1. X-User-Api-Key request header (highest priority)
+      2. User's saved (encrypted) key in the database
+      3. System environment key (only if REQUIRE_USER_API_KEY is false)
+    """
+    # 1. Request-level header
+    header_key = request.headers.get("X-User-Api-Key", "").strip()
+    if header_key:
+        return header_key
+
+    # 2. User-level stored key (encrypted in DB)
+    if current_user.deepseek_api_key:
+        try:
+            from .utils.crypto import decrypt_api_key
+            return decrypt_api_key(current_user.deepseek_api_key)
+        except Exception:
+            pass  # Decryption failure falls through to next tier
+
+    # 3. Environment-level fallback
+    if settings.deepseek_api_key and not settings.require_user_api_key:
+        return settings.deepseek_api_key
+
+    raise HTTPException(
+        status_code=400,
+        detail="请在设置页面配置您的 DeepSeek API Key（https://platform.deepseek.com/api_keys）",
+    )

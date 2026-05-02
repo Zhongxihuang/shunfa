@@ -62,7 +62,7 @@ async def test_deduplication_excludes_recent_topics(user, db):
     # Track what topics AI was asked to exclude
     excluded_in_call = []
 
-    async def mock_generate(exclude_topics):
+    async def mock_generate(exclude_topics, api_key=""):
         excluded_in_call.extend(exclude_topics)
         return ["新选题一", "新选题二", "新选题三"]
 

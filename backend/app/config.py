@@ -4,7 +4,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    deepseek_api_key: str
+    deepseek_api_key: str | None = None
+    require_user_api_key: bool = False
+    api_key_encryption_secret: str = "change-me-to-a-random-32-char-secret"
     wechat_app_id: str = ""
     wechat_app_secret: str = ""
     wechat_subscribe_template_id: str = ""
@@ -69,6 +71,20 @@ class Settings(BaseSettings):
                     "Please set a strong random secret."
                 )
 
+    def validate_encryption_secret(self) -> None:
+        """Validate Fernet encryption secret at startup."""
+        if self.environment == "production":
+            default = "change-me-to-a-random-32-char-secret"
+            if self.api_key_encryption_secret == default:
+                raise ValueError(
+                    "API_KEY_ENCRYPTION_SECRET must be changed from the default in production. "
+                    "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                )
+            if len(self.api_key_encryption_secret) < 32:
+                raise ValueError(
+                    "API_KEY_ENCRYPTION_SECRET must be at least 32 characters in production."
+                )
+
     def validate_cors(self) -> list[str]:
         """
         Return the validated CORS origins.
@@ -91,3 +107,4 @@ settings = Settings()
 # Validate at import time
 if settings.environment == "production":
     settings.validate_jwt_secret()
+    settings.validate_encryption_secret()

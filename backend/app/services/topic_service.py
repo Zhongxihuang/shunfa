@@ -11,7 +11,7 @@ from .prompt_templates import prompts
 MAX_DAILY_REFRESHES = 3
 TOPICS_PER_BATCH = 3
 
-async def generate_topics(user_id: int, db: Session) -> dict:
+async def generate_topics(user_id: int, db: Session, api_key: str = "") -> dict:
     """
     Generate 3 topic suggestions for the user.
     Returns {"topics": [...], "refresh_count": int, "batch_id": str}
@@ -22,21 +22,17 @@ async def generate_topics(user_id: int, db: Session) -> dict:
     """
     today = get_today_cst()
 
-    # Use with_for_update to lock the row and prevent race conditions
     today_checkin = db.query(CheckIn).filter(
         CheckIn.user_id == user_id,
         CheckIn.date == today
     ).with_for_update().first()
 
     refresh_count = today_checkin.refresh_count if today_checkin else 0
-
-    # First load (refresh_count == 0) is free; only check limit on refreshes
     is_first_load = today_checkin is None
 
     if not is_first_load and refresh_count >= MAX_DAILY_REFRESHES:
         raise ValueError(f"已达到今日最大刷新次数({MAX_DAILY_REFRESHES}次)")
 
-    # Get topics shown in the last 24 hours for deduplication
     twenty_four_hours_ago = get_now_cst() - timedelta(hours=24)
     recent_topics = db.query(TopicHistory.topic).filter(
         TopicHistory.user_id == user_id,
@@ -44,10 +40,8 @@ async def generate_topics(user_id: int, db: Session) -> dict:
     ).all()
     recent_topic_texts = [t.topic for t in recent_topics]
 
-    # Generate new topics via AI
-    topics = await _generate_topics_via_ai(recent_topic_texts)
+    topics = await _generate_topics_via_ai(recent_topic_texts, api_key)
 
-    # Save to topic history
     batch_id = str(uuid.uuid4())
     for topic in topics:
         history = TopicHistory(
@@ -58,18 +52,16 @@ async def generate_topics(user_id: int, db: Session) -> dict:
         )
         db.add(history)
 
-    # Update CheckIn: only increment refresh_count for user-initiated refreshes
     if is_first_load:
         if not today_checkin:
             today_checkin = CheckIn(
                 user_id=user_id,
                 date=today,
-                topic="",  # Will be set when user selects a topic
+                topic="",
                 status=CheckInStatus.topic_selected,
                 refresh_count=0
             )
             db.add(today_checkin)
-        # refresh_count stays 0 on first load
     else:
         today_checkin.refresh_count = refresh_count + 1
 
@@ -82,7 +74,7 @@ async def generate_topics(user_id: int, db: Session) -> dict:
         "batch_id": batch_id
     }
 
-async def _generate_topics_via_ai(exclude_topics: list[str]) -> list[str]:
+async def _generate_topics_via_ai(exclude_topics: list[str], api_key: str = "") -> list[str]:
     """Generate 3 writing topics via DeepSeek AI."""
     exclude_text = ""
     if exclude_topics:
@@ -91,14 +83,11 @@ async def _generate_topics_via_ai(exclude_topics: list[str]) -> list[str]:
     prompt = prompts.topic_generation_prompt.format(exclude_text=exclude_text)
 
     messages = [{"role": "user", "content": prompt}]
-    response = await chat_completion(messages, temperature=0.9, max_tokens=200)
+    response = await chat_completion(messages, temperature=0.9, max_tokens=200, api_key=api_key)
 
-    # Parse topics - split by newlines and clean up
     topics = [line.strip() for line in response.split('\n') if line.strip()]
 
-    # Ensure we have exactly 3 topics
     if len(topics) < 3:
-        # Pad with defaults if AI returns fewer
         defaults = ["分享一件最近让你有所感悟的小事", "聊聊你最近学到的一个新认知", "记录今天一个让你印象深刻的瞬间"]
         topics.extend(defaults[len(topics):3])
 

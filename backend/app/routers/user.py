@@ -1,8 +1,10 @@
 from datetime import UTC, date, datetime, timedelta
 
+import bcrypt
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import jwt
+from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,15 +15,27 @@ from ..rate_limit import limiter
 from ..schemas import (
     AchievementItem,
     AchievementsResponse,
+    ApiKeyStatusResponse,
     LoginRequest,
     LoginResponse,
+    RegisterRequest,
+    SaveApiKeyRequest,
     UserStatusResponse,
+    WebAuthLoginRequest,
     WebLoginRequest,
 )
 from ..services.reminder_service import check_reminder_needed
 from ..utils.time_utils import get_today_cst
 
 router = APIRouter()
+
+
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 async def get_wechat_openid(code: str) -> str:
@@ -68,25 +82,8 @@ def get_user_today_status(user: User, today: date, db: Session) -> bool:
     return checkin is not None
 
 
-@router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
-    openid = await get_wechat_openid(request.code)
-
-    # Get or create user
-    user = db.query(User).filter(User.openid == openid).first()
-    if not user:
-        try:
-            user = User(openid=openid)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        except IntegrityError:
-            db.rollback()
-            user = db.query(User).filter(User.openid == openid).first()
-
+def _build_login_response(user: User, today: date, db: Session) -> LoginResponse:
     token = create_jwt_token(user.id, user.token_version)
-    today = get_today_cst()
-
     user_status = UserStatusResponse(
         id=user.id,
         streak=user.streak,
@@ -100,12 +97,73 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         today_completed=get_user_today_status(user, today, db),
         reminder_needed=check_reminder_needed(user, db)
     )
-
     return LoginResponse(token=token, user=user_status)
+
+
+# ── WeChat login ───────────────────────────────────────────────────────────────
+
+@router.post("/login", response_model=LoginResponse)
+async def login(request: LoginRequest, db: Session = Depends(get_db)):
+    openid = await get_wechat_openid(request.code)
+
+    user = db.query(User).filter(User.openid == openid).first()
+    if not user:
+        try:
+            user = User(openid=openid)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except IntegrityError:
+            db.rollback()
+            user = db.query(User).filter(User.openid == openid).first()
+
+    return _build_login_response(user, get_today_cst(), db)
+
+
+# ── Web auth: register + login ─────────────────────────────────────────────────
+
+@router.post("/register", response_model=LoginResponse)
+async def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    """Register a new web user with username + password."""
+    existing = db.query(User).filter(User.username == request.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="用户名已存在")
+
+    openid = f"web_{request.username}"
+    if db.query(User).filter(User.openid == openid).first():
+        raise HTTPException(status_code=400, detail="用户名已存在")
+
+    try:
+        user = User(
+            openid=openid,
+            username=request.username,
+            password_hash=_hash_password(request.password),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="用户名已存在")
+
+    return _build_login_response(user, get_today_cst(), db)
+
+
+@router.post("/auth_login", response_model=LoginResponse)
+async def auth_login(request: WebAuthLoginRequest, db: Session = Depends(get_db)):
+    """Login with username + password (web users)."""
+    user = db.query(User).filter(User.username == request.username).first()
+    if not user or not user.password_hash:
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if not _verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+    return _build_login_response(user, get_today_cst(), db)
 
 
 @router.post("/web_login", response_model=LoginResponse)
 async def web_login(request: WebLoginRequest, db: Session = Depends(get_db)):
+    """Legacy single-password admin login. Kept for backward compatibility."""
     if not settings.admin_password:
         raise HTTPException(status_code=503, detail="Web login is not configured")
     if request.password != settings.admin_password:
@@ -123,32 +181,57 @@ async def web_login(request: WebLoginRequest, db: Session = Depends(get_db)):
             db.rollback()
             user = db.query(User).filter(User.openid == openid).first()
 
-    token = create_jwt_token(user.id, user.token_version)
-    today = get_today_cst()
+    return _build_login_response(user, get_today_cst(), db)
 
-    user_status = UserStatusResponse(
-        id=user.id,
-        streak=user.streak,
-        longest_streak=user.longest_streak,
-        points=user.points,
-        level=user.level,
-        diamonds=user.diamonds,
-        reminder_time=user.reminder_time,
-        reminder_enabled=user.reminder_enabled,
-        last_checkin_date=user.last_checkin_date,
-        today_completed=get_user_today_status(user, today, db),
-        reminder_needed=check_reminder_needed(user, db)
-    )
 
-    return LoginResponse(token=token, user=user_status)
+# ── User API Key management ────────────────────────────────────────────────────
 
+@router.get("/user/api_key/status", response_model=ApiKeyStatusResponse)
+async def get_api_key_status(current_user: User = Depends(get_current_user)):
+    """Check if the user has a DeepSeek API key configured (never returns the plaintext key)."""
+    if not current_user.deepseek_api_key:
+        return ApiKeyStatusResponse(configured=False)
+    try:
+        from ..utils.crypto import decrypt_api_key
+        plaintext = decrypt_api_key(current_user.deepseek_api_key)
+        preview = f"...{plaintext[-4:]}" if len(plaintext) >= 4 else "..."
+        return ApiKeyStatusResponse(configured=True, preview=preview)
+    except Exception:
+        return ApiKeyStatusResponse(configured=True, preview=None)
+
+
+@router.post("/user/api_key", response_model=ApiKeyStatusResponse)
+async def save_api_key(
+    request: SaveApiKeyRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Save the user's DeepSeek API key (stored encrypted)."""
+    from ..utils.crypto import encrypt_api_key
+    current_user.deepseek_api_key = encrypt_api_key(request.api_key.strip())
+    db.commit()
+    preview = f"...{request.api_key.strip()[-4:]}"
+    return ApiKeyStatusResponse(configured=True, preview=preview)
+
+
+@router.delete("/user/api_key", response_model=ApiKeyStatusResponse)
+async def delete_api_key(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove the user's saved DeepSeek API key."""
+    current_user.deepseek_api_key = None
+    db.commit()
+    return ApiKeyStatusResponse(configured=False)
+
+
+# ── User status + achievements ─────────────────────────────────────────────────
 
 @router.get("/achievements", response_model=AchievementsResponse)
 async def get_achievements(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """获取用户已解锁的成就列表。"""
     from ..services.achievement_service import get_user_achievements
     items = get_user_achievements(current_user)
     return AchievementsResponse(
@@ -178,8 +261,7 @@ async def get_user_status(
     )
 
 
-from pydantic import BaseModel
-
+# ── Admin: token revocation ────────────────────────────────────────────────────
 
 class RevokeTokenRequest(BaseModel):
     user_id: int
@@ -198,8 +280,7 @@ async def revoke_token(
     current_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
-    """Admin endpoint to revoke a user's tokens by incrementing their token_version.
-    Requires admin JWT auth (web_admin user). Rate limited to 5/minute."""
+    """Admin endpoint to revoke a user's tokens. Rate limited to 5/minute."""
     user = db.query(User).filter(User.id == revoke_req.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

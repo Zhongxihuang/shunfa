@@ -1,6 +1,8 @@
 """Tests for hot topic AI scoring and angle generation."""
 
 import json
+from datetime import UTC, datetime
+
 import pytest
 from unittest.mock import AsyncMock, patch
 
@@ -12,7 +14,7 @@ from app.services.hot_topic_service import (
 from app.schemas import RawArticle, TopicCategory
 
 # Use UTC ISO format so _is_recent() passes the 3-day filter in tests
-RECENT_DATE = "2026-04-26T10:00:00Z"
+RECENT_DATE = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 SAMPLE_ARTICLES = [

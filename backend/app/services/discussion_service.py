@@ -2,7 +2,7 @@
 Discussion service — handles the conversational content creation flow.
 
 Exported functions:
-    - process_message(checkin, user_message, db, angle) -> dict
+    - process_message(checkin, user_message, db, api_key, angle) -> dict
     - reset_checkin_for_new_topic(checkin, topic, status) -> None
     - count_real_user_rounds(history) -> int
     - MIN_DISCUSSION_ROUNDS: int
@@ -21,7 +21,6 @@ from ..services.prompt_templates import prompts
 MIN_DISCUSSION_ROUNDS = 1
 MAX_DISCUSSION_ROUNDS = 3
 
-# Sentinels and markers — exported for backward compatibility
 AUTO_SUGGEST_SENTINEL = prompts.auto_suggest_sentinel
 REFRESH_ANGLES_SENTINEL = prompts.refresh_angles_sentinel
 ANGLE_HISTORY_MARKER = prompts.angle_history_marker
@@ -74,27 +73,27 @@ def reset_checkin_for_new_topic(checkin: CheckIn, topic: str, status: CheckInSta
     checkin.completed_at = None
 
 
-async def _force_generate_draft(topic: str, conversation: list[dict]) -> str:
+async def _force_generate_draft(topic: str, conversation: list[dict], api_key: str = "") -> str:
     """Force generate a draft when max discussion rounds are reached."""
     conv_text = "\n".join(
         [f"{'用户' if m['role'] == 'user' else 'AI'}: {m['content']}" for m in conversation]
     )
     prompt = prompts.force_generate_draft_prompt.format(topic=topic, conversation=conv_text)
     messages = [{"role": "user", "content": prompt}]
-    return await chat_completion(messages, temperature=0.75, max_tokens=450)
+    return await chat_completion(messages, temperature=0.75, max_tokens=450, api_key=api_key)
 
 
 async def process_message(
     checkin: CheckIn,
     user_message: str,
     db: Session,
+    api_key: str = "",
     angle: str = "",
 ) -> dict:
     """
     Process a user message in the discussion flow.
     Returns {"reply": str, "status": CheckInStatus, "draft": Optional[str]}
     """
-    # Handle angle suggestion on page load or refresh
     if user_message in (AUTO_SUGGEST_SENTINEL, REFRESH_ANGLES_SENTINEL):
         prompt = prompts.angle_suggestion_prompt.format(
             topic=checkin.topic,
@@ -104,6 +103,7 @@ async def process_message(
             [{"role": "user", "content": prompt}],
             temperature=0.8,
             max_tokens=300,
+            api_key=api_key,
         )
         history = _prune_angle_suggestion_history(
             json.loads(checkin.conversation_history or "[]")
@@ -115,16 +115,10 @@ async def process_message(
         db.commit()
         return {"reply": ai_response, "status": CheckInStatus.discussing, "draft": None}
 
-    # Load conversation history
     history = json.loads(checkin.conversation_history or "[]")
-
-    # Count real user rounds (skip angle suggestion entries)
     user_rounds = count_real_user_rounds(history)
-
-    # Strip angle suggestions from history — they are context only, not real conversation
     real_history = _prune_angle_suggestion_history(history)
 
-    # Build messages for AI
     system_prompt = prompts.system_prompt_discuss.format(
         topic=checkin.topic,
         angle=angle or "（用户自定义方向）",
@@ -133,14 +127,11 @@ async def process_message(
     messages.extend(real_history)
     messages.append({"role": "user", "content": user_message})
 
-    # Get AI response
-    ai_response = await chat_completion(messages, temperature=0.8, max_tokens=600)
+    ai_response = await chat_completion(messages, temperature=0.8, max_tokens=600, api_key=api_key)
 
-    # Check if draft was generated
     draft = None
     if "<<<DRAFT_START>>>" in ai_response and "<<<DRAFT_END>>>" in ai_response:
         if user_rounds < MIN_DISCUSSION_ROUNDS:
-            # Too early for a draft — strip markers and continue discussing
             draft_start = ai_response.find("<<<DRAFT_START>>>")
             clean_reply = (
                 ai_response[:draft_start].strip() if draft_start > 0 else ai_response
@@ -160,9 +151,10 @@ async def process_message(
             new_status = CheckInStatus.draft_ready
             checkin.content = draft
     elif user_rounds >= MAX_DISCUSSION_ROUNDS:
-        # Force draft generation after max rounds
         draft = await _force_generate_draft(
-            checkin.topic, real_history + [{"role": "user", "content": user_message}]
+            checkin.topic,
+            real_history + [{"role": "user", "content": user_message}],
+            api_key=api_key,
         )
         reply = "好的，我根据咱们聊的内容帮你整理了初稿～"
         new_status = CheckInStatus.draft_ready
@@ -171,7 +163,6 @@ async def process_message(
         reply = ai_response
         new_status = CheckInStatus.discussing
 
-    # Update conversation history
     history.append({"role": "user", "content": user_message})
     history.append({"role": "assistant", "content": ai_response})
     checkin.conversation_history = json.dumps(history, ensure_ascii=False)

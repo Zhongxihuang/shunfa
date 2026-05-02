@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_current_user, get_db
+from ..dependencies import get_current_user, get_db, get_resolved_api_key
+from ..rate_limit import limiter
 from ..models import CheckIn, CheckInStatus, HotTopic, User
 from ..schemas import (
     ConfirmContentRequest,
@@ -37,54 +38,6 @@ def get_today_hot_topic_or_404(topic_id: int, db: Session) -> HotTopic:
     return topic
 
 
-@router.post("/quick_generate", response_model=QuickGenerateResponse)
-async def quick_generate_endpoint(
-    request: QuickGenerateRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Quick mode: generate content in ~30s from a hot topic + angle. Stateless."""
-    hot_topic = request.hot_topic
-    fact_block = None
-    topic_record = None
-    if request.topic_id is not None:
-        topic_record = get_today_hot_topic_or_404(request.topic_id, db)
-        hot_topic = topic_record.title
-        fact_block = build_quick_generate_context(
-            hot_topic=topic_record.title,
-            summary=topic_record.summary or "",
-            source=topic_record.source,
-            published_at=topic_record.published_at,
-            url=topic_record.url,
-        )
-    elif request.checkin_id is not None:
-        checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
-        if any([checkin.topic_source, checkin.topic_summary, checkin.topic_url, checkin.topic_published_at]):
-            hot_topic = checkin.topic
-            fact_block = build_quick_generate_context_from_checkin(checkin)
-
-    result = await quick_generate(
-        hot_topic=hot_topic,
-        angle=request.angle,
-        platform=request.platform.value,
-        fact_block=fact_block,
-    )
-    if request.checkin_id is not None:
-        checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
-        if checkin.status == CheckInStatus.completed:
-            raise HTTPException(status_code=400, detail="今日已完成发布")
-        checkin.topic = hot_topic
-        if topic_record is not None:
-            checkin.topic_source = topic_record.source
-            checkin.topic_url = topic_record.url
-            checkin.topic_summary = topic_record.summary
-            checkin.topic_published_at = topic_record.published_at
-        checkin.content = result["content"]
-        checkin.status = CheckInStatus.draft_ready
-        db.commit()
-    return QuickGenerateResponse(**result)
-
-
 def get_checkin_or_404(checkin_id: int, user_id: int, db: Session) -> CheckIn:
     checkin = db.query(CheckIn).filter(
         CheckIn.id == checkin_id,
@@ -106,14 +59,69 @@ def get_checkin_for_update(checkin_id: int, user_id: int, db: Session) -> CheckI
     return checkin
 
 
-@router.post("/generate_content", response_model=MessageResponse)
-async def generate_content(
-    request: MessageRequest,
+@router.post("/quick_generate", response_model=QuickGenerateResponse)
+@limiter.limit("10/minute")
+async def quick_generate_endpoint(
+    request: Request,
+    body: QuickGenerateRequest,
     current_user: User = Depends(get_current_user),
+    api_key: str = Depends(get_resolved_api_key),
+    db: Session = Depends(get_db),
+):
+    """Quick mode: generate content in ~30s from a hot topic + angle. Stateless."""
+    hot_topic = body.hot_topic
+    fact_block = None
+    topic_record = None
+    if body.topic_id is not None:
+        topic_record = get_today_hot_topic_or_404(body.topic_id, db)
+        hot_topic = topic_record.title
+        fact_block = build_quick_generate_context(
+            hot_topic=topic_record.title,
+            summary=topic_record.summary or "",
+            source=topic_record.source,
+            published_at=topic_record.published_at,
+            url=topic_record.url,
+        )
+    elif body.checkin_id is not None:
+        checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+        if any([checkin.topic_source, checkin.topic_summary, checkin.topic_url, checkin.topic_published_at]):
+            hot_topic = checkin.topic
+            fact_block = build_quick_generate_context_from_checkin(checkin)
+
+    result = await quick_generate(
+        hot_topic=hot_topic,
+        angle=body.angle,
+        platform=body.platform.value,
+        fact_block=fact_block,
+        api_key=api_key,
+    )
+    if body.checkin_id is not None:
+        checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+        if checkin.status == CheckInStatus.completed:
+            raise HTTPException(status_code=400, detail="今日已完成发布")
+        checkin.topic = hot_topic
+        if topic_record is not None:
+            checkin.topic_source = topic_record.source
+            checkin.topic_url = topic_record.url
+            checkin.topic_summary = topic_record.summary
+            checkin.topic_published_at = topic_record.published_at
+        checkin.content = result["content"]
+        checkin.status = CheckInStatus.draft_ready
+        db.commit()
+    return QuickGenerateResponse(**result)
+
+
+@router.post("/generate_content", response_model=MessageResponse)
+@limiter.limit("10/minute")
+async def generate_content(
+    request: Request,
+    body: MessageRequest,
+    current_user: User = Depends(get_current_user),
+    api_key: str = Depends(get_resolved_api_key),
     db: Session = Depends(get_db)
 ):
     """Send a message in the discussion flow."""
-    checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
+    checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
 
     if checkin.status == CheckInStatus.completed:
         raise HTTPException(status_code=400, detail="今日已完成发布")
@@ -121,25 +129,25 @@ async def generate_content(
     if checkin.status not in (CheckInStatus.topic_selected, CheckInStatus.discussing):
         raise HTTPException(status_code=400, detail=f"当前状态不支持发送消息: {checkin.status.value}")
 
-    # Change status to discussing if just started
     if checkin.status == CheckInStatus.topic_selected:
         checkin.status = CheckInStatus.discussing
         db.commit()
 
-    result = await process_message(checkin, request.message, db)
+    result = await process_message(checkin, body.message, db, api_key=api_key)
     return MessageResponse(**result)
 
 @router.post("/confirm_content")
 async def confirm_content_endpoint(
     request: ConfirmContentRequest,
     current_user: User = Depends(get_current_user),
+    api_key: str = Depends(get_resolved_api_key),
     db: Session = Depends(get_db)
 ):
     """User confirms (possibly edited) draft content. Returns quality check result."""
     checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
 
     try:
-        qc_result = await confirm_content(checkin, request.content, db)
+        qc_result = await confirm_content(checkin, request.content, db, api_key=api_key)
         return {
             "status": "pending",
             "content_approved": qc_result["quality_pass"],

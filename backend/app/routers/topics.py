@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_current_user, get_db
+from ..dependencies import get_current_user, get_db, get_resolved_api_key
 from ..models import CheckIn, CheckInStatus, HotTopic, User
+from ..rate_limit import limiter
 from ..schemas import SelectTopicRequest, SelectTopicResponse, TopicCard, TopicsResponse
 from ..services.discussion_service import reset_checkin_for_new_topic
 from ..services.topic_service import generate_topics
@@ -21,13 +22,16 @@ def get_today_hot_topic_or_404(hot_topic_id: int, db: Session) -> HotTopic:
     return topic
 
 @router.post("/daily_topics", response_model=TopicsResponse)
+@limiter.limit("10/minute")
 async def get_daily_topics(
+    request: Request,
     current_user: User = Depends(get_current_user),
+    api_key: str = Depends(get_resolved_api_key),
     db: Session = Depends(get_db)
 ):
     """Get today's topic suggestions (max 3 refreshes per day)."""
     try:
-        result = await generate_topics(current_user.id, db)
+        result = await generate_topics(current_user.id, db, api_key)
         return TopicsResponse(
             topics=[TopicCard(**t) for t in result["topics"]],
             refresh_count=result["refresh_count"],
@@ -45,7 +49,6 @@ async def select_topic(
     """Select a topic (either from suggestions or custom input)."""
     today = get_today_cst()
 
-    # Check if already has today's completed check-in
     existing = db.query(CheckIn).filter(
         CheckIn.user_id == current_user.id,
         CheckIn.date == today,
@@ -54,7 +57,6 @@ async def select_topic(
     if existing:
         raise HTTPException(status_code=400, detail="今日已完成打卡")
 
-    # Get or create today's check-in
     checkin = db.query(CheckIn).filter(
         CheckIn.user_id == current_user.id,
         CheckIn.date == today
@@ -85,17 +87,14 @@ async def select_topic(
         checkin.topic_summary = selected_topic.summary
         checkin.topic_published_at = selected_topic.published_at
 
-    # Mark topic as used in history
     from ..models import TopicHistory
     if request.batch_id:
-        # Suggested topic: use batch_id for precise lookup
         topic_history = db.query(TopicHistory).filter(
             TopicHistory.user_id == current_user.id,
             TopicHistory.topic == topic_text,
             TopicHistory.batch_id == request.batch_id
         ).first()
     else:
-        # Custom topic: find most recent matching entry
         topic_history = db.query(TopicHistory).filter(
             TopicHistory.user_id == current_user.id,
             TopicHistory.topic == topic_text

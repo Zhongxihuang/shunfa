@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from ..config import settings
 from ..schemas import RawArticle, ScoredTopic, TopicCategory
-from .ai_service import chat_completion
+from .ai_service import chat_completion, get_system_api_key
 
 # Articles older than this are filtered out — keeps only recent hot topics
 MAX_ARTICLE_AGE_DAYS = 3
@@ -169,6 +169,7 @@ async def score_articles(articles: list[RawArticle]) -> list[dict]:
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=1000,
+        api_key=get_system_api_key(),
     )
 
     try:
@@ -187,6 +188,7 @@ async def generate_angles(topic: str, summary: str = "") -> dict:
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
         max_tokens=300,
+        api_key=get_system_api_key(),
     )
 
     try:
@@ -263,6 +265,7 @@ async def translate_titles(articles: list[RawArticle]) -> dict[int, str]:
             [{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=4000,
+            api_key=get_system_api_key(),
         )
         return _parse_translation_response(response, MAX_TITLE_CHARS)
     except Exception:
@@ -286,6 +289,7 @@ async def translate_summaries(articles: list[RawArticle]) -> dict[int, str]:
             [{"role": "user", "content": prompt}],
             temperature=0.1,
             max_tokens=8000,
+            api_key=get_system_api_key(),
         )
         return _parse_translation_response(response, MAX_SUMMARY_CHARS)
     except Exception:

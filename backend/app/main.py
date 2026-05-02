@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI):
             integrations=[FastApiIntegration()],
             environment=settings.environment,
             traces_sample_rate=0.1,
+            send_default_pii=False,
         )
         logger.info("Sentry initialized")
 
@@ -55,11 +56,15 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down 顺发 API")
 
 
+_is_prod = settings.environment == "production"
 app = FastAPI(
     title="顺发 API",
     description="Gamified writing assistant backend",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 # Prometheus /metrics endpoint
@@ -78,8 +83,8 @@ instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schem
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.validate_cors(),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-User-Api-Key", "X-Request-ID"],
 )
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
@@ -136,8 +141,8 @@ async def health_check(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
         checks["database"] = "ok"
-    except Exception as e:
-        checks["database"] = f"error: {str(e)}"
+    except Exception:
+        checks["database"] = "error"
         checks["status"] = "degraded"
 
     return checks

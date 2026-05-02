@@ -120,6 +120,25 @@ class WebLoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
+    password: str = Field(..., min_length=8)
+
+
+class WebAuthLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class ApiKeyStatusResponse(BaseModel):
+    configured: bool
+    preview: str | None = None  # last 4 chars e.g. "...ab12"
+
+
+class SaveApiKeyRequest(BaseModel):
+    api_key: str = Field(..., min_length=10, pattern=r"^sk-")
+
+
 class LoginResponse(BaseModel):
     token: str
     user: UserStatusResponse

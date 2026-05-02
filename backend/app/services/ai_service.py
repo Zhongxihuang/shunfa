@@ -4,23 +4,25 @@ from typing import Any
 from openai import APIError, AsyncOpenAI, RateLimitError, Timeout
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from ..config import settings
-
 logger = logging.getLogger("ai_service")
 
-# Module-level singleton client — connections are pooled internally by httpx
-_client: AsyncOpenAI | None = None
+
+def _get_client(api_key: str) -> AsyncOpenAI:
+    return AsyncOpenAI(
+        api_key=api_key,
+        base_url="https://api.deepseek.com",
+        timeout=60.0,
+    )
 
 
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(
-            api_key=settings.deepseek_api_key,
-            base_url="https://api.deepseek.com",
-            timeout=60.0,  # explicit timeout per request
+def get_system_api_key() -> str:
+    from ..config import settings
+    if not settings.deepseek_api_key:
+        raise RuntimeError(
+            "DEEPSEEK_API_KEY is not configured. "
+            "Set it in your .env file for system-level operations (hot topic processing, etc.)."
         )
-    return _client
+    return settings.deepseek_api_key
 
 
 @retry(
@@ -37,16 +39,12 @@ async def chat_completion(
     messages: list[dict[str, Any]],
     temperature: float = 0.7,
     max_tokens: int = 1000,
+    api_key: str = "",
 ) -> str:
-    """
-    Call DeepSeek API and return the assistant's text response.
-
-    Retry policy (via tenacity):
-      - 3 attempts with exponential back-off (2s, 4s, 8s)
-      - retries on: Timeout, RateLimitError (429), 5xx API errors
-      - logs each retry attempt for observability
-    """
-    client = _get_client()
+    """Call DeepSeek API and return the assistant's text response."""
+    if not api_key:
+        api_key = get_system_api_key()
+    client = _get_client(api_key)
     response = await client.chat.completions.create(
         model="deepseek-chat",
         messages=messages,

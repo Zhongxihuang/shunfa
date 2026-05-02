@@ -12,11 +12,11 @@ const ENV = getEnv();
 const configs = {
   development: {
     baseUrl: 'http://127.0.0.1:8080',
-    reminderTemplateId: 'JVoKTiV5hVsvD916S3Ma5AbcgW7QRGGR6dYrPItzpzM',
+    reminderTemplateId: 'YOUR_WECHAT_SUBSCRIBE_TEMPLATE_ID',
   },
   production: {
-    baseUrl: 'https://shunfa-production.up.railway.app',
-    reminderTemplateId: 'JVoKTiV5hVsvD916S3Ma5AbcgW7QRGGR6dYrPItzpzM',
+    baseUrl: 'https://your-backend.example.com',
+    reminderTemplateId: 'YOUR_WECHAT_SUBSCRIBE_TEMPLATE_ID',
   }
 };
 

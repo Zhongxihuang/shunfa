@@ -2,8 +2,8 @@
 Draft service — handles quick-mode generation and draft confirmation flows.
 
 Exported functions:
-    - quick_generate(hot_topic, angle, platform, fact_block) -> dict
-    - confirm_content(checkin, content, db) -> dict
+    - quick_generate(hot_topic, angle, platform, fact_block, api_key) -> dict
+    - confirm_content(checkin, content, db, api_key) -> dict
     - build_quick_generate_context(...) -> str
     - build_quick_generate_context_from_checkin(checkin) -> str
     - format_for_platform(content, platform) -> str
@@ -59,6 +59,7 @@ async def _generate_quick_draft(
     platform: str,
     fact_block: str,
     temperature: float,
+    api_key: str = "",
     extra_requirements: str = "",
 ) -> str:
     prompt = prompts.system_prompt_quick.format(
@@ -73,10 +74,11 @@ async def _generate_quick_draft(
         [{"role": "user", "content": prompt}],
         temperature=temperature,
         max_tokens=600,
+        api_key=api_key,
     )
 
 
-async def _check_quick_generate_grounding(draft: str, fact_block: str) -> dict:
+async def _check_quick_generate_grounding(draft: str, fact_block: str, api_key: str = "") -> dict:
     result = await chat_completion(
         [
             {
@@ -88,6 +90,7 @@ async def _check_quick_generate_grounding(draft: str, fact_block: str) -> dict:
         ],
         temperature=0.1,
         max_tokens=300,
+        api_key=api_key,
     )
     try:
         parsed = json.loads(result)
@@ -111,6 +114,7 @@ async def quick_generate(
     angle: str,
     platform: str = "xiaohongshu",
     fact_block: str | None = None,
+    api_key: str = "",
 ) -> dict:
     """
     Quick mode: single-shot content generation. No session state required.
@@ -125,8 +129,9 @@ async def quick_generate(
         platform=platform,
         fact_block=effective_fact_block,
         temperature=0.45,
+        api_key=api_key,
     )
-    grounding = await _check_quick_generate_grounding(content, effective_fact_block)
+    grounding = await _check_quick_generate_grounding(content, effective_fact_block, api_key)
     if not grounding["pass"]:
         fixes = (
             "\n".join(f"- {issue}" for issue in grounding["issues"])
@@ -139,6 +144,7 @@ async def quick_generate(
             platform=platform,
             fact_block=effective_fact_block,
             temperature=0.2,
+            api_key=api_key,
             extra_requirements=(
                 "上一版存在超出素材的事实，请严格删除或改写以下问题：\n"
                 f"{fixes}"
@@ -174,11 +180,11 @@ def _format_for_platform(content: str, platform: str) -> str:
     return content
 
 
-async def _quality_check(draft: str, topic: str) -> dict:
+async def _quality_check(draft: str, topic: str, api_key: str = "") -> dict:
     """检查初稿是否符合质量标准。返回 {pass: bool, issues: list[str]}"""
     prompt = prompts.quality_check_prompt.format(draft=draft)
     messages = [{"role": "user", "content": prompt}]
-    result = await chat_completion(messages, temperature=0.3, max_tokens=300)
+    result = await chat_completion(messages, temperature=0.3, max_tokens=300, api_key=api_key)
     try:
         parsed = json.loads(result)
         return {
@@ -194,12 +200,12 @@ async def _quality_check(draft: str, topic: str) -> dict:
         }
 
 
-async def confirm_content(checkin: CheckIn, content: str, db: Session) -> dict:
+async def confirm_content(checkin: CheckIn, content: str, db: Session, api_key: str = "") -> dict:
     """User confirms (possibly edited) content. Returns quality check result."""
     if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.pending):
         raise ValueError("请先完成内容讨论，生成初稿后再确认")
 
-    qc_result = await _quality_check(content, checkin.topic)
+    qc_result = await _quality_check(content, checkin.topic, api_key)
     checkin.content_approved = qc_result["pass"]
     checkin.content = content
     checkin.status = CheckInStatus.pending
