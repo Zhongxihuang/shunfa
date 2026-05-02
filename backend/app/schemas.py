@@ -112,10 +112,6 @@ class UserStatusResponse(BaseModel):
         from_attributes = True
 
 
-class LoginRequest(BaseModel):
-    code: str  # WeChat login code
-
-
 class WebLoginRequest(BaseModel):
     password: str
 

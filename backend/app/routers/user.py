@@ -1,7 +1,6 @@
 from datetime import UTC, date, datetime, timedelta
 
 import bcrypt
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import jwt
 from pydantic import BaseModel
@@ -16,7 +15,6 @@ from ..schemas import (
     AchievementItem,
     AchievementsResponse,
     ApiKeyStatusResponse,
-    LoginRequest,
     LoginResponse,
     RegisterRequest,
     SaveApiKeyRequest,
@@ -36,33 +34,6 @@ def _hash_password(password: str) -> str:
 
 def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
-
-
-async def get_wechat_openid(code: str) -> str:
-    """Exchange WeChat login code for openid."""
-    url = "https://api.weixin.qq.com/sns/jscode2session"
-    params = {
-        "appid": settings.wechat_app_id,
-        "secret": settings.wechat_app_secret,
-        "js_code": code,
-        "grant_type": "authorization_code"
-    }
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-    except (httpx.RequestError, httpx.HTTPStatusError, ValueError):
-        raise HTTPException(status_code=503, detail="WeChat service unavailable")
-
-    if "errcode" in data and data["errcode"] != 0:
-        raise HTTPException(status_code=400, detail=f"WeChat error: {data.get('errmsg', 'Unknown error')}")
-
-    openid = data.get("openid")
-    if not openid:
-        raise HTTPException(status_code=400, detail="Failed to get openid from WeChat")
-
-    return openid
 
 
 def create_jwt_token(user_id: int, token_version: int = 0) -> str:
@@ -98,26 +69,6 @@ def _build_login_response(user: User, today: date, db: Session) -> LoginResponse
         reminder_needed=check_reminder_needed(user, db)
     )
     return LoginResponse(token=token, user=user_status)
-
-
-# ── WeChat login ───────────────────────────────────────────────────────────────
-
-@router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
-    openid = await get_wechat_openid(request.code)
-
-    user = db.query(User).filter(User.openid == openid).first()
-    if not user:
-        try:
-            user = User(openid=openid)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        except IntegrityError:
-            db.rollback()
-            user = db.query(User).filter(User.openid == openid).first()
-
-    return _build_login_response(user, get_today_cst(), db)
 
 
 # ── Web auth: register + login ─────────────────────────────────────────────────

@@ -1,8 +1,0 @@
-{
-  "navigationBarTitleText": "顺发",
-  "usingComponents": {
-    "streak-badge": "/components/streak-badge/index",
-    "level-progress": "/components/level-progress/index",
-    "diamond-display": "/components/diamond-display/index"
-  }
-}

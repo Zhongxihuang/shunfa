@@ -139,17 +139,3 @@ class HotTopic(Base):
     )
 
 
-class ReminderDelivery(Base):
-    __tablename__ = "reminder_deliveries"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    reminder_date = Column(Date, nullable=False, index=True)
-    channel = Column(String, nullable=False, default="wechat_subscribe")
-    status = Column(String, nullable=False, default="sent")
-    response_payload = Column(Text, nullable=True)
-    sent_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "reminder_date", "channel", name="uq_reminder_delivery_user_date_channel"),
-    )

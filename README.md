@@ -26,8 +26,6 @@
 | 数据库 | SQLite（开发） / PostgreSQL（生产可选） |
 | 部署 | Vercel（前端）+ Railway（后端） |
 
-小程序版本（微信原生）保留在 `miniprogram/` 目录，作为 v2.0 路线图项，暂不主动维护。
-
 ---
 
 ## BYOK（Bring Your Own Key）
@@ -87,8 +85,7 @@ npm run dev
 
 ```bash
 cd backend
-DEEPSEEK_API_KEY=test WECHAT_APP_ID=test WECHAT_APP_SECRET=test \
-  JWT_SECRET_KEY=supersecretkey123456789 \
+DEEPSEEK_API_KEY=test JWT_SECRET_KEY=supersecretkey123456789 \
   API_KEY_ENCRYPTION_SECRET=testencryptionsecretkey12345678 \
   pytest -v
 ```
@@ -127,11 +124,10 @@ shunfa/
 │   │   └── database.py     # engine + WAL 模式
 │   ├── alembic/versions/   # 数据库迁移历史
 │   └── tests/              # 152 个测试（全 mock AI）
-├── web/
-│   ├── src/app/            # Next.js App Router 页面（login, topics, discuss, preview, profile, settings）
-│   ├── src/components/     # 共用组件（Navbar, StreakBadge, LevelProgress, DiamondDisplay）
-│   └── src/lib/            # api.ts（自动注入 X-User-Api-Key）、auth.tsx（AuthContext）
-└── miniprogram/            # 微信小程序（v2.0 路线图，暂不维护）
+└── web/
+    ├── src/app/            # Next.js App Router 页面（login, topics, discuss, preview, profile, settings）
+    ├── src/components/     # 共用组件（Navbar, StreakBadge, LevelProgress, DiamondDisplay）
+    └── src/lib/            # api.ts（自动注入 X-User-Api-Key）、auth.tsx（AuthContext）
 ```
 
 ---
@@ -177,7 +173,6 @@ CORS_ORIGINS=https://your-app.vercel.app
 |------|------|------|
 | POST | `/api/register` | 注册账号（username + password） |
 | POST | `/api/auth_login` | 登录，返回 JWT |
-| POST | `/api/login` | 微信 code 换 JWT（小程序） |
 | GET | `/api/user/api_key/status` | 查询 API Key 配置状态 |
 | POST | `/api/user/api_key` | 保存（加密存储）用户 API Key |
 | GET | `/api/hot_topics/today` | 获取今日 3 个推荐热点 |

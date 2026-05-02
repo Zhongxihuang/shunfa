@@ -7,14 +7,6 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     require_user_api_key: bool = False
     api_key_encryption_secret: str = "change-me-to-a-random-32-char-secret"
-    wechat_app_id: str = ""
-    wechat_app_secret: str = ""
-    wechat_subscribe_template_id: str = ""
-    wechat_subscribe_page: str = "pages/index/index"
-    wechat_subscribe_thing_key: str = "thing1"
-    wechat_subscribe_time_key: str = "time2"
-    wechat_subscribe_phrase_key: str = "phrase3"
-    wechat_subscribe_project_key: str = ""
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 720
@@ -53,7 +45,7 @@ class Settings(BaseSettings):
     bitable_hot_topic_table_id: str = ""
     bitable_voice_record_table_id: str = ""
 
-    model_config = {"env_file": ".env", "case_sensitive": False}
+    model_config = {"env_file": ".env", "case_sensitive": False, "extra": "ignore"}
 
     def validate_jwt_secret(self) -> None:
         """Validate JWT secret at startup. Raises ValueError if secret is too weak."""
