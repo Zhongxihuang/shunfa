@@ -4,7 +4,7 @@
 
 「写完了再想好不好。」
 
-**[在线 Demo](https://shunfa.vercel.app)** · [后端 API 文档](https://your-backend.example.com/docs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)](https://fastapi.tiangolo.com) [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black)](https://nextjs.org)
 
 ---
 
