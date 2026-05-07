@@ -1,0 +1,60 @@
+<view class="container">
+  <view class="hero paper-card">
+    <view class="hero__topline">
+      <text class="eyebrow">今日选题</text>
+      <text class="pill pill-accent">原始来源已保留</text>
+    </view>
+    <text class="hero__title">今天选一条就够了</text>
+    <text class="hero__subtitle">这些热点都保留了标题、摘要、来源和原始链接。你不需要追完全部新闻，只需要挑一条最想表达判断的。</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-state">
+    <view class="loading-spinner"></view>
+    <text>正在加载热点...</text>
+  </view>
+
+  <view wx:elif="{{emptyState && !loadError}}" class="empty-panel paper-card">
+    <text class="empty-panel__title">今天的热点还没准备好</text>
+    <text class="empty-panel__desc">可能是定时抓取还没跑，或者今天的 RSS 还没入库。你可以先重试一次。</text>
+    <button class="btn-secondary empty-panel__btn" bindtap="onRetryLoad">重新加载</button>
+  </view>
+
+  <view wx:elif="{{loadError}}" class="empty-panel paper-card">
+    <text class="empty-panel__title">加载失败</text>
+    <text class="empty-panel__desc">网络或服务端出了点问题，请稍后重试。</text>
+    <button class="btn-secondary empty-panel__btn" bindtap="onRetryLoad">重新加载</button>
+  </view>
+
+  <view wx:else class="anim-fade-in">
+    <view class="topic-list">
+      <topic-card
+        wx:for="{{topics}}"
+        wx:key="id"
+        topicId="{{item.id}}"
+        topic="{{item.title}}"
+        summary="{{item.summary}}"
+        source="{{item.source}}"
+        url="{{item.url}}"
+        index="{{index + 1}}"
+        selected="{{selectedTopicId === item.id}}"
+        bindselect="onSelectTopic"
+      />
+    </view>
+
+    <view class="selection-footer paper-card">
+      <view class="selection-footer__header">
+        <text class="selection-footer__title">当前选择</text>
+        <text class="pill">{{selectedTopicId ? '已选中 1 条' : '还未选题'}}</text>
+      </view>
+      <text class="selection-footer__desc">确认后会直接生成初稿，并把来源、摘要和链接绑定到稿件里。</text>
+    </view>
+
+    <button
+      class="btn-primary confirm-btn"
+      bindtap="onConfirmTopic"
+      disabled="{{!selectedTopicId || generating}}"
+    >
+      {{generating ? '正在起稿...' : '就选这一条'}}
+    </button>
+  </view>
+</view>

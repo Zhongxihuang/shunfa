@@ -11,7 +11,9 @@ from app.services.draft_service import (
     quick_generate,
     build_quick_generate_context,
     _format_for_platform,
+    remove_identity_framing,
 )
+from app.services.generation_context import parse_generation_context
 from app.config import settings
 
 SAMPLE_XHS = (
@@ -84,6 +86,36 @@ async def test_quick_generate_prompt_includes_topic_and_angle():
     assert "OpenAI涨价20%" in prompt_text
     assert "用户在为确定性付钱" in prompt_text
     assert "xiaohongshu" in prompt_text
+    assert "有从业者视角" not in prompt_text
+    assert "不得出现\"作为AI从业者\"" in prompt_text
+
+
+def test_quick_generate_prompt_forbids_identity_framing():
+    from app.services.prompt_templates import prompts
+
+    prompt = prompts.system_prompt_quick.format(
+        hot_topic="OpenAI 发布新产品",
+        angle="这会引发新的产品讨论",
+        platform="weibo",
+        fact_block="标题：OpenAI 发布新产品",
+        discussion_brief="核心立场：这会引发新的产品讨论",
+    )
+
+    assert "不要用\"从业者\"给观点背书" in prompt
+    assert "不得出现\"作为AI从业者\"" in prompt
+
+
+def test_remove_identity_framing_strips_forbidden_phrases():
+    content = (
+        "作为 AI 从业者，我觉得这件事真正该讨论的是分发。\n"
+        "站在行业从业者角度，OpenAI这次不是简单更新。"
+    )
+
+    result = remove_identity_framing(content)
+
+    assert "从业者" not in result
+    assert "我觉得这件事真正该讨论的是分发。" in result
+    assert "OpenAI这次不是简单更新。" in result
 
 
 def test_build_quick_generate_context_contains_structured_facts():
@@ -113,6 +145,28 @@ async def test_quick_generate_linkedin():
         )
 
     assert len(result["content"]) <= 500
+
+
+@pytest.mark.asyncio
+async def test_quick_generate_api_accepts_web_platforms(client):
+    with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+        mock_ai.side_effect = [
+            "微博风格的热点短评",
+            '{"pass": true, "issues": []}',
+        ]
+        token = _get_test_token(client)
+        response = client.post(
+            "/api/quick_generate",
+            json={
+                "hot_topic": "AI 产品新动态",
+                "angle": "真正的竞争在工作流",
+                "platform": "weibo",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["platform"] == "weibo"
 
 
 # ── _format_for_platform ──────────────────────────────────────────────────────
@@ -160,6 +214,24 @@ def test_format_linkedin_truncates_over_500():
     content = "字" * 600
     result = _format_for_platform(content, "linkedin")
     assert len(result) <= 500
+
+
+def test_format_weibo_truncates_over_target_length():
+    content = "字" * 400
+    result = _format_for_platform(content, "weibo")
+    assert len(result) <= 260
+
+
+def test_format_wechat_short_truncates_over_target_length():
+    content = "字" * 500
+    result = _format_for_platform(content, "wechat_short")
+    assert len(result) <= 380
+
+
+def test_format_generic_preserves_content():
+    content = "字" * 600
+    result = _format_for_platform(content, "generic")
+    assert result == content
 
 
 def test_format_unknown_platform_unchanged():
@@ -379,6 +451,7 @@ async def test_quick_generate_retries_when_grounding_check_fails():
             "第一版文案里写了素材没有的旧价格",
             '{"pass": false, "issues": ["提到了素材中没有的旧价格信息"]}',
             "修正后的文案只保留素材里的信息",
+            '{"pass": true, "issues": []}',
         ]
         result = await quick_generate(
             hot_topic="OpenAI 新定价",
@@ -394,7 +467,7 @@ async def test_quick_generate_retries_when_grounding_check_fails():
         )
 
     assert result["content"] == "修正后的文案只保留素材里的信息"
-    assert mock_ai.await_count == 3
+    assert mock_ai.await_count == 4
     retry_prompt = mock_ai.await_args_list[2].args[0][0]["content"]
     assert "上一版存在超出素材的事实" in retry_prompt
 
@@ -436,3 +509,60 @@ def test_quick_generate_persists_draft_when_checkin_id_provided(client, db):
     assert checkin.topic == "ChatGPT 新价格带"
     assert checkin.content == "这是可直接发布的初稿"
     assert checkin.status == CheckInStatus.draft_ready
+
+
+def test_quick_generate_persists_generation_context(client, db):
+    user = User(openid="quick_generate_context_persist_user")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    hot_topic = HotTopic(
+        topic_date=get_today_cst(),
+        rank=1,
+        title="OpenAI 新产品引发讨论",
+        summary="OpenAI 发布的新产品引发了用户对平台能力的讨论。",
+        source="TechCrunch AI",
+        url="https://example.com/openai-product",
+        published_at="2026-04-10T09:00:00Z",
+        category="ai_product",
+        score=9,
+        ai_angle="真正值得聊的是平台能力",
+        ai_counter_angle="也可能只是一次普通更新",
+    )
+    checkin = CheckIn(
+        user_id=user.id,
+        date=get_today_cst(),
+        topic=hot_topic.title,
+        status=CheckInStatus.topic_selected,
+    )
+    db.add_all([hot_topic, checkin])
+    db.commit()
+    db.refresh(hot_topic)
+    db.refresh(checkin)
+
+    token = create_jwt_token(user.id)
+    with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+        mock_ai.side_effect = ["这次真正值得聊的是平台能力，而不是功能更新本身。", '{"pass": true, "issues": []}']
+        response = client.post(
+            "/api/quick_generate",
+            json={
+                "topic_id": hot_topic.id,
+                "checkin_id": checkin.id,
+                "hot_topic": hot_topic.title,
+                "angle": "真正值得聊的是平台能力",
+                "platform": "weibo",
+                "opportunities": ["可以写平台能力变化"],
+                "risks": ["不要补充未确认功能细节"],
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    db.refresh(checkin)
+    context = parse_generation_context(checkin)
+    assert context["platform"] == "weibo"
+    assert context["selected_angle"] == "真正值得聊的是平台能力"
+    assert context["hot_topic_id"] == hot_topic.id
+    assert context["discussion_brief"]["risks"] == ["不要补充未确认功能细节"]
+    assert context["fact_guard_result"]["pass"] is True

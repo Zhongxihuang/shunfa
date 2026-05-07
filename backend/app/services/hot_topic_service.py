@@ -72,14 +72,18 @@ SCORE_PROMPT = """你是一个社交媒体内容策略师，专注于AI行业内
 只返回JSON数组，不要有其他文字。"""
 
 
-ANGLE_PROMPT = """你是一个AI行业内容顾问，帮助用户经营"AI洞察者"人设。
+ANGLE_PROMPT = """你是一个AI/科技热点内容策略师，帮助用户找到适合参与公开讨论的鲜明角度。
 
 热点：{topic}
 来源摘要：{summary}
 
 请生成：
-1. 推荐角度（ai_angle）：普通AI从业者/关注者能蹭的立场，100字以内
+1. 推荐角度（ai_angle）：能参与讨论、可赞同也可反驳的明确立场，100字以内
 2. 反驳角度（ai_counter_angle）：与推荐角度对立的观点，增加讨论深度，80字以内
+
+要求：
+- 不要使用"从业者"、"内行"、"懂行"、"行业内幕"等身份化表达
+- 不要用职业身份背书观点，重点是热点本身的争议和判断
 
 以JSON格式返回：
 {{"ai_angle": "...", "ai_counter_angle": "..."}}
@@ -201,6 +205,98 @@ async def generate_angles(topic: str, summary: str = "") -> dict:
         }
     except (json.JSONDecodeError, ValueError):
         return _default_angles(topic)
+
+
+def _coerce_string_list(value: object, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result = []
+    for item in value:
+        if isinstance(item, str) and item.strip():
+            result.append(item.strip())
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _fallback_analysis(
+    title: str,
+    summary: str = "",
+    ai_angle: str = "",
+    ai_counter_angle: str = "",
+) -> dict:
+    opportunities = [
+        "可以从热点背后的行业信号切入，而不是复述新闻本身。",
+        "适合写成一个明确判断，让读者愿意顺着这个观点接话或反驳。",
+    ]
+    if summary:
+        opportunities.insert(0, f"摘要里已经有可引用的事实基础：{summary[:80]}")
+
+    risks = [
+        "素材有限时不要补充未经确认的数字、时间线或公司背景。",
+        "避免写成泛泛的AI趋势感慨，立场要落在这个热点本身。",
+    ]
+
+    angles = [
+        angle
+        for angle in [ai_angle, ai_counter_angle, f"我更关心「{title}」释放的行业信号"]
+        if angle
+    ]
+
+    return {
+        "opportunities": opportunities[:4],
+        "risks": risks[:4],
+        "recommended_stance": ai_angle or f"把「{title}」当成行业变化的一个信号来写。",
+        "angles": angles[:5],
+    }
+
+
+async def analyze_hot_topic(
+    title: str,
+    source: str,
+    published_at: str | None = None,
+    summary: str = "",
+    ai_angle: str = "",
+    ai_counter_angle: str = "",
+    angle: str | None = None,
+    api_key: str = "",
+) -> dict:
+    """Generate a deeper writing analysis for a hot topic."""
+    from .prompt_templates import prompts
+
+    prompt = prompts.hot_topic_analysis_prompt.format(
+        title=title,
+        source=source,
+        published_at=published_at or "",
+        summary=summary or "",
+        ai_angle=ai_angle or "",
+        ai_counter_angle=ai_counter_angle or "",
+        angle=angle or ai_angle or "",
+    )
+    response = await chat_completion(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.35,
+        max_tokens=800,
+        api_key=api_key,
+    )
+
+    try:
+        data = json.loads(response)
+        if not isinstance(data, dict):
+            return _fallback_analysis(title, summary, ai_angle, ai_counter_angle)
+        fallback = _fallback_analysis(title, summary, ai_angle, ai_counter_angle)
+        return {
+            "opportunities": _coerce_string_list(data.get("opportunities"), 4) or fallback["opportunities"],
+            "risks": _coerce_string_list(data.get("risks"), 4) or fallback["risks"],
+            "recommended_stance": (
+                data.get("recommended_stance", "").strip()
+                if isinstance(data.get("recommended_stance"), str)
+                else ""
+            ) or fallback["recommended_stance"],
+            "angles": _coerce_string_list(data.get("angles"), 5) or fallback["angles"],
+        }
+    except (json.JSONDecodeError, ValueError):
+        return _fallback_analysis(title, summary, ai_angle, ai_counter_angle)
 
 
 MAX_TITLE_CHARS = 40  # Short, news-style title limit

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
+    wechat_app_id: str = ""
+    wechat_app_secret: str = ""
 
     # RSS aggregation settings
     rss_sources: list[str] = [

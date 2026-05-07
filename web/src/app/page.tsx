@@ -28,59 +28,77 @@ function Dashboard() {
   if (!user) return null;
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-24">
+    <div className="sf-shell">
       {showReminderToast && (
-        <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-primary text-white px-4 py-3 rounded-xl shadow-lg z-50 text-sm">
-          该写今天的文章啦！🔔
+        <div className="fixed left-4 right-4 top-4 z-50 mx-auto max-w-md rounded-2xl bg-primary-dark px-4 py-3 text-sm text-white shadow-lg">
+          该写今天的文章了
         </div>
       )}
 
-      <h1 className="text-xl font-bold text-gray-900 mb-4">顺发</h1>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div>
+          <section className="sf-card mb-5 p-6 md:p-8">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <span className="sf-eyebrow">今日待发</span>
+              <span className="sf-pill sf-pill-accent">顺发</span>
+            </div>
+            <h1 className="sf-display text-[40px] font-bold leading-tight text-[var(--ink)] md:max-w-2xl md:text-[64px] md:leading-none">今天，先发一条</h1>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-[var(--ink-soft)]">
+              从热点里挑一个判断，生成初稿，改到能发为止。
+            </p>
+          </section>
 
-      {user && !apiKeyConfigured && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-          <p className="text-sm font-medium text-amber-800">还差一步：配置 DeepSeek API Key</p>
-          <p className="text-xs text-amber-700 mt-0.5">AI 选题和讨论功能需要你自己的 Key。</p>
-          <Link
-            href="/settings"
-            className="mt-2 inline-block text-xs font-medium text-amber-900 underline"
-          >
-            前往设置 →
-          </Link>
-        </div>
-      )}
+          {user && !apiKeyConfigured && (
+            <div className="sf-note-card mb-4 px-4 py-3">
+              <p className="text-sm font-semibold text-[var(--ink)]">还差一步：配置 DeepSeek API Key</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--ink-soft)]">AI 选题、深挖和起稿需要可用 Key。</p>
+              <Link
+                href="/settings"
+                className="mt-2 inline-block text-xs font-semibold text-primary-dark underline"
+              >
+                前往设置
+              </Link>
+            </div>
+          )}
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <StreakBadge streak={user.streak} longestStreak={user.longest_streak} />
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <DiamondDisplay diamonds={user.diamonds} />
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl p-4 shadow-sm mb-6">
-        <LevelProgress level={user.level} points={user.points} />
-      </div>
-
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <h2 className="font-semibold text-gray-800 mb-3">今日状态</h2>
-        {user.today_completed ? (
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-primary"></span>
-            <span className="text-primary font-medium text-sm">今日已打卡 ✓</span>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="sf-card p-4">
+              <StreakBadge streak={user.streak} longestStreak={user.longest_streak} />
+            </div>
+            <div className="sf-card p-4">
+              <DiamondDisplay diamonds={user.diamonds} />
+            </div>
           </div>
-        ) : (
-          <div>
-            <p className="text-gray-500 text-sm mb-3">今天还没写文章，快来开始吧！</p>
-            <Link
-              href="/topics"
-              className="block w-full text-center py-3 bg-primary text-white rounded-xl font-medium hover:bg-primary-dark transition-colors"
-            >
-              开始今天的选题 →
-            </Link>
+        </div>
+
+        <div className="lg:sticky lg:top-24 lg:self-start">
+          <div className="sf-card mb-5 p-4">
+            <LevelProgress level={user.level} points={user.points} />
           </div>
-        )}
+
+          <div className="sf-card p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="sf-display text-2xl font-semibold text-[var(--ink)]">今日动作</h2>
+              <span className="sf-pill">{user.today_completed ? '已完成' : '待开始'}</span>
+            </div>
+            {user.today_completed ? (
+              <div className="flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full bg-primary"></span>
+                <span className="text-sm font-medium text-primary-dark">今日已打卡</span>
+              </div>
+            ) : (
+              <div>
+                <p className="mb-4 text-sm leading-6 text-[var(--ink-soft)]">今天还没写文章，从今日热点里选一条，先生成一个能改的初稿。</p>
+                <Link
+                  href="/topics"
+                  className="sf-btn-primary w-full"
+                >
+                  开始今日写作
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

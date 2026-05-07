@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>顺发 - 个人主页预览</title>
+  <style>
+    /* CSS Variables from app.wxss */
+    :root {
+      --color-bg: #f6f3ee;
+      --color-bg-elevated: #fbf9f6;
+      --color-surface: rgba(255, 253, 250, 0.92);
+      --color-surface-strong: #fffdfb;
+      --color-surface-muted: #f1ece4;
+      --color-surface-tint: rgba(216, 226, 218, 0.52);
+      --color-accent: #8ea592;
+      --color-accent-strong: #6f8773;
+      --color-accent-soft: rgba(142, 165, 146, 0.16);
+      --color-accent-deep: #46554b;
+      --color-primary: var(--color-accent);
+      --color-primary-dark: var(--color-accent-deep);
+      --color-primary-soft: var(--color-accent-soft);
+      --color-ink: #222320;
+      --color-ink-soft: #50524b;
+      --color-ink-muted: #86887f;
+      --color-highlight: #ebe2d5;
+      --color-highlight-soft: #f4ece1;
+      --color-border: rgba(133, 128, 118, 0.18);
+      --color-border-strong: rgba(124, 120, 111, 0.28);
+      --color-danger: #b56a5b;
+      --color-danger-soft: rgba(181, 106, 91, 0.12);
+      --color-success: #728b77;
+      --color-shadow: rgba(25, 25, 25, 0.06);
+      --color-shadow-strong: rgba(25, 25, 25, 0.1);
+      --color-shadow-primary: rgba(111, 135, 115, 0.12);
+      --color-switch: #8ea592;
+      --color-bg-card: var(--color-surface);
+      --color-bg-card-strong: var(--color-surface-strong);
+      --radius-xs: 18rpx;
+      --radius-sm: 24rpx;
+      --radius-md: 32rpx;
+      --radius-lg: 42rpx;
+      --radius-pill: 999rpx;
+      --shadow-card: 0 18rpx 50rpx var(--color-shadow);
+      --shadow-soft: 0 10rpx 28rpx rgba(35, 35, 35, 0.05);
+      --shadow-accent: 0 14rpx 36rpx rgba(111, 135, 115, 0.12);
+      --shadow-primary: var(--shadow-accent);
+      --font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+      --font-family-display: 'Iowan Old Style', 'Palatino Linotype', 'Baskerville', 'Times New Roman', 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-family);
+      font-size: 15px;
+      line-height: 1.6;
+      background: linear-gradient(180deg, #f8f5f1 0%, #f3efe8 100%);
+      color: var(--color-ink);
+      min-height: 100vh;
+      padding: 14px 0 36px;
+    }
+
+    /* Container */
+    .container {
+      padding: 14px 0 36px;
+      min-height: 100vh;
+    }
+
+    /* Animations */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .anim-fade-in {
+      animation: fadeInUp 0.4s ease-out both;
+    }
+
+    /* Hero Section */
+    .hero {
+      margin: 0 12px 12px;
+      padding: 18px 16px 16px;
+      background: linear-gradient(160deg, rgba(255, 253, 248, 0.99) 0%, rgba(250, 245, 237, 0.99) 100%);
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(43, 35, 24, 0.04), 0 8px 24px rgba(43, 35, 24, 0.06);
+      border: 1px solid rgba(182, 172, 153, 0.25);
+      animation: fadeInUp 0.4s ease-out both;
+    }
+
+    .hero__header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hero__avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: linear-gradient(160deg, #f5efe6 0%, #e8e0d3 100%);
+      border: 1.5px solid rgba(182, 172, 153, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(43, 35, 24, 0.08), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+      flex-shrink: 0;
+    }
+
+    .hero__avatar-text {
+      font-size: 28px;
+      color: var(--color-ink);
+      font-weight: 600;
+      font-family: var(--font-family-display);
+    }
+
+    .hero__meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .profile-kicker {
+      display: inline-block;
+      font-size: 10px;
+      color: var(--color-ink-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .hero__greeting {
+      display: block;
+      margin-top: 4px;
+      font-size: 17px;
+      color: var(--color-ink);
+      font-weight: 600;
+      line-height: 1.45;
+      font-family: var(--font-family-display);
+      letter-spacing: -0.25px;
+    }
+
+    .hero__subtitle {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--color-ink-muted);
+      line-height: 1.4;
+    }
+
+    .hero__memo {
+      margin-top: 14px;
+      padding: 12px 13px 13px;
+      background: linear-gradient(160deg, rgba(255, 249, 240, 0.9) 0%, rgba(250, 244, 232, 0.9) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(170, 151, 123, 0.22);
+      box-shadow: 0 4px 16px rgba(43, 35, 24, 0.04);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero__memo::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, #c9a86c 0%, #a8895a 100%);
+      border-radius: 1.5px 0 0 1.5px;
+    }
+
+    .hero__memo-label {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--color-ink-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+      padding-left: 6px;
+    }
+
+    .hero__memo-text {
+      display: block;
+      font-size: 14px;
+      color: var(--color-ink-soft);
+      line-height: 1.65;
+      font-family: var(--font-family-display);
+      font-style: italic;
+      padding-left: 6px;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin: 0 12px 12px;
+    }
+
+    .stat-card {
+      padding: 13px 12px 12px;
+      background: linear-gradient(160deg, rgba(255, 253, 248, 0.96) 0%, rgba(250, 245, 237, 0.96) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(182, 172, 153, 0.22);
+      box-shadow: 0 2px 6px rgba(43, 35, 24, 0.04), 0 6px 18px rgba(43, 35, 24, 0.05);
+      animation: fadeInUp 0.4s ease-out both;
+    }
+
+    .stat-card:nth-child(1) { animation-delay: 0.08s; }
+    .stat-card:nth-child(2) { animation-delay: 0.12s; }
+    .stat-card:nth-child(3) { animation-delay: 0.16s; }
+    .stat-card:nth-child(4) { animation-delay: 0.20s; }
+
+    .stat-kicker {
+      display: inline-block;
+      font-size: 10px;
+      color: var(--color-ink-muted);
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--color-ink);
+      margin-bottom: 5px;
+      line-height: 1;
+      font-family: var(--font-family-display);
+      letter-spacing: -0.5px;
+    }
+
+    .stat-label {
+      display: block;
+      font-size: 11px;
+      color: var(--color-ink-muted);
+      font-weight: 500;
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      margin: 0 12px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .quick-action {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 13px;
+      background: linear-gradient(160deg, rgba(255, 253, 248, 0.96) 0%, rgba(250, 245, 237, 0.96) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(182, 172, 153, 0.28);
+      box-shadow: 0 2px 8px rgba(43, 35, 24, 0.04), 0 6px 20px rgba(43, 35, 24, 0.05);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.2s ease;
+      animation: fadeInUp 0.4s ease-out both;
+      cursor: pointer;
+    }
+
+    .quick-action:nth-child(1) { animation-delay: 0.24s; }
+    .quick-action:nth-child(2) { animation-delay: 0.28s; }
+    .quick-action:nth-child(3) { animation-delay: 0.32s; }
+
+    .quick-action::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0;
+      background: linear-gradient(90deg, rgba(200, 185, 160, 0.08) 0%, transparent 100%);
+      transition: width 0.3s ease;
+    }
+
+    .quick-action:hover {
+      transform: scale(0.99);
+      background: rgba(245, 240, 231, 0.9);
+    }
+
+    .quick-action:hover::before {
+      width: 100%;
+    }
+
+    .quick-action__icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(160deg, rgba(142, 165, 146, 0.2) 0%, rgba(142, 165, 146, 0.12) 100%);
+      border: 1px solid rgba(111, 135, 115, 0.22);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--color-accent-deep);
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(111, 135, 115, 0.12);
+    }
+
+    .quick-action__icon--draft {
+      background: linear-gradient(160deg, rgba(218, 199, 160, 0.32) 0%, rgba(218, 199, 160, 0.2) 100%);
+      border-color: rgba(182, 152, 80, 0.25);
+      color: #8a7040;
+      box-shadow: 0 4px 12px rgba(182, 152, 80, 0.12);
+    }
+
+    .quick-action__icon--settings {
+      background: linear-gradient(160deg, rgba(142, 140, 200, 0.18) 0%, rgba(142, 140, 200, 0.1) 100%);
+      border-color: rgba(100, 98, 160, 0.2);
+      color: #6060a0;
+      box-shadow: 0 4px 12px rgba(100, 98, 160, 0.1);
+    }
+
+    .quick-action__meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .quick-action__title {
+      display: block;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-ink);
+      font-family: var(--font-family-display);
+      letter-spacing: -0.15px;
+    }
+
+    .quick-action__desc {
+      display: block;
+      margin-top: 3px;
+      font-size: 11px;
+      color: var(--color-ink-muted);
+    }
+
+    .quick-action__badge {
+      padding: 4px 8px;
+      border-radius: 10px;
+      background: linear-gradient(160deg, rgba(218, 199, 160, 0.5) 0%, rgba(218, 199, 160, 0.35) 100%);
+      color: #8a7040;
+      font-size: 12px;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(182, 152, 80, 0.15);
+    }
+
+    .quick-action__arrow {
+      font-size: 19px;
+      color: var(--color-ink-muted);
+      font-weight: 300;
+    }
+
+    /* Recent Section */
+    .recent-section {
+      margin: 0 12px 12px;
+      animation: fadeInUp 0.4s ease-out both;
+      animation-delay: 0.36s;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 9px;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-ink);
+      letter-spacing: 0.5px;
+      font-family: var(--font-family-display);
+    }
+
+    .section-more {
+      font-size: 12px;
+      color: var(--color-accent-deep);
+      font-weight: 600;
+      transition: opacity 0.2s;
+      cursor: pointer;
+    }
+
+    .section-more:hover {
+      opacity: 0.7;
+    }
+
+    .recent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .recent-item {
+      padding: 12px 13px 11px;
+      background: linear-gradient(160deg, rgba(255, 253, 248, 0.96) 0%, rgba(250, 245, 237, 0.96) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(182, 172, 153, 0.22);
+      box-shadow: 0 2px 6px rgba(43, 35, 24, 0.04), 0 6px 18px rgba(43, 35, 24, 0.05);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .recent-item:hover {
+      transform: scale(0.99);
+      background: rgba(245, 240, 231, 0.9);
+    }
+
+    .recent-item__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .recent-item__date {
+      font-size: 10px;
+      color: var(--color-ink-muted);
+    }
+
+    .recent-item__status {
+      padding: 3px 7px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .recent-item__status--completed {
+      background: linear-gradient(160deg, rgba(142, 165, 146, 0.18) 0%, rgba(142, 165, 146, 0.1) 100%);
+      color: var(--color-accent-deep);
+    }
+
+    .recent-item__status--draft,
+    .recent-item__status--topic_selected,
+    .recent-item__status--discussing,
+    .recent-item__status--draft_ready {
+      background: linear-gradient(160deg, rgba(218, 199, 160, 0.32) 0%, rgba(218, 199, 160, 0.2) 100%);
+      color: #8a7040;
+    }
+
+    .recent-item__topic {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--color-ink);
+      line-height: 1.45;
+      font-family: var(--font-family-display);
+      letter-spacing: -0.15px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Achievements Section */
+    .achievements-section {
+      margin: 0 12px 12px;
+      animation: fadeInUp 0.4s ease-out both;
+      animation-delay: 0.4s;
+    }
+
+    .achievements-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 9px;
+    }
+
+    .achievement-badge {
+      background: linear-gradient(160deg, rgba(255, 253, 248, 0.98) 0%, rgba(250, 245, 237, 0.96) 100%);
+      border-radius: 12px;
+      padding: 11px 12px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      box-shadow: 0 2px 6px rgba(43, 35, 24, 0.04), 0 6px 18px rgba(43, 35, 24, 0.06);
+      border: 1px solid rgba(182, 172, 153, 0.35);
+      min-width: 80px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .achievement-badge:hover {
+      transform: scale(0.98);
+    }
+
+    .achievement-icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .achievement-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .achievement-name {
+      font-size: 14px;
+      color: var(--color-ink);
+      font-weight: 600;
+      font-family: var(--font-family-display);
+    }
+
+    .achievement-desc {
+      font-size: 10px;
+      color: var(--color-ink-muted);
+    }
+
+    /* History Page Styles */
+    .page-header {
+      margin: 0 12px 12px;
+      padding: 16px 15px;
+      background: linear-gradient(160deg, rgba(255, 253, 248, 0.98) 0%, rgba(250, 245, 237, 0.98) 100%);
+      border-radius: 16px;
+      border: 1px solid rgba(182, 172, 153, 0.25);
+      box-shadow: 0 2px 8px rgba(43, 35, 24, 0.04), 0 8px 24px rgba(43, 35, 24, 0.06);
+      animation: fadeInUp 0.4s ease-out both;
+    }
+
+    .page-header__title {
+      display: block;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--color-ink);
+      font-family: var(--font-family-display);
+      letter-spacing: -0.25px;
+    }
+
+    .page-header__subtitle {
+      display: block;
+      margin-top: 5px;
+      font-size: 12px;
+      color: var(--color-ink-muted);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      margin: 0 12px 12px;
+      background: linear-gradient(160deg, rgba(255, 253, 248, 0.88) 0%, rgba(250, 245, 237, 0.88) 100%);
+      border-radius: 12px;
+      padding: 3px;
+      border: 1px solid rgba(182, 172, 153, 0.22);
+      box-shadow: 0 4px 16px rgba(43, 35, 24, 0.04);
+      animation: fadeInUp 0.4s ease-out both;
+      animation-delay: 0.08s;
+    }
+
+    .tab-item {
+      flex: 1;
+      text-align: center;
+      padding: 9px 0;
+      font-size: 14px;
+      color: var(--color-ink-muted);
+      border-radius: 6px;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+
+    .tab-item--active {
+      background: linear-gradient(160deg, rgba(142, 165, 146, 0.22) 0%, rgba(142, 165, 146, 0.14) 100%);
+      color: var(--color-accent-deep);
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(111, 135, 115, 0.12);
+    }
+
+    .tab-item:not(.tab-item--active):hover {
+      background: rgba(245, 240, 231, 0.7);
+    }
+
+    /* Checkin List */
+    .checkin-list {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      padding: 0 12px;
+    }
+
+    .checkin-item {
+      padding: 13px 14px 12px;
+      background: linear-gradient(160deg, rgba(255, 253, 248, 0.96) 0%, rgba(250, 245, 237, 0.96) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(182, 172, 153, 0.25);
+      box-shadow: 0 2px 8px rgba(43, 35, 24, 0.04), 0 6px 20px rgba(43, 35, 24, 0.05);
+      transition: all 0.22s ease;
+      animation: fadeInUp 0.4s ease-out both;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .checkin-item:nth-child(1) { animation-delay: 0.1s; }
+    .checkin-item:nth-child(2) { animation-delay: 0.14s; }
+    .checkin-item:nth-child(3) { animation-delay: 0.18s; }
+    .checkin-item:nth-child(4) { animation-delay: 0.22s; }
+    .checkin-item:nth-child(5) { animation-delay: 0.26s; }
+
+    .checkin-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2.5px;
+      background: linear-gradient(180deg, var(--color-accent) 0%, var(--color-accent-strong) 100%);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .checkin-item--completed::before {
+      opacity: 1;
+    }
+
+    .checkin-item:hover {
+      transform: scale(0.99);
+      background: rgba(245, 240, 231, 0.92);
+    }
+
+    .checkin-item__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 7px;
+    }
+
+    .checkin-item__date {
+      font-size: 11px;
+      color: var(--color-ink-muted);
+      font-weight: 500;
+    }
+
+    .checkin-item__badge {
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .checkin-item__badge--completed {
+      background: linear-gradient(160deg, rgba(142, 165, 146, 0.2) 0%, rgba(142, 165, 146, 0.12) 100%);
+      color: var(--color-accent-deep);
+    }
+
+    .checkin-item__badge--draft,
+    .checkin-item__badge--topic_selected,
+    .checkin-item__badge--discussing,
+    .checkin-item__badge--draft_ready {
+      background: linear-gradient(160deg, rgba(218, 199, 160, 0.32) 0%, rgba(218, 199, 160, 0.2) 100%);
+      color: #8a7040;
+    }
+
+    .checkin-item__topic {
+      display: block;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--color-ink);
+      line-height: 1.45;
+      font-family: var(--font-family-display);
+      letter-spacing: -0.15px;
+      margin-bottom: 2px;
+    }
+
+    .checkin-item__source {
+      margin-top: 5px;
+    }
+
+    .checkin-item__source-text {
+      font-size: 11px;
+      color: var(--color-ink-muted);
+    }
+
+    .checkin-item__preview {
+      margin-top: 8px;
+      padding: 9px 10px;
+      background: linear-gradient(160deg, rgba(245, 240, 231, 0.7) 0%, rgba(240, 235, 225, 0.7) 100%);
+      border-radius: 7px;
+      border: 1px solid rgba(182, 172, 153, 0.15);
+    }
+
+    .checkin-item__preview-text {
+      font-size: 13px;
+      color: var(--color-ink-soft);
+      line-height: 1.65;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+    }
+
+    .checkin-item__footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 9px;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(182, 172, 153, 0.2);
+    }
+
+    .checkin-item__points {
+      font-size: 12px;
+      color: var(--color-accent-deep);
+      font-weight: 600;
+    }
+
+    .checkin-item__arrow {
+      font-size: 19px;
+      color: var(--color-ink-muted);
+      font-weight: 300;
+      transition: transform 0.2s ease;
+    }
+
+    .checkin-item:hover .checkin-item__arrow {
+      transform: translateX(2px);
+    }
+
+    /* Preview Toggle */
+    .preview-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    .preview-btn {
+      padding: 8px 16px;
+      background: var(--color-accent);
+      color: white;
+      border: none;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(142, 165, 146, 0.3);
+    }
+
+    .preview-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(142, 165, 146, 0.4);
+    }
+
+    .preview-btn.active {
+      background: var(--color-accent-deep);
+    }
+
+    .page-container {
+      display: none;
+    }
+
+    .page-container.active {
+      display: block;
+    }
+
+    .page-title {
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-ink-muted);
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-toggle">
+    <button class="preview-btn active" onclick="showPage('profile')">我的</button>
+    <button class="preview-btn" onclick="showPage('history')">历史</button>
+    <button class="preview-btn" onclick="showPage('drafts')">草稿</button>
+  </div>
+
+  <!-- Profile Page -->
+  <div class="page-container active" id="profile-page">
+    <div class="container">
+      <p class="page-title">PROFILE PAGE</p>
+
+      <view class="hero">
+        <view class="hero__header">
+          <view class="hero__avatar">
+            <text class="hero__avatar-text">文</text>
+          </view>
+          <view class="hero__meta">
+            <text class="profile-kicker">个人写作档案</text>
+            <text class="hero__greeting">保持这个节奏，写作会越来越轻</text>
+            <text class="hero__subtitle">当前连更 7 天 · 最长连更 14 天</text>
+          </view>
+        </view>
+        <view class="hero__memo">
+          <text class="hero__memo-label">写作备注</text>
+          <text class="hero__memo-text">你积累的不是任务数，而是稳定表达的手感。</text>
+        </view>
+      </view>
+
+      <view class="stats-grid">
+        <view class="stat-card">
+          <text class="stat-kicker">当前</text>
+          <text class="stat-value">7</text>
+          <text class="stat-label">当前连更</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-kicker">最佳</text>
+          <text class="stat-value">14</text>
+          <text class="stat-label">最长连更</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-kicker">积分</text>
+          <text class="stat-value">386</text>
+          <text class="stat-label">累计积分</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-kicker">等级</text>
+          <text class="stat-value">Lv.3</text>
+          <text class="stat-label">当前等级</text>
+        </view>
+      </view>
+
+      <view class="quick-actions">
+        <view class="quick-action">
+          <view class="quick-action__icon">稿</view>
+          <view class="quick-action__meta">
+            <text class="quick-action__title">我的稿件</text>
+            <text class="quick-action__desc">已完成的创作</text>
+          </view>
+          <text class="quick-action__arrow">›</text>
+        </view>
+        <view class="quick-action">
+          <view class="quick-action__icon quick-action__icon--draft">草</view>
+          <view class="quick-action__meta">
+            <text class="quick-action__title">草稿箱</text>
+            <text class="quick-action__desc">中断的创作</text>
+          </view>
+          <view class="quick-action__badge">3</view>
+        </view>
+        <view class="quick-action">
+          <view class="quick-action__icon quick-action__icon--settings">时</view>
+          <view class="quick-action__meta">
+            <text class="quick-action__title">提醒设置</text>
+            <text class="quick-action__desc">安排每日提醒</text>
+          </view>
+          <text class="quick-action__arrow">›</text>
+        </view>
+      </view>
+
+      <view class="recent-section">
+        <view class="section-header">
+          <text class="section-label">最近创作</text>
+          <text class="section-more">查看全部 ›</text>
+        </view>
+        <view class="recent-list">
+          <view class="recent-item">
+            <view class="recent-item__header">
+              <text class="recent-item__date">2026-04-15</text>
+              <view class="recent-item__status recent-item__status--completed">已发布</view>
+            </view>
+            <text class="recent-item__topic">今天的早餐让我思考效率与生活质量的关系</text>
+          </view>
+          <view class="recent-item">
+            <view class="recent-item__header">
+              <text class="recent-item__date">2026-04-14</text>
+              <view class="recent-item__status recent-item__status--completed">已发布</view>
+            </view>
+            <text class="recent-item__topic">为什么我开始享受独自散步的时光</text>
+          </view>
+          <view class="recent-item">
+            <view class="recent-item__header">
+              <text class="recent-item__date">2026-04-13</text>
+              <view class="recent-item__status recent-item__status--draft">草稿</view>
+            </view>
+            <text class="recent-item__topic">读《活着》给我带来的三层触动</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="achievements-section">
+        <text class="section-label">已解锁习惯</text>
+        <view class="achievements-grid">
+          <view class="achievement-badge">
+            <text class="achievement-icon">🔥</text>
+            <view class="achievement-info">
+              <text class="achievement-name">连续7天</text>
+              <text class="achievement-desc">坚持一周</text>
+            </view>
+          </view>
+          <view class="achievement-badge">
+            <text class="achievement-icon">📝</text>
+            <view class="achievement-info">
+              <text class="achievement-name">首发完成</text>
+              <text class="achievement-desc">首次发布</text>
+            </view>
+          </view>
+          <view class="achievement-badge">
+            <text class="achievement-icon">⭐</text>
+            <view class="achievement-info">
+              <text class="achievement-name">内容达人</text>
+              <text class="achievement-desc">发布10篇</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </div>
+  </div>
+
+  <!-- History Page -->
+  <div class="page-container" id="history-page">
+    <div class="container">
+      <p class="page-title">HISTORY PAGE</p>
+
+      <view class="page-header">
+        <text class="page-header__title">历史稿件</text>
+        <text class="page-header__subtitle">你的每一次表达轨迹</text>
+      </view>
+
+      <view class="tabs">
+        <view class="tab-item">全部</view>
+        <view class="tab-item tab-item--active">已发布</view>
+        <view class="tab-item">草稿</view>
+      </view>
+
+      <view class="checkin-list">
+        <view class="checkin-item checkin-item--completed">
+          <view class="checkin-item__header">
+            <text class="checkin-item__date">2026-04-15</text>
+            <view class="checkin-item__badge checkin-item__badge--completed">已发布</view>
+          </view>
+          <text class="checkin-item__topic">今天的早餐让我思考效率与生活质量的关系</text>
+          <view class="checkin-item__source">
+            <text class="checkin-item__source-text">来源：知乎热榜</text>
+          </view>
+          <view class="checkin-item__preview">
+            <text class="checkin-item__preview-text">以前总觉得时间不够用，每天早上都是一场战斗。但最近我开始尝试一种新的早餐方式——给自己留出完整的用餐时间，而不是边走边吃...</text>
+          </view>
+          <view class="checkin-item__footer">
+            <text class="checkin-item__points">+45 积分</text>
+            <text class="checkin-item__arrow">›</text>
+          </view>
+        </view>
+
+        <view class="checkin-item checkin-item--completed">
+          <view class="checkin-item__header">
+            <text class="checkin-item__date">2026-04-14</text>
+            <view class="checkin-item__badge checkin-item__badge--completed">已发布</view>
+          </view>
+          <text class="checkin-item__topic">为什么我开始享受独自散步的时光</text>
+          <view class="checkin-item__preview">
+            <text class="checkin-item__preview-text">城市里的公园是我最喜欢的角落。不是因为风景有多美，而是因为在这里，我可以暂时脱离社交媒体的喧嚣，听到自己内心的声音...</text>
+          </view>
+          <view class="checkin-item__footer">
+            <text class="checkin-item__points">+52 积分</text>
+            <text class="checkin-item__arrow">›</text>
+          </view>
+        </view>
+
+        <view class="checkin-item">
+          <view class="checkin-item__header">
+            <text class="checkin-item__date">2026-04-13</text>
+            <view class="checkin-item__badge">讨论中</view>
+          </view>
+          <text class="checkin-item__topic">读《活着》给我带来的三层触动</text>
+        </view>
+
+        <view class="checkin-item">
+          <view class="checkin-item__header">
+            <text class="checkin-item__date">2026-04-12</text>
+            <view class="checkin-item__badge checkin-item__badge--completed">已发布</view>
+          </view>
+          <text class="checkin-item__topic">独居三个月，我学会了与孤独相处</text>
+          <view class="checkin-item__preview">
+            <text class="checkin-item__preview-text">独居并不意味着孤独。相反，它给了我一个机会，去真正了解自己，去接受自己的不完美，去学会独立解决问题...</text>
+          </view>
+          <view class="checkin-item__footer">
+            <text class="checkin-item__points">+48 积分</text>
+            <text class="checkin-item__arrow">›</text>
+          </view>
+        </view>
+      </view>
+    </div>
+  </div>
+
+  <!-- Drafts Page -->
+  <div class="page-container" id="drafts-page">
+    <div class="container">
+      <p class="page-title">DRAFTS PAGE</p>
+
+      <view class="page-header">
+        <text class="page-header__title">草稿箱</text>
+        <text class="page-header__subtitle">中断的创作，随时可以继续</text>
+      </view>
+
+      <view class="checkin-list">
+        <view class="checkin-item">
+          <view class="checkin-item__header">
+            <text class="checkin-item__date">2026-04-13</text>
+            <view class="checkin-item__badge">讨论中</view>
+          </view>
+          <text class="checkin-item__topic">读《活着》给我带来的三层触动</text>
+          <view class="checkin-item__source">
+            <text class="checkin-item__source-text">来源：豆瓣读书</text>
+          </view>
+          <view style="margin-top: 12px; display: flex; justify-content: flex-end;">
+            <button class="btn-continue" style="padding: 8px 20px; background: linear-gradient(160deg, rgba(142, 165, 146, 0.2) 0%, rgba(142, 165, 146, 0.12) 100%); border: 1px solid rgba(111, 135, 115, 0.25); border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--color-accent-deep);">继续</button>
+          </view>
+        </view>
+
+        <view class="checkin-item">
+          <view class="checkin-item__header">
+            <text class="checkin-item__date">2026-04-11</text>
+            <view class="checkin-item__badge">待讨论</view>
+          </view>
+          <text class="checkin-item__topic">一部让我重拾信心的纪录片</text>
+          <view class="checkin-item__source">
+            <text class="checkin-item__source-text">来源：B站推荐</text>
+          </view>
+          <view style="margin-top: 12px; display: flex; justify-content: flex-end;">
+            <button class="btn-continue" style="padding: 8px 20px; background: linear-gradient(160deg, rgba(142, 165, 146, 0.2) 0%, rgba(142, 165, 146, 0.12) 100%); border: 1px solid rgba(111, 135, 115, 0.25); border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--color-accent-deep);">继续</button>
+          </view>
+        </view>
+
+        <view class="checkin-item">
+          <view class="checkin-item__header">
+            <text class="checkin-item__date">2026-04-09</text>
+            <view class="checkin-item__badge">待发布</view>
+          </view>
+          <text class="checkin-item__topic">周末独自去爬山的收获</text>
+          <view class="checkin-item__source">
+            <text class="checkin-item__source-text">来源：个人经历</text>
+          </view>
+          <view class="checkin-item__preview">
+            <text class="checkin-item__preview-text">山上云雾缭绕，能见度很低。但正是这种朦胧感，让我想起了生活中很多模糊的边界...</text>
+          </view>
+          <view style="margin-top: 12px; display: flex; justify-content: flex-end;">
+            <button class="btn-continue" style="padding: 8px 20px; background: linear-gradient(160deg, rgba(142, 165, 146, 0.2) 0%, rgba(142, 165, 146, 0.12) 100%); border: 1px solid rgba(111, 135, 115, 0.25); border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--color-accent-deep);">继续</button>
+          </view>
+        </view>
+      </view>
+    </div>
+  </div>
+
+  <script>
+    function showPage(page) {
+      document.querySelectorAll('.page-container').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.preview-btn').forEach(b => b.classList.remove('active'));
+
+      document.getElementById(page + '-page').classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<view class="container">
+  <view class="header paper-card">
+    <text class="header__title">草稿箱</text>
+    <text class="header__subtitle">中断的创作，随时可以继续</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-state">
+    <view class="loading-spinner"></view>
+    <text>加载中...</text>
+  </view>
+
+  <view wx:elif="{{error}}" class="empty-panel paper-card">
+    <text class="empty-panel__title">加载失败</text>
+    <text class="empty-panel__desc">网络或服务端出了点问题，请稍后重试。</text>
+    <button class="empty-panel__btn" bindtap="onRetryLoad">重新加载</button>
+  </view>
+
+  <view wx:elif="{{checkins.length === 0}}" class="empty-panel paper-card">
+    <text class="empty-panel__title">草稿箱是空的</text>
+    <text class="empty-panel__desc">所有创作都已完成，没有中断的草稿。</text>
+    <button class="empty-panel__btn" bindtap="onGoTopics">去选题</button>
+  </view>
+
+  <view wx:else class="draft-list">
+    <view
+      wx:for="{{checkins}}"
+      wx:key="id"
+      class="draft-item paper-card"
+    >
+      <view class="draft-item__header">
+        <text class="draft-item__date">{{item.date}}</text>
+        <view class="draft-item__status draft-item__status--{{item.status}}">
+          <text wx:if="{{item.status === 'topic_selected'}}">待讨论</text>
+          <text wx:elif="{{item.status === 'discussing'}}">讨论中</text>
+          <text wx:elif="{{item.status === 'draft_ready'}}">待发布</text>
+          <text wx:elif="{{item.status === 'pending'}}">待确认</text>
+          <text wx:else>{{item.status}}</text>
+        </view>
+      </view>
+      <text class="draft-item__topic">{{item.topic}}</text>
+      <view wx:if="{{item.topic_source}}" class="draft-item__source">
+        <text class="draft-item__source-text">来源：{{item.topic_source}}</text>
+      </view>
+      <view class="draft-item__actions">
+        <button
+          class="btn-continue"
+          bindtap="onContinueDraft"
+          data-id="{{item.id}}"
+          data-status="{{item.status}}"
+        >
+          继续
+        </button>
+      </view>
+    </view>
+  </view>
+</view>

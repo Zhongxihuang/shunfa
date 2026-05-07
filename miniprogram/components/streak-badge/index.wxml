@@ -1,0 +1,5 @@
+<view class="streak-badge {{streak >= 30 ? 'badge-legendary' : streak >= 7 ? 'badge-epic' : streak >= 3 ? 'badge-rare' : 'badge-normal'}}">
+  <text class="fire">续</text>
+  <text class="streak-number">{{streak}}</text>
+  <text class="streak-label">天连更</text>
+</view>

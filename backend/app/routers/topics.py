@@ -6,6 +6,7 @@ from ..models import CheckIn, CheckInStatus, HotTopic, User
 from ..rate_limit import limiter
 from ..schemas import SelectTopicRequest, SelectTopicResponse, TopicCard, TopicsResponse
 from ..services.discussion_service import reset_checkin_for_new_topic
+from ..services.generation_context import update_generation_context
 from ..services.topic_service import generate_topics
 from ..utils.time_utils import get_today_cst
 
@@ -86,6 +87,22 @@ async def select_topic(
         checkin.topic_url = selected_topic.url
         checkin.topic_summary = selected_topic.summary
         checkin.topic_published_at = selected_topic.published_at
+        update_generation_context(
+            checkin,
+            hot_topic_id=selected_topic.id,
+            hot_topic_score=selected_topic.score,
+            hot_topic_category=selected_topic.category,
+            source_angle=selected_topic.ai_angle,
+            counter_angle=selected_topic.ai_counter_angle,
+            selected_angle=request.selected_angle,
+            platform=request.platform.value if request.platform else None,
+        )
+    elif request.selected_angle or request.platform:
+        update_generation_context(
+            checkin,
+            selected_angle=request.selected_angle,
+            platform=request.platform.value if request.platform else None,
+        )
 
     from ..models import TopicHistory
     if request.batch_id:

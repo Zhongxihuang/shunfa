@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
 const tabs = [
-  { href: '/', label: '首页', icon: '🏠' },
-  { href: '/profile', label: '个人', icon: '👤' },
-  { href: '/settings', label: '设置', icon: '⚙️' },
+  { href: '/', label: '首页', mark: 'H' },
+  { href: '/profile', label: '个人', mark: 'P' },
+  { href: '/settings', label: '设置', mark: 'S' },
 ];
 
 export default function Navbar() {
@@ -15,7 +15,8 @@ export default function Navbar() {
   const { apiKeyConfigured } = useAuth();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around z-50">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--border)] bg-[rgba(255,253,250,0.9)] backdrop-blur-md md:bottom-auto md:top-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:rounded-full md:border md:shadow-[var(--shadow-soft)]">
+      <div className="mx-auto flex max-w-md justify-around md:max-w-none md:gap-1 md:px-2">
       {tabs.map((tab) => {
         const active = pathname === tab.href;
         const isSettings = tab.href === '/settings';
@@ -23,18 +24,25 @@ export default function Navbar() {
           <Link
             key={tab.href}
             href={tab.href}
-            className={`relative flex flex-col items-center py-2 px-6 text-xs transition-colors ${
-              active ? 'text-primary' : 'text-gray-500'
+            className={`relative flex min-w-20 flex-col items-center px-5 py-2.5 text-xs transition-colors md:min-w-24 md:flex-row md:justify-center md:gap-2 md:rounded-full md:px-4 ${
+              active ? 'text-primary-dark' : 'text-[var(--ink-muted)]'
             }`}
           >
-            <span className="text-xl mb-0.5">{tab.icon}</span>
+            <span className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold md:mb-0 ${
+              active
+                ? 'border-primary/20 bg-primary/10 text-primary-dark'
+                : 'border-[var(--border)] bg-white/60 text-[var(--ink-muted)]'
+            }`}>
+              {tab.mark}
+            </span>
             <span>{tab.label}</span>
             {isSettings && !apiKeyConfigured && (
-              <span className="absolute top-1 right-4 w-2 h-2 bg-red-500 rounded-full" />
+              <span className="absolute right-5 top-2 h-2 w-2 rounded-full bg-[var(--danger)]" />
             )}
           </Link>
         );
       })}
+      </div>
     </nav>
   );
 }

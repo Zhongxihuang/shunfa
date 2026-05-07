@@ -1,0 +1,50 @@
+<view class="container">
+  <view class="topic-header">
+    <text class="topic-label">今日话题</text>
+    <text class="topic-text">{{topic}}</text>
+  </view>
+
+  <scroll-view
+    class="message-list"
+    scroll-y="true"
+    scroll-top="{{scrollTop}}"
+    scroll-with-animation="true"
+  >
+    <view wx:for="{{messages}}" wx:key="index" class="message-item {{item.role}}">
+      <view class="bubble">
+        <text class="message-text">{{item.content}}</text>
+        <text class="message-time">{{item.time}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="message-item assistant">
+      <view class="bubble typing-bubble">
+        <view class="typing-dots">
+          <view class="typing-dot"></view>
+          <view class="typing-dot"></view>
+          <view class="typing-dot"></view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="input-area">
+    <textarea
+      class="input"
+      placeholder="说说你的想法..."
+      value="{{inputText}}"
+      bindinput="onInputChange"
+      auto-height="true"
+      maxlength="500"
+      disabled="{{inputDisabled}}"
+      cursor-spacing="16"
+    />
+    <button
+      class="send-btn {{(!inputText || loading || inputDisabled) ? 'disabled' : ''}}"
+      bindtap="onSend"
+      disabled="{{!inputText || loading || inputDisabled}}"
+    >
+      {{inputText ? '发送' : ''}}
+    </button>
+  </view>
+</view>

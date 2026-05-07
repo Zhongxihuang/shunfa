@@ -104,7 +104,7 @@ function SettingsContent() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-24">
+    <div className="sf-shell md:max-w-4xl xl:max-w-4xl">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700">
           ←
@@ -112,8 +112,9 @@ function SettingsContent() {
         <h1 className="text-xl font-bold text-gray-900">设置</h1>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
       {/* DeepSeek API Key (BYOK) */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
+      <div className="bg-white rounded-2xl p-5 shadow-sm mb-4 md:mb-0">
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="font-medium text-gray-800">DeepSeek API Key</div>
@@ -219,6 +220,7 @@ function SettingsContent() {
         >
           {saving ? '保存中...' : saved ? '已保存 ✓' : '保存'}
         </button>
+      </div>
       </div>
     </div>
   );

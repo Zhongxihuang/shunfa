@@ -10,12 +10,36 @@ Exported functions:
 """
 
 import json
+import re
 
 from sqlalchemy.orm import Session
 
 from ..models import CheckIn, CheckInStatus
 from ..services.ai_service import chat_completion
+from ..services.generation_context import format_discussion_brief
 from ..services.prompt_templates import prompts
+
+
+FORBIDDEN_IDENTITY_PATTERNS = [
+    re.compile(r"作为\s*(?:一名|一个)?\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者[，,、：:\s]*"),
+    re.compile(r"站在\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:的)?\s*(?:角度|视角)[，,、：:\s]*"),
+    re.compile(r"从\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:的)?\s*(?:角度|视角)\s*(?:来看|看)?[，,、：:\s]*"),
+    re.compile(r"(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:视角|角度)"),
+    re.compile(r"作为\s*(?:一名|一个)?\s*(?:做)?AI(?:产品|方向)?的人[，,、：:\s]*"),
+    re.compile(r"在AI公司工作(?:这些年)?[，,、：:\s]*"),
+    re.compile(r"业内人看[，,、：:\s]*"),
+    re.compile(r"懂行的人都知道[，,、：:\s]*"),
+    re.compile(r"行业内幕[，,、：:\s]*"),
+]
+
+
+def remove_identity_framing(content: str) -> str:
+    """Remove identity-backed phrasing the product does not want in drafts."""
+    cleaned = content
+    for pattern in FORBIDDEN_IDENTITY_PATTERNS:
+        cleaned = pattern.sub("", cleaned)
+    lines = [line.strip() for line in cleaned.splitlines()]
+    return "\n".join(line for line in lines if line).strip()
 
 
 def build_quick_generate_context(
@@ -58,6 +82,7 @@ async def _generate_quick_draft(
     angle: str,
     platform: str,
     fact_block: str,
+    discussion_brief: dict | None,
     temperature: float,
     api_key: str = "",
     extra_requirements: str = "",
@@ -67,6 +92,7 @@ async def _generate_quick_draft(
         angle=angle,
         platform=platform,
         fact_block=fact_block,
+        discussion_brief=format_discussion_brief(discussion_brief),
     )
     if extra_requirements:
         prompt = f"{prompt}\n\n额外修正要求：\n{extra_requirements}"
@@ -109,11 +135,27 @@ async def _check_quick_generate_grounding(draft: str, fact_block: str, api_key: 
         }
 
 
+async def _check_discussion_quality(draft: str, discussion_brief: dict | None, api_key: str = "") -> dict:
+    issues: list[str] = []
+    stripped = draft.strip()
+    if not stripped:
+        issues.append("内容为空")
+    if "大家怎么看" in stripped or "你怎么看" in stripped:
+        issues.append("结尾用了甩锅式提问")
+    if any(token in stripped for token in ("据报道", "报道称", "新闻显示")) and len(stripped) < 180:
+        issues.append("内容更像新闻复述，缺少明确判断")
+    if any(pattern.search(stripped) for pattern in FORBIDDEN_IDENTITY_PATTERNS):
+        issues.append("存在身份背书表达")
+
+    return {"pass": not issues, "issues": issues, "available": False}
+
+
 async def quick_generate(
     hot_topic: str,
     angle: str,
     platform: str = "xiaohongshu",
     fact_block: str | None = None,
+    discussion_brief: dict | None = None,
     api_key: str = "",
 ) -> dict:
     """
@@ -128,6 +170,7 @@ async def quick_generate(
         angle=angle,
         platform=platform,
         fact_block=effective_fact_block,
+        discussion_brief=discussion_brief,
         temperature=0.45,
         api_key=api_key,
     )
@@ -143,6 +186,7 @@ async def quick_generate(
             angle=angle,
             platform=platform,
             fact_block=effective_fact_block,
+            discussion_brief=discussion_brief,
             temperature=0.2,
             api_key=api_key,
             extra_requirements=(
@@ -150,39 +194,84 @@ async def quick_generate(
                 f"{fixes}"
             ),
         )
-    content = _format_for_platform(content.strip(), platform)
-    return {"content": content, "platform": platform, "char_count": len(content)}
+        grounding = await _check_quick_generate_grounding(content, effective_fact_block, api_key)
+
+    content = remove_identity_framing(content.strip())
+    discussion = await _check_discussion_quality(content, discussion_brief, api_key)
+    if not discussion["pass"]:
+        fixes = (
+            "\n".join(f"- {issue}" for issue in discussion["issues"])
+            if discussion["issues"]
+            else "- 内容要更像参与热点讨论，而不是新闻复述。"
+        )
+        content = await _generate_quick_draft(
+            hot_topic=hot_topic,
+            angle=angle,
+            platform=platform,
+            fact_block=effective_fact_block,
+            discussion_brief=discussion_brief,
+            temperature=0.35,
+            api_key=api_key,
+            extra_requirements=(
+                "上一版讨论性不足，请保留事实边界并按以下要求重写：\n"
+                f"{fixes}"
+            ),
+        )
+        content = remove_identity_framing(content.strip())
+        grounding = await _check_quick_generate_grounding(content, effective_fact_block, api_key)
+        discussion = await _check_discussion_quality(content, discussion_brief, api_key)
+
+    content = _format_for_platform(content, platform)
+    return {
+        "content": content,
+        "platform": platform,
+        "char_count": len(content),
+        "fact_pass": bool(grounding.get("pass", False)),
+        "fact_issues": grounding.get("issues", []),
+        "discussion_pass": bool(discussion.get("pass", False)),
+        "discussion_issues": discussion.get("issues", []),
+    }
 
 
 def _format_for_platform(content: str, platform: str) -> str:
     """Trim/adjust content to fit platform constraints."""
+    def trim_to_limit(text: str, limit: int) -> str:
+        if len(text) <= limit:
+            return text
+        return (
+            text[:limit].rsplit("\n", 1)[0]
+            if "\n" in text[:limit]
+            else text[:limit]
+        )
+
     if platform == "twitter":
-        if len(content) > 280:
-            content = (
-                content[:280].rsplit("\n", 1)[0]
-                if "\n" in content[:280]
-                else content[:280]
-            )
+        content = trim_to_limit(content, 220)
     elif platform == "xiaohongshu":
-        if len(content) > 300:
-            content = (
-                content[:300].rsplit("\n", 1)[0]
-                if "\n" in content[:300]
-                else content[:300]
-            )
+        content = trim_to_limit(content, 300)
+    elif platform == "weibo":
+        content = trim_to_limit(content, 260)
+    elif platform == "wechat_short":
+        content = trim_to_limit(content, 380)
     elif platform == "linkedin":
-        if len(content) > 500:
-            content = (
-                content[:500].rsplit("\n", 1)[0]
-                if "\n" in content[:500]
-                else content[:500]
-            )
+        content = trim_to_limit(content, 500)
     return content
 
 
-async def _quality_check(draft: str, topic: str, api_key: str = "") -> dict:
+async def _quality_check(
+    draft: str,
+    topic: str,
+    api_key: str = "",
+    platform: str = "xiaohongshu",
+    fact_block: str = "",
+    discussion_brief: dict | None = None,
+) -> dict:
     """检查初稿是否符合质量标准。返回 {pass: bool, issues: list[str]}"""
-    prompt = prompts.quality_check_prompt.format(draft=draft)
+    prompt = prompts.quality_check_prompt.format(
+        draft=draft,
+        platform=platform,
+        fact_block=fact_block or f"标题：{topic}",
+        discussion_brief=format_discussion_brief(discussion_brief),
+    )
     messages = [{"role": "user", "content": prompt}]
     result = await chat_completion(messages, temperature=0.3, max_tokens=300, api_key=api_key)
     try:
@@ -205,15 +294,53 @@ async def confirm_content(checkin: CheckIn, content: str, db: Session, api_key: 
     if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.pending):
         raise ValueError("请先完成内容讨论，生成初稿后再确认")
 
-    qc_result = await _quality_check(content, checkin.topic, api_key)
-    checkin.content_approved = qc_result["pass"]
+    from ..services.generation_context import build_fact_block_from_checkin, parse_generation_context
+
+    context = parse_generation_context(checkin)
+    platform = context.get("platform", "xiaohongshu")
+    discussion_brief = context.get("discussion_brief")
+    fact_block = build_fact_block_from_checkin(checkin)
+    has_snapshot_facts = any([
+        checkin.topic_source,
+        checkin.topic_summary,
+        checkin.topic_url,
+        checkin.topic_published_at,
+    ])
+    fact_result = (
+        await _check_quick_generate_grounding(content, fact_block, api_key)
+        if has_snapshot_facts
+        else {"pass": True, "issues": [], "available": False}
+    )
+    qc_result = await _quality_check(
+        content,
+        checkin.topic,
+        api_key,
+        platform=platform,
+        fact_block=fact_block,
+        discussion_brief=discussion_brief,
+    )
+    discussion_result = await _check_discussion_quality(content, discussion_brief, api_key)
+
+    checkin.content_approved = bool(qc_result["pass"] and fact_result["pass"] and discussion_result["pass"])
     checkin.content = content
     checkin.status = CheckInStatus.pending
+    from ..services.generation_context import update_generation_context
+
+    update_generation_context(
+        checkin,
+        confirm_fact_guard={"pass": fact_result["pass"], "issues": fact_result.get("issues", [])},
+        confirm_quality_guard={"pass": qc_result["pass"], "issues": qc_result.get("issues", [])},
+        confirm_discussion_guard={"pass": discussion_result["pass"], "issues": discussion_result.get("issues", [])},
+    )
     db.commit()
 
     return {
-        "quality_pass": qc_result["pass"],
+        "quality_pass": checkin.content_approved,
         "quality_issues": qc_result.get("issues", []),
         "quality_available": qc_result.get("available", True),
+        "fact_pass": fact_result["pass"],
+        "fact_issues": fact_result.get("issues", []),
+        "discussion_pass": discussion_result["pass"],
+        "discussion_issues": discussion_result.get("issues", []),
         "topic": checkin.topic,
     }

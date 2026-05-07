@@ -23,6 +23,12 @@ from ..services.draft_service import (
     quick_generate,
 )
 from ..services.discussion_service import process_message
+from ..services.generation_context import (
+    build_discussion_brief,
+    build_fact_block_from_checkin,
+    parse_generation_context,
+    update_generation_context,
+)
 from ..utils.time_utils import get_now_cst, get_today_cst
 
 router = APIRouter()
@@ -72,9 +78,11 @@ async def quick_generate_endpoint(
     hot_topic = body.hot_topic
     fact_block = None
     topic_record = None
+    counter_angle = ""
     if body.topic_id is not None:
         topic_record = get_today_hot_topic_or_404(body.topic_id, db)
         hot_topic = topic_record.title
+        counter_angle = topic_record.ai_counter_angle or ""
         fact_block = build_quick_generate_context(
             hot_topic=topic_record.title,
             summary=topic_record.summary or "",
@@ -84,15 +92,28 @@ async def quick_generate_endpoint(
         )
     elif body.checkin_id is not None:
         checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+        context = parse_generation_context(checkin)
+        counter_angle = context.get("counter_angle", "")
         if any([checkin.topic_source, checkin.topic_summary, checkin.topic_url, checkin.topic_published_at]):
             hot_topic = checkin.topic
             fact_block = build_quick_generate_context_from_checkin(checkin)
 
+    effective_fact_block = fact_block or build_quick_generate_context(hot_topic)
+    discussion_brief = body.discussion_brief or build_discussion_brief(
+        topic=hot_topic,
+        fact_block=effective_fact_block,
+        angle=body.angle,
+        platform=body.platform.value,
+        opportunities=body.opportunities,
+        risks=body.risks,
+        counter_angle=counter_angle,
+    )
     result = await quick_generate(
         hot_topic=hot_topic,
         angle=body.angle,
         platform=body.platform.value,
-        fact_block=fact_block,
+        fact_block=effective_fact_block,
+        discussion_brief=discussion_brief,
         api_key=api_key,
     )
     if body.checkin_id is not None:
@@ -107,6 +128,21 @@ async def quick_generate_endpoint(
             checkin.topic_published_at = topic_record.published_at
         checkin.content = result["content"]
         checkin.status = CheckInStatus.draft_ready
+        update_generation_context(
+            checkin,
+            generation_mode="quick",
+            platform=result["platform"],
+            selected_angle=body.angle,
+            discussion_brief=discussion_brief,
+            char_count=result["char_count"],
+            fact_guard_result={"pass": result["fact_pass"], "issues": result["fact_issues"]},
+            discussion_guard_result={"pass": result["discussion_pass"], "issues": result["discussion_issues"]},
+            hot_topic_id=topic_record.id if topic_record else None,
+            hot_topic_score=topic_record.score if topic_record else None,
+            hot_topic_category=topic_record.category if topic_record else None,
+            source_angle=topic_record.ai_angle if topic_record else None,
+            counter_angle=topic_record.ai_counter_angle if topic_record else counter_angle,
+        )
         db.commit()
     return QuickGenerateResponse(**result)
 
@@ -133,7 +169,36 @@ async def generate_content(
         checkin.status = CheckInStatus.discussing
         db.commit()
 
-    result = await process_message(checkin, body.message, db, api_key=api_key)
+    context = parse_generation_context(checkin)
+    if body.angle or body.platform or body.discussion_brief:
+        context = update_generation_context(
+            checkin,
+            selected_angle=body.angle,
+            platform=body.platform.value if body.platform else None,
+            discussion_brief=body.discussion_brief,
+            generation_mode="deep",
+        )
+        db.commit()
+    platform = body.platform.value if body.platform else context.get("platform", "xiaohongshu")
+    angle = body.angle or context.get("selected_angle", "")
+    fact_block = build_fact_block_from_checkin(checkin)
+    discussion_brief = body.discussion_brief or context.get("discussion_brief") or build_discussion_brief(
+        topic=checkin.topic,
+        fact_block=fact_block,
+        angle=angle,
+        platform=platform,
+        counter_angle=context.get("counter_angle", ""),
+    )
+    result = await process_message(
+        checkin,
+        body.message,
+        db,
+        api_key=api_key,
+        angle=angle,
+        platform=platform,
+        fact_block=fact_block,
+        discussion_brief=discussion_brief,
+    )
     return MessageResponse(**result)
 
 @router.post("/confirm_content")
@@ -153,6 +218,10 @@ async def confirm_content_endpoint(
             "content_approved": qc_result["quality_pass"],
             "quality_issues": qc_result["quality_issues"],
             "quality_available": qc_result["quality_available"],
+            "fact_pass": qc_result["fact_pass"],
+            "fact_issues": qc_result["fact_issues"],
+            "discussion_pass": qc_result["discussion_pass"],
+            "discussion_issues": qc_result["discussion_issues"],
             "topic": qc_result["topic"],
             "message": "内容已确认。以下为质量提示，不影响发布。"
         }
@@ -172,6 +241,11 @@ async def content_feedback_endpoint(
 
     checkin.content_feedback = request.feedback
     checkin.content_feedback_at = get_now_cst()
+    update_generation_context(
+        checkin,
+        feedback_reason_tags=request.reason_tags,
+        feedback_free_text=request.free_text,
+    )
     db.commit()
 
     return ContentFeedbackResponse(checkin_id=checkin.id, feedback=request.feedback)
@@ -195,6 +269,7 @@ async def get_checkin(
         "status": checkin.status.value,
         "content_approved": checkin.content_approved,
         "content_feedback": checkin.content_feedback,
+        "generation_context": parse_generation_context(checkin),
     }
 
 @router.post("/confirm_publish", response_model=PublishResponse)

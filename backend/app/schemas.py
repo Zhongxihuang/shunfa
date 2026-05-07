@@ -27,6 +27,9 @@ class Platform(str, Enum):
     twitter = "twitter"
     xiaohongshu = "xiaohongshu"
     linkedin = "linkedin"
+    weibo = "weibo"
+    wechat_short = "wechat_short"
+    generic = "generic"
 
 
 class RawArticle(BaseModel):
@@ -73,6 +76,17 @@ class HotTopicsResponse(BaseModel):
     topics: list[HotTopicListItem]
 
 
+class HotTopicAnalysisRequest(BaseModel):
+    angle: str | None = Field(default=None, max_length=300)
+
+
+class HotTopicAnalysisResponse(BaseModel):
+    opportunities: list[str] = []
+    risks: list[str] = []
+    recommended_stance: str = ""
+    angles: list[str] = []
+
+
 # ── Content mode schemas ─────────────────────────────────────────────────────
 
 class ContentMode(str, Enum):
@@ -86,12 +100,19 @@ class QuickGenerateRequest(BaseModel):
     angle: str = Field(..., min_length=1, max_length=300)
     platform: Platform = Platform.xiaohongshu
     checkin_id: int | None = None
+    opportunities: list[str] = []
+    risks: list[str] = []
+    discussion_brief: dict | None = None
 
 
 class QuickGenerateResponse(BaseModel):
     content: str
     platform: Platform
     char_count: int
+    fact_pass: bool = True
+    fact_issues: list[str] = []
+    discussion_pass: bool = True
+    discussion_issues: list[str] = []
 
 
 # User schemas
@@ -114,6 +135,10 @@ class UserStatusResponse(BaseModel):
 
 class WebLoginRequest(BaseModel):
     password: str
+
+
+class LoginRequest(BaseModel):
+    code: str = Field(..., min_length=1)
 
 
 class RegisterRequest(BaseModel):
@@ -156,6 +181,9 @@ class TopicsResponse(BaseModel):
 class MessageRequest(BaseModel):
     checkin_id: int
     message: str = Field(..., min_length=1, max_length=2000)
+    angle: str | None = Field(default=None, max_length=300)
+    platform: Platform | None = None
+    discussion_brief: dict | None = None
 
 
 class MessageResponse(BaseModel):
@@ -168,6 +196,8 @@ class SelectTopicRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=100)
     batch_id: str | None = None  # If from suggestion, provide batch_id to mark was_used accurately
     hot_topic_id: int | None = None
+    selected_angle: str | None = Field(default=None, max_length=300)
+    platform: Platform | None = None
 
 
 class SelectTopicResponse(BaseModel):
@@ -187,6 +217,8 @@ class ConfirmPublishRequest(BaseModel):
 class ContentFeedbackRequest(BaseModel):
     checkin_id: int
     feedback: str = Field(..., pattern="^(up|down)$")
+    reason_tags: list[str] = []
+    free_text: str | None = Field(default=None, max_length=500)
 
 
 class ContentFeedbackResponse(BaseModel):

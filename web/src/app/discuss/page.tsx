@@ -22,6 +22,8 @@ function DiscussContent() {
   const params = useSearchParams();
   const checkinId = parseInt(params.get('checkin_id') ?? '0');
   const topic = decodeURIComponent(params.get('topic') ?? '');
+  const angle = params.get('angle') ?? '';
+  const platform = params.get('platform') ?? 'xiaohongshu';
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -41,6 +43,8 @@ function DiscussContent() {
     api.post<{ reply: string; status: string; draft?: string }>('/api/generate_content', {
       checkin_id: checkinId,
       message: '__auto_suggest_angles__',
+      angle,
+      platform,
     })
       .then((data) => {
         setLoading(false);
@@ -56,7 +60,7 @@ function DiscussContent() {
           setMessages([{ role: 'assistant', content: '加载失败，请返回重试～', time: now() }]);
         }
       });
-  }, [checkinId]);
+  }, [checkinId, angle, platform]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -75,6 +79,8 @@ function DiscussContent() {
       const data = await api.post<{ reply: string; status: string; draft?: string }>('/api/generate_content', {
         checkin_id: checkinId,
         message: trimmed,
+        angle,
+        platform,
       });
 
       setLoading(false);
@@ -113,6 +119,8 @@ function DiscussContent() {
       const data = await api.post<{ reply: string; status: string }>('/api/generate_content', {
         checkin_id: checkinId,
         message: '__refresh_angles__',
+        angle,
+        platform,
       });
       setLoading(false);
       // Replace the last AI message with the new angle suggestion
@@ -139,9 +147,9 @@ function DiscussContent() {
   }
 
   return (
-    <div className="max-w-md mx-auto flex flex-col h-[100dvh]">
+    <div className="mx-auto flex h-[100dvh] max-w-md flex-col md:h-[calc(100dvh-3rem)] md:max-w-4xl md:py-6">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 flex-shrink-0">
+      <div className="flex flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 md:rounded-t-2xl md:border-x md:border-t">
         <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700">
           ←
         </button>
@@ -162,7 +170,7 @@ function DiscussContent() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 bg-bg">
+      <div className="flex-1 overflow-y-auto bg-bg px-4 py-4 md:border-x md:border-gray-200 md:px-8">
         {messages.map((m, i) => (
           <ChatBubble key={i} role={m.role} content={m.content} time={m.time} />
         ))}
@@ -191,7 +199,7 @@ function DiscussContent() {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 px-4 py-3 bg-white border-t border-gray-200">
+      <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3 md:rounded-b-2xl md:border-x md:border-b md:px-8">
         <div className="flex gap-2 items-end">
           <textarea
             value={input}

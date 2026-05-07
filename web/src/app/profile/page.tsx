@@ -37,7 +37,7 @@ function ProfileContent() {
   const levelName = LEVEL_NAMES[user.level - 1] ?? '传奇';
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-24">
+    <div className="sf-shell md:max-w-4xl xl:max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-900">个人</h1>
         <button onClick={logout} className="text-sm text-gray-400 hover:text-gray-600">
@@ -46,7 +46,7 @@ function ProfileContent() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-6 md:grid-cols-4">
         {[
           { label: '连续天数', value: `${user.streak} 🔥` },
           { label: '最长连胜', value: `${user.longest_streak} 天` },
@@ -73,7 +73,7 @@ function ProfileContent() {
       {achievements.length > 0 && (
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
           <h2 className="font-semibold text-gray-800 mb-3">成就</h2>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-2 md:grid-cols-6">
             {achievements.map((a) => (
               <AchievementBadge
                 key={a.type}

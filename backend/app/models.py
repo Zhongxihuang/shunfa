@@ -62,6 +62,7 @@ class CheckIn(Base):
     topic_url = Column(Text, nullable=True)
     topic_summary = Column(Text, nullable=True)
     topic_published_at = Column(String, nullable=True)
+    generation_context = Column(Text, nullable=True)  # JSON: platform, selected angle, discussion brief, guard results
     content = Column(Text, nullable=True)  # final published content
     conversation_history = Column(Text, nullable=True)  # JSON string
     status = Column(SAEnum(CheckInStatus), default=CheckInStatus.topic_selected, nullable=False)
@@ -137,5 +138,4 @@ class HotTopic(Base):
     __table_args__ = (
         UniqueConstraint("topic_date", "title", name="uq_hot_topics_date_title"),
     )
-
 

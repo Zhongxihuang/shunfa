@@ -74,11 +74,19 @@ function PreviewContent() {
       const review = await api.post<{
         content_approved: boolean;
         quality_issues: string[];
+        fact_pass?: boolean;
+        fact_issues?: string[];
+        discussion_pass?: boolean;
+        discussion_issues?: string[];
         topic: string;
       }>('/api/confirm_content', { checkin_id: checkinId, content: text });
       setTopic(review.topic);
       setQualityPass(review.content_approved);
-      setQualityIssues(review.quality_issues ?? []);
+      setQualityIssues([
+        ...(review.fact_issues ?? []),
+        ...(review.discussion_issues ?? []),
+        ...(review.quality_issues ?? []),
+      ]);
       setStep('quality_result');
     } catch (e: unknown) {
       const err = e as { data?: { detail?: string } };
@@ -111,7 +119,11 @@ function PreviewContent() {
   async function handleFeedback() {
     if (feedbackSent || !checkinId) return;
     try {
-      await api.post('/api/content_feedback', { checkin_id: checkinId, feedback: 'down' });
+      await api.post('/api/content_feedback', {
+        checkin_id: checkinId,
+        feedback: 'down',
+        reason_tags: qualityIssues.length ? ['quality_issue'] : ['too_flat'],
+      });
       setFeedbackSent(true);
     } catch {
       // Best-effort signal only.
@@ -120,7 +132,7 @@ function PreviewContent() {
 
   if (result) {
     return (
-      <div className="max-w-md mx-auto px-4 pt-8 pb-8">
+      <div className="sf-shell md:max-w-4xl">
         <div className="text-center mb-8">
           <div className="text-5xl mb-4">🎉</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">发布成功！</h1>
@@ -128,7 +140,7 @@ function PreviewContent() {
         </div>
 
         <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
-          <div className="grid grid-cols-2 gap-4 text-center">
+          <div className="grid grid-cols-2 gap-4 text-center md:grid-cols-4">
             <div>
               <div className="text-2xl font-bold text-primary">+{result.points_earned}</div>
               <div className="text-xs text-gray-500">本次获得积分</div>
@@ -170,7 +182,7 @@ function PreviewContent() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-8">
+    <div className="sf-shell md:max-w-4xl xl:max-w-4xl">
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700">
           ←
@@ -193,7 +205,7 @@ function PreviewContent() {
               onChange={(e) => setContent(e.target.value)}
               rows={12}
               disabled={step === 'quality_check'}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-60"
+              className="min-h-80 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm leading-relaxed focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 md:text-base"
             />
           </div>
 
