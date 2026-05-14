@@ -1,11 +1,14 @@
-import pytest
 import json
-from unittest.mock import patch, AsyncMock
-from app.models import User, CheckIn, CheckInStatus
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from app.models import CheckIn, CheckInStatus, User
 from app.routers.user import create_jwt_token
 from app.services.discussion_service import reset_checkin_for_new_topic
 from app.services.generation_context import parse_generation_context
 from app.utils.time_utils import get_today_cst
+
 
 @pytest.fixture
 def user(db):
@@ -219,6 +222,66 @@ def test_confirm_content_checks_user_edits_against_fact_block(user, checkin, cli
     assert data["content_approved"] is False
 
 
+def test_review_content_allows_completed_without_mutating_status(user, checkin, client, db):
+    token = create_jwt_token(user.id)
+    checkin.status = CheckInStatus.completed
+    checkin.content = "已经发布的内容"
+    db.commit()
+
+    with patch("app.services.draft_service._quality_check", new_callable=AsyncMock) as mock_qc:
+        mock_qc.return_value = {"pass": True, "issues": [], "available": True}
+        response = client.post(
+            "/api/review_content",
+            json={"checkin_id": checkin.id, "content": "已经发布的内容"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["content_approved"] is True
+    db.refresh(checkin)
+    assert checkin.status == CheckInStatus.completed
+    assert checkin.content == "已经发布的内容"
+
+
+def test_revise_content_uses_quality_issues_and_persists_draft(user, checkin, client, db):
+    token = create_jwt_token(user.id)
+    checkin.status = CheckInStatus.pending
+    checkin.content = "旧草稿"
+    checkin.topic_source = "TechCrunch AI"
+    checkin.topic_summary = "OpenAI 发布新产品。"
+    db.commit()
+
+    with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+        mock_ai.side_effect = [
+            "改写后的草稿",
+            '{"pass": true, "issues": []}',
+        ]
+        response = client.post(
+            "/api/revise_content",
+            json={
+                "checkin_id": checkin.id,
+                "content": "旧草稿",
+                "issues": ["缺少明确判断"],
+                "instruction": "更像参与讨论",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["content"] == "改写后的草稿"
+    assert data["char_count"] == len("改写后的草稿")
+    db.refresh(checkin)
+    assert checkin.content == "改写后的草稿"
+    assert checkin.status == CheckInStatus.draft_ready
+
+    prompt_text = mock_ai.await_args_list[0].args[0][0]["content"]
+    assert "缺少明确判断" in prompt_text
+    assert "更像参与讨论" in prompt_text
+    assert "OpenAI 发布新产品" in prompt_text
+
+
 def test_get_checkin_returns_topic_snapshot(user, checkin, client, db):
     token = create_jwt_token(user.id)
     checkin.topic_source = "TechCrunch AI"
@@ -360,7 +423,7 @@ def test_status_transition_completed_blocks_message(user, checkin, client, db):
     checkin.status = CheckInStatus.completed
     db.commit()
 
-    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock):
         response = client.post(
             "/api/generate_content",
             json={"checkin_id": checkin.id, "message": "再说点什么"},

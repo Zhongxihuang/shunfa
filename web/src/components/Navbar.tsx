@@ -6,7 +6,8 @@ import { useAuth } from '@/lib/auth';
 
 const tabs = [
   { href: '/', label: '首页', mark: 'H' },
-  { href: '/profile', label: '个人', mark: 'P' },
+  { href: '/drafts', label: '草稿', mark: 'D' },
+  { href: '/history', label: '历史', mark: 'R' },
   { href: '/settings', label: '设置', mark: 'S' },
 ];
 
@@ -18,7 +19,7 @@ export default function Navbar() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--border)] bg-[rgba(255,253,250,0.9)] backdrop-blur-md md:bottom-auto md:top-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:rounded-full md:border md:shadow-[var(--shadow-soft)]">
       <div className="mx-auto flex max-w-md justify-around md:max-w-none md:gap-1 md:px-2">
       {tabs.map((tab) => {
-        const active = pathname === tab.href;
+        const active = pathname === tab.href || (tab.href === '/history' && pathname === '/profile');
         const isSettings = tab.href === '/settings';
         return (
           <Link

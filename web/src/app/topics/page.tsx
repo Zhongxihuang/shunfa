@@ -33,28 +33,62 @@ function TopicsContent() {
   const [maxRefreshes, setMaxRefreshes] = useState(3);
   const [loading, setLoading] = useState(false);
   const [hotLoading, setHotLoading] = useState(true);
+  const [hotRefreshing, setHotRefreshing] = useState(false);
   const [aiLoaded, setAiLoaded] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [selectedHotTopicId, setSelectedHotTopicId] = useState<number | null>(null);
   const [customTopic, setCustomTopic] = useState('');
   const [showCustom, setShowCustom] = useState(false);
   const [error, setError] = useState('');
+  const [authError, setAuthError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  function reportError(e: unknown, fallback: string) {
+    const err = e as { status?: number; data?: { detail?: string } };
+    const is401 = err?.status === 401;
+    setAuthError(is401);
+    setError(err?.data?.detail ?? (is401 ? '登录已失效，请重新登录' : fallback));
+  }
+
+  async function loadHotTopics() {
+    setHotLoading(true);
+    setError('');
+    setAuthError(false);
+    try {
+      const data = await api.get<{ date: string; topics: HotTopicItem[] }>('/api/hot_topics/today');
+      setHotTopics(data.topics);
+    } catch (e: unknown) {
+      reportError(e, '获取今日热点失败');
+    } finally {
+      setHotLoading(false);
+    }
+  }
 
   useEffect(() => {
     loadHotTopics();
   }, []);
 
-  async function loadHotTopics() {
-    setHotLoading(true);
+  async function handleBack() {
+    router.push('/');
+  }
+
+  async function handleRefreshHotTopics() {
+    if (hotLoading || hotRefreshing) return;
+    setHotRefreshing(true);
     setError('');
+    setAuthError(false);
     try {
+      await api.post('/api/hot_topics/refresh');
       const data = await api.get<{ date: string; topics: HotTopicItem[] }>('/api/hot_topics/today');
       setHotTopics(data.topics);
+      setSelectedHotTopicId(null);
+      if (data.topics.length === 0) {
+        setError('刷新完成，但暂时没有抓到今日热点。可以稍后再试，或先使用 AI 选题。');
+      }
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '获取今日热点失败');
+      reportError(e, '刷新今日热点失败');
     } finally {
+      setHotRefreshing(false);
       setHotLoading(false);
     }
   }
@@ -62,6 +96,7 @@ function TopicsContent() {
   async function loadTopics() {
     setLoading(true);
     setError('');
+    setAuthError(false);
     try {
       const data = await api.post<{ topics: TopicItem[]; refresh_count: number; max_refreshes: number }>('/api/daily_topics');
       setTopics(data.topics);
@@ -69,8 +104,7 @@ function TopicsContent() {
       setMaxRefreshes(data.max_refreshes);
       setAiLoaded(true);
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '获取选题失败');
+      reportError(e, '获取选题失败');
     } finally {
       setLoading(false);
     }
@@ -110,8 +144,7 @@ function TopicsContent() {
       const data = await api.post<{ checkin_id: number }>('/api/select_topic', body);
       router.push(`/discuss?checkin_id=${data.checkin_id}&topic=${encodeURIComponent(topic)}`);
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '选题失败');
+      reportError(e, '选题失败');
       setSubmitting(false);
     }
   }
@@ -120,18 +153,23 @@ function TopicsContent() {
     <div className="sf-shell">
       <div className="mb-4 flex items-center gap-3">
         <button
-          onClick={() => router.back()}
-          aria-label="返回上一页"
+          onClick={handleBack}
+          aria-label="返回首页"
           className="sf-btn-secondary h-10 min-h-10 w-10 px-0"
         >
           ←
         </button>
-        <span className="sf-eyebrow">返回</span>
+        <span className="sf-eyebrow">返回首页</span>
       </div>
 
       {error && (
         <div className="sf-note-card mb-4 px-4 py-3 text-sm text-[var(--danger)]">
           <p>{error}</p>
+          {authError && (
+            <Link href="/login" className="mt-2 inline-block font-medium text-primary-dark underline">
+              去重新登录 →
+            </Link>
+          )}
           {error.includes('API Key') && (
             <Link href="/settings" className="mt-1 inline-block font-medium text-primary-dark underline">
               前往设置页面配置
@@ -159,11 +197,11 @@ function TopicsContent() {
               <h2 className="sf-display mt-1 text-2xl font-semibold text-[var(--ink)]">选一个热点直接开写</h2>
             </div>
             <button
-              onClick={loadHotTopics}
-              disabled={hotLoading}
+              onClick={handleRefreshHotTopics}
+              disabled={hotLoading || hotRefreshing}
               className="text-xs font-medium text-primary-dark disabled:opacity-40"
             >
-              刷新
+              {hotRefreshing ? '刷新中...' : hotLoading ? '加载中...' : '刷新'}
             </button>
           </div>
 

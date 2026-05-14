@@ -19,7 +19,6 @@ from ..services.ai_service import chat_completion
 from ..services.generation_context import format_discussion_brief
 from ..services.prompt_templates import prompts
 
-
 FORBIDDEN_IDENTITY_PATTERNS = [
     re.compile(r"作为\s*(?:一名|一个)?\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者[，,、：:\s]*"),
     re.compile(r"站在\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:的)?\s*(?:角度|视角)[，,、：:\s]*"),
@@ -233,6 +232,87 @@ async def quick_generate(
     }
 
 
+async def revise_content_with_feedback(
+    checkin: CheckIn,
+    content: str,
+    issues: list[str],
+    db: Session,
+    api_key: str = "",
+    instruction: str = "",
+) -> dict:
+    """Rewrite a draft using quality feedback while preserving stored topic context."""
+    if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.pending):
+        raise ValueError("请先生成初稿后再根据提示改写")
+
+    from ..services.generation_context import (
+        build_fact_block_from_checkin,
+        parse_generation_context,
+        update_generation_context,
+    )
+
+    context = parse_generation_context(checkin)
+    platform = context.get("platform", "xiaohongshu")
+    discussion_brief = context.get("discussion_brief")
+    angle = context.get("selected_angle", "")
+    fact_block = build_fact_block_from_checkin(checkin)
+    feedback_lines = "\n".join(f"- {issue}" for issue in issues if issue.strip())
+    if instruction.strip():
+        feedback_lines = f"{feedback_lines}\n- {instruction.strip()}".strip()
+    if not feedback_lines:
+        feedback_lines = "- 让内容更有明确立场，更像参与热点讨论。"
+
+    prompt = prompts.revise_content_prompt.format(
+        topic=checkin.topic,
+        platform=platform,
+        angle=angle or "沿用当前角度",
+        fact_block=fact_block,
+        discussion_brief=format_discussion_brief(discussion_brief),
+        current_content=content,
+        issues=feedback_lines,
+    )
+    revised = await chat_completion(
+        [{"role": "user", "content": prompt}],
+        temperature=0.35,
+        max_tokens=650,
+        api_key=api_key,
+    )
+    revised = _format_for_platform(remove_identity_framing(revised.strip()), platform)
+
+    has_snapshot_facts = any([
+        checkin.topic_source,
+        checkin.topic_summary,
+        checkin.topic_url,
+        checkin.topic_published_at,
+    ])
+    fact_result = (
+        await _check_quick_generate_grounding(revised, fact_block, api_key)
+        if has_snapshot_facts
+        else {"pass": True, "issues": [], "available": False}
+    )
+    discussion_result = await _check_discussion_quality(revised, discussion_brief, api_key)
+
+    checkin.content = revised
+    checkin.status = CheckInStatus.draft_ready
+    checkin.content_approved = False
+    update_generation_context(
+        checkin,
+        revision_source_issues=issues,
+        revision_instruction=instruction.strip() or None,
+        revision_fact_guard={"pass": fact_result["pass"], "issues": fact_result.get("issues", [])},
+        revision_discussion_guard={"pass": discussion_result["pass"], "issues": discussion_result.get("issues", [])},
+    )
+    db.commit()
+
+    return {
+        "content": revised,
+        "char_count": len(revised),
+        "fact_pass": fact_result["pass"],
+        "fact_issues": fact_result.get("issues", []),
+        "discussion_pass": discussion_result["pass"],
+        "discussion_issues": discussion_result.get("issues", []),
+    }
+
+
 def _format_for_platform(content: str, platform: str) -> str:
     """Trim/adjust content to fit platform constraints."""
     def trim_to_limit(text: str, limit: int) -> str:
@@ -289,12 +369,12 @@ async def _quality_check(
         }
 
 
-async def confirm_content(checkin: CheckIn, content: str, db: Session, api_key: str = "") -> dict:
-    """User confirms (possibly edited) content. Returns quality check result."""
-    if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.pending):
-        raise ValueError("请先完成内容讨论，生成初稿后再确认")
-
-    from ..services.generation_context import build_fact_block_from_checkin, parse_generation_context
+async def review_content_quality(checkin: CheckIn, content: str, api_key: str = "") -> dict:
+    """Review content quality without mutating checkin state."""
+    from ..services.generation_context import (
+        build_fact_block_from_checkin,
+        parse_generation_context,
+    )
 
     context = parse_generation_context(checkin)
     platform = context.get("platform", "xiaohongshu")
@@ -321,21 +401,8 @@ async def confirm_content(checkin: CheckIn, content: str, db: Session, api_key: 
     )
     discussion_result = await _check_discussion_quality(content, discussion_brief, api_key)
 
-    checkin.content_approved = bool(qc_result["pass"] and fact_result["pass"] and discussion_result["pass"])
-    checkin.content = content
-    checkin.status = CheckInStatus.pending
-    from ..services.generation_context import update_generation_context
-
-    update_generation_context(
-        checkin,
-        confirm_fact_guard={"pass": fact_result["pass"], "issues": fact_result.get("issues", [])},
-        confirm_quality_guard={"pass": qc_result["pass"], "issues": qc_result.get("issues", [])},
-        confirm_discussion_guard={"pass": discussion_result["pass"], "issues": discussion_result.get("issues", [])},
-    )
-    db.commit()
-
     return {
-        "quality_pass": checkin.content_approved,
+        "quality_pass": bool(qc_result["pass"] and fact_result["pass"] and discussion_result["pass"]),
         "quality_issues": qc_result.get("issues", []),
         "quality_available": qc_result.get("available", True),
         "fact_pass": fact_result["pass"],
@@ -344,3 +411,26 @@ async def confirm_content(checkin: CheckIn, content: str, db: Session, api_key: 
         "discussion_issues": discussion_result.get("issues", []),
         "topic": checkin.topic,
     }
+
+
+async def confirm_content(checkin: CheckIn, content: str, db: Session, api_key: str = "") -> dict:
+    """User confirms (possibly edited) content. Returns quality check result."""
+    if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.pending):
+        raise ValueError("请先完成内容讨论，生成初稿后再确认")
+
+    review_result = await review_content_quality(checkin, content, api_key=api_key)
+
+    checkin.content_approved = review_result["quality_pass"]
+    checkin.content = content
+    checkin.status = CheckInStatus.pending
+    from ..services.generation_context import update_generation_context
+
+    update_generation_context(
+        checkin,
+        confirm_fact_guard={"pass": review_result["fact_pass"], "issues": review_result.get("fact_issues", [])},
+        confirm_quality_guard={"pass": review_result["quality_pass"], "issues": review_result.get("quality_issues", [])},
+        confirm_discussion_guard={"pass": review_result["discussion_pass"], "issues": review_result.get("discussion_issues", [])},
+    )
+    db.commit()
+
+    return review_result

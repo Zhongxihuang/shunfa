@@ -209,6 +209,34 @@ class PromptTemplates(BaseModel):
     refresh_angles_sentinel: str = "__refresh_angles__"
     angle_history_marker: str = "__angle_suggestion__"
 
+    # ── Compose post assets ──────────────────────────────────────────────────
+
+    compose_post_assets_prompt: str = """你是顺发的图文排版助手。根据给定正文，输出适合小红书发布的三项内容：分页正文、标题、标签。
+
+正文内容：
+{content}
+
+要求：
+1. **分页**（pages）：
+   - 按自然段切分，禁止切到句子中间
+   - 如果正文 ≤80 字，只输出 1 页（整段）
+   - 首页不超过 60 字；后续每页不超过 100 字
+   - 最多 3 页，多余内容合并到最后一页
+   - 每页是完整可读的段落，不是摘要
+
+2. **标题**（title）：
+   - 小红书爆款公式：具体数字 / 反差感 / emoji 开头 / 痛点钩子，任选其一
+   - 不超过 20 字（含 emoji）
+   - 不复述正文，给读者点击的理由
+
+3. **标签**（tags）：
+   - 5-8 个，无 # 号前缀
+   - 每个 2-6 字，去重
+   - 覆盖 1 个核心话题 + 2-3 个相关泛话题
+
+只输出 JSON，格式如下，不要解释：
+{{"pages": ["第一页内容", "第二页内容"], "title": "标题", "tags": ["标签1", "标签2"]}}"""
+
     # ── Quality check ───────────────────────────────────────────────────────
 
     quality_check_prompt: str = """你是顺发的内容质量审核员，检查一条初稿是否合格。
@@ -232,6 +260,32 @@ class PromptTemplates(BaseModel):
 
 请输出 JSON：
 {{"pass": true/false, "issues": ["问题1", "问题2"]}}"""
+
+    revise_content_prompt: str = """你是顺发热点内容改稿助手。请根据质量提示，把当前草稿改成一版更适合直接发布的短内容。
+
+主题：{topic}
+目标平台：{platform}
+选定角度：{angle}
+
+热点事实：
+{fact_block}
+
+讨论策略：
+{discussion_brief}
+
+当前草稿：
+{current_content}
+
+需要修正的问题：
+{issues}
+
+改写要求：
+- 保留事实边界，只使用热点事实里能确认的信息
+- 不要新增未经确认的数字、时间线、公司背景或因果结论
+- 不要写“作为AI从业者”“作为从业者”“业内人看”等身份背书
+- 不要只复述新闻，要给出明确判断和可讨论的立场
+- 不要输出解释、标题或修改说明，只输出改写后的正文
+"""
 
     force_generate_draft_prompt: str = """根据以下信息，写一条小红书/朋友圈风格的帖子。
 

@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -210,6 +211,38 @@ class ConfirmContentRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)  # possibly edited by user
 
 
+class ReviewContentRequest(BaseModel):
+    checkin_id: int
+    content: str = Field(..., min_length=1, max_length=5000)
+
+
+class ReviewContentResponse(BaseModel):
+    content_approved: bool
+    quality_issues: list[str]
+    quality_available: bool = True
+    fact_pass: bool = True
+    fact_issues: list[str] = []
+    discussion_pass: bool = True
+    discussion_issues: list[str] = []
+    topic: str
+
+
+class ReviseContentRequest(BaseModel):
+    checkin_id: int
+    content: str = Field(..., min_length=1, max_length=5000)
+    issues: list[str] = []
+    instruction: str | None = Field(default=None, max_length=500)
+
+
+class ReviseContentResponse(BaseModel):
+    content: str
+    char_count: int
+    fact_pass: bool = True
+    fact_issues: list[str] = []
+    discussion_pass: bool = True
+    discussion_issues: list[str] = []
+
+
 class ConfirmPublishRequest(BaseModel):
     checkin_id: int
 
@@ -289,3 +322,17 @@ class StatsSummary(BaseModel):
 class StatsResponse(BaseModel):
     last_30_days: list[DailyStatsItem]
     summary: StatsSummary
+
+
+# ── Compose post assets schemas ──────────────────────────────────────────────
+
+class ComposePostAssetsRequest(BaseModel):
+    checkin_id: int
+    template: Literal["beige", "magazine"]
+    regenerate: bool = False
+
+
+class ComposePostAssetsResponse(BaseModel):
+    pages: list[str]   # 1-3 segments of body text, each for one image
+    title: str         # Xiaohongshu-style title (with emoji, ≤20 chars)
+    tags: list[str]    # 5-8 hashtags without # prefix

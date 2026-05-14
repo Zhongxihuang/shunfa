@@ -8,7 +8,6 @@ Endpoint prefix: /api/coze/
 Auth: X-Coze-Plugin-Token header (shared secret) + optional user identity headers
 """
 
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -17,16 +16,16 @@ from ..config import settings
 from ..dependencies import get_db
 from ..models import CheckIn, CheckInStatus, User
 from ..services.content_service import confirm_publish
-from ..services.draft_service import (
-    confirm_content,
-    quick_generate,
-)
 from ..services.discussion_service import (
     AUTO_SUGGEST_SENTINEL,
     process_message,
     reset_checkin_for_new_topic,
 )
-from ..services.hot_topic_store import get_pending_topics
+from ..services.draft_service import (
+    confirm_content,
+    quick_generate,
+)
+from ..services.local_hot_topic_store import ensure_topics_for_date
 from ..utils.time_utils import get_today_cst
 
 router = APIRouter(prefix="/coze")
@@ -157,32 +156,33 @@ async def get_hot_topics(
     current_user: User = Depends(get_coze_user),
     db: Session = Depends(get_db),
 ):
-    """Return today's top-scored pending hot topics for the daily push."""
+    """Return locally stored hot topics for the daily push."""
     try:
-        topics = await get_pending_topics(limit=limit)
+        topic_date = get_today_cst()
+        topics = ensure_topics_for_date(topic_date=topic_date, limit=limit, db=db)
     except Exception:
-        # Bitable unavailable — return empty
+        topic_date = get_today_cst()
         topics = []
 
     topic_list = [
         {
             "index": i + 1,
-            "hot_topic": t.hot_topic,
-            "hot_source": t.hot_source,
-            "hot_url": t.hot_url,
-            "hot_summary": t.hot_summary,
-            "ai_angle": t.ai_angle,
-            "ai_counter_angle": t.ai_counter_angle,
+            "hot_topic": t.title,
+            "hot_source": t.source,
+            "hot_url": t.url,
+            "hot_summary": t.summary or "",
+            "ai_angle": t.ai_angle or "",
+            "ai_counter_angle": t.ai_counter_angle or "",
             "score": t.score,
-            "category": t.topic_category.value,
-            "record_id": t.record_id,
+            "category": t.category,
+            "record_id": str(t.id),
         }
         for i, t in enumerate(topics)
     ]
 
     return GetHotTopicsResponse(
         topics=topic_list,
-        date=get_today_cst().isoformat(),
+        date=topic_date.isoformat(),
     )
 
 
@@ -303,12 +303,12 @@ async def confirm_and_publish(
     try:
         await confirm_content(checkin, request.content, db)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     try:
         result = await confirm_publish(checkin, db, current_user)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     return ConfirmPublishResponse(
         streak=result["streak"],

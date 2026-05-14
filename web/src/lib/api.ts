@@ -32,9 +32,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (res.status === 401) {
     if (token !== DEV_PREVIEW_TOKEN) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('auth:expired'));
+      }
     }
-    throw new Error('Unauthorized');
+    throw Object.assign(new Error('Unauthorized'), {
+      status: 401,
+      data: { detail: '登录已失效，请重新登录' },
+    });
   }
 
   if (!res.ok) {

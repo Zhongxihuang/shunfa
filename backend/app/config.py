@@ -44,7 +44,6 @@ class Settings(BaseSettings):
     feishu_app_id: str = ""
     feishu_app_secret: str = ""
     feishu_bitable_app_token: str = ""
-    bitable_hot_topic_table_id: str = ""
     bitable_voice_record_table_id: str = ""
 
     model_config = {"env_file": ".env", "case_sensitive": False, "extra": "ignore"}

@@ -12,10 +12,7 @@ import logging
 
 from celery import shared_task
 
-from ..services.hot_topic_service import score_and_filter
-from ..services.local_hot_topic_store import replace_topics_for_date
-from ..services.rss_service import fetch_all_sources
-from ..utils.time_utils import get_today_cst
+from ..services.hot_topic_refresh_service import refresh_hot_topic_supply
 
 logger = logging.getLogger("celery_tasks")
 
@@ -33,22 +30,9 @@ def fetch_hot_topics(self) -> dict:
         import asyncio
 
         async def _run():
-            articles = await fetch_all_sources()
-            logger.info(f"[rss_task] Fetched {len(articles)} articles")
-
-            if not articles:
-                logger.warning("[rss_task] No articles fetched")
-                return {"status": "ok", "articles": 0, "topics": 0}
-
-            topics = await score_and_filter(articles)
-            logger.info(f"[rss_task] {len(topics)} topics qualified")
-
-            if topics:
-                today = get_today_cst()
-                replace_topics_for_date(topics, today)
-                logger.info(f"[rss_task] Stored {len(topics)} topics for {today}")
-
-            return {"status": "ok", "articles": len(articles), "topics": len(topics)}
+            result = await refresh_hot_topic_supply()
+            logger.info(f"[rss_task] Hot topic supply result: {result}")
+            return result
 
         return asyncio.run(_run())
 

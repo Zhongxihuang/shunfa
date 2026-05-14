@@ -7,11 +7,6 @@ import { DEV_PREVIEW_TOKEN, isDevPreviewToken } from './devPreview';
 
 interface UserStatus {
   id: number;
-  streak: number;
-  longest_streak: number;
-  points: number;
-  level: number;
-  diamonds: number;
   reminder_time: string | null;
   reminder_enabled: boolean;
   last_checkin_date: string | null;
@@ -21,11 +16,6 @@ interface UserStatus {
 
 const MOCK_USER: UserStatus = {
   id: 1,
-  streak: 7,
-  longest_streak: 14,
-  points: 320,
-  level: 3,
-  diamonds: 6,
   reminder_time: '09:00',
   reminder_enabled: true,
   last_checkin_date: null,
@@ -95,6 +85,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   }, [refreshUser, checkApiKeyStatus]);
+
+  useEffect(() => {
+    function handleExpired() {
+      setToken(null);
+      setUser(null);
+      setApiKeyConfigured(false);
+      router.push('/login');
+    }
+    window.addEventListener('auth:expired', handleExpired);
+    return () => window.removeEventListener('auth:expired', handleExpired);
+  }, [router]);
 
   const login = useCallback(async (username: string, password: string) => {
     const data = await api.post<{ token: string; user: UserStatus }>('/api/auth_login', { username, password });

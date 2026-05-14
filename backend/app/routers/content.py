@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_current_user, get_db, get_resolved_api_key
-from ..rate_limit import limiter
 from ..models import CheckIn, CheckInStatus, HotTopic, User
+from ..rate_limit import limiter
 from ..schemas import (
+    ComposePostAssetsRequest,
+    ComposePostAssetsResponse,
     ConfirmContentRequest,
     ConfirmPublishRequest,
     ContentFeedbackRequest,
@@ -14,15 +16,22 @@ from ..schemas import (
     PublishResponse,
     QuickGenerateRequest,
     QuickGenerateResponse,
+    ReviewContentRequest,
+    ReviewContentResponse,
+    ReviseContentRequest,
+    ReviseContentResponse,
 )
+from ..services.compose_service import compose_post_assets
 from ..services.content_service import confirm_publish
+from ..services.discussion_service import process_message
 from ..services.draft_service import (
     build_quick_generate_context,
     build_quick_generate_context_from_checkin,
     confirm_content,
     quick_generate,
+    review_content_quality,
+    revise_content_with_feedback,
 )
-from ..services.discussion_service import process_message
 from ..services.generation_context import (
     build_discussion_brief,
     build_fact_block_from_checkin,
@@ -226,7 +235,56 @@ async def confirm_content_endpoint(
             "message": "内容已确认。以下为质量提示，不影响发布。"
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/review_content", response_model=ReviewContentResponse)
+@limiter.limit("20/minute")
+async def review_content_endpoint(
+    request: Request,
+    body: ReviewContentRequest,
+    current_user: User = Depends(get_current_user),
+    api_key: str = Depends(get_resolved_api_key),
+    db: Session = Depends(get_db),
+):
+    """Review content quality without changing the checkin status."""
+    checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+    result = await review_content_quality(checkin, body.content, api_key=api_key)
+    return ReviewContentResponse(
+        content_approved=result["quality_pass"],
+        quality_issues=result["quality_issues"],
+        quality_available=result["quality_available"],
+        fact_pass=result["fact_pass"],
+        fact_issues=result["fact_issues"],
+        discussion_pass=result["discussion_pass"],
+        discussion_issues=result["discussion_issues"],
+        topic=result["topic"],
+    )
+
+
+@router.post("/revise_content", response_model=ReviseContentResponse)
+@limiter.limit("10/minute")
+async def revise_content_endpoint(
+    request: Request,
+    body: ReviseContentRequest,
+    current_user: User = Depends(get_current_user),
+    api_key: str = Depends(get_resolved_api_key),
+    db: Session = Depends(get_db),
+):
+    """Rewrite the current draft using quality feedback from confirm_content."""
+    checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+    try:
+        result = await revise_content_with_feedback(
+            checkin,
+            body.content,
+            body.issues,
+            db,
+            api_key=api_key,
+            instruction=body.instruction or "",
+        )
+        return ReviseContentResponse(**result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/content_feedback", response_model=ContentFeedbackResponse)
@@ -285,4 +343,19 @@ async def confirm_publish_endpoint(
         result = await confirm_publish(checkin, db, current_user)
         return PublishResponse(**result)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/compose_post_assets", response_model=ComposePostAssetsResponse)
+@limiter.limit("20/minute")
+async def compose_post_assets_endpoint(
+    request: Request,
+    body: ComposePostAssetsRequest,
+    current_user: User = Depends(get_current_user),
+    api_key: str = Depends(get_resolved_api_key),
+    db: Session = Depends(get_db),
+) -> ComposePostAssetsResponse:
+    """Generate post assets (pages, title, tags) from checkin content for image rendering."""
+    checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+    result = await compose_post_assets(checkin, api_key)
+    return ComposePostAssetsResponse(**result)

@@ -9,27 +9,12 @@ from ..schemas import (
     HotTopicListItem,
     HotTopicsResponse,
 )
+from ..services.hot_topic_refresh_service import refresh_hot_topic_supply
 from ..services.hot_topic_service import analyze_hot_topic
-from ..services.local_hot_topic_store import get_topics_for_date, to_list_items
+from ..services.local_hot_topic_store import ensure_topics_for_date, to_list_items
 from ..utils.time_utils import get_today_cst
 
 router = APIRouter()
-
-
-async def refresh_hot_topics_directly() -> dict:
-    from ..services.hot_topic_service import score_and_filter
-    from ..services.local_hot_topic_store import replace_topics_for_date
-    from ..services.rss_service import fetch_all_sources
-
-    articles = await fetch_all_sources()
-    if not articles:
-        return {"status": "ok", "articles": 0, "topics": 0}
-
-    topics = await score_and_filter(articles)
-    if topics:
-        replace_topics_for_date(topics, get_today_cst())
-
-    return {"status": "ok", "articles": len(articles), "topics": len(topics)}
 
 
 def get_today_hot_topic_or_404(topic_id: int, db: Session) -> HotTopic:
@@ -48,11 +33,37 @@ async def get_today_hot_topics(
     db: Session = Depends(get_db),
 ):
     today = get_today_cst()
-    records = get_topics_for_date(topic_date=today, limit=3, db=db)
+    records = ensure_topics_for_date(topic_date=today, limit=3, db=db)
     return HotTopicsResponse(
         date=today,
         topics=to_list_items(records),
     )
+
+
+@router.get("/hot_topics/health")
+async def get_hot_topics_health(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    today = get_today_cst()
+    today_count = db.query(HotTopic).filter(HotTopic.topic_date == today).count()
+    latest_date = (
+        db.query(HotTopic.topic_date)
+        .order_by(HotTopic.topic_date.desc())
+        .limit(1)
+        .scalar()
+    )
+    latest_count = 0
+    if latest_date is not None:
+        latest_count = db.query(HotTopic).filter(HotTopic.topic_date == latest_date).count()
+
+    return {
+        "status": "ok" if today_count > 0 else "degraded",
+        "today": today.isoformat(),
+        "today_count": today_count,
+        "latest_date": latest_date.isoformat() if latest_date is not None else None,
+        "latest_count": latest_count,
+    }
 
 
 @router.get("/hot_topics/{topic_id}", response_model=HotTopicListItem)
@@ -92,23 +103,10 @@ async def refresh_hot_topics(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Trigger a hot topics refresh. Runs synchronously and returns the result.
-    Falls back to direct execution when Celery is not available.
-    """
-    try:
-        from app.tasks.celery_tasks import fetch_hot_topics
-        task = fetch_hot_topics.delay()
-        return {
-            "message": "热点刷新任务已提交",
-            "task_id": task.id,
-            "async": True,
-        }
-    except Exception:
-        # Celery not available — run directly in this request.
-        result = await refresh_hot_topics_directly()
-        return {
-            "message": "热点刷新已完成",
-            "result": result,
-            "async": False,
-        }
+    """Trigger a synchronous refresh and ensure Web has usable hot topics."""
+    result = await refresh_hot_topic_supply(db=db)
+    return {
+        "message": "热点刷新已完成",
+        "result": result,
+        "async": False,
+    }
