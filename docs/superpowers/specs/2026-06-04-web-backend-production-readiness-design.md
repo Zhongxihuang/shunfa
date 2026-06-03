@@ -67,7 +67,9 @@ Production startup must reject weak secrets:
 - `JWT_SECRET_KEY` must be at least 32 characters in production.
 - `API_KEY_ENCRYPTION_SECRET` must be changed from the default and at least 32 characters in production.
 
-Production CORS must be explicit. Localhost origins should be treated as a release warning at minimum, and the deployment checklist must require a real Web origin.
+Production checks are gated by the project's canonical environment flag, currently `ENVIRONMENT=production` mapped to `settings.environment == "production"`. The deployment checklist must document this flag explicitly.
+
+Production CORS must be explicit. Localhost origins should be treated as a release warning at minimum, and the deployment checklist must require a real Web origin. Production CORS must not use wildcard origins when bearer `Authorization` headers or credentials are used.
 
 `REQUIRE_USER_API_KEY=true` is the default launch posture. System-level `DEEPSEEK_API_KEY` remains allowed only when explicitly configured for self-hosted fallback behavior.
 
@@ -80,6 +82,8 @@ Rollback is a launch-critical path, not a documentation afterthought. Every laun
 - Fresh database can upgrade to `head`.
 - Database at `head` can downgrade one revision and then upgrade back to `head`.
 - Any new launch-critical migration added during this work has a direct upgrade/downgrade test.
+
+For existing historical migrations, do not rewrite migration history unless required to make a fresh deployment work. Downgrade verification should prioritize new or launch-touched migrations and the latest launch-critical rollback path.
 
 Downgrade smoke tests improve migration confidence, but production rollback should prefer backup restore, traffic rollback, and forward-compatible migrations. Destructive or irreversible migrations must be explicitly marked and require backup verification before deployment. A runnable downgrade is not by itself proof that production data can be safely rolled back after the new app version has written new-schema data.
 
@@ -100,6 +104,7 @@ The user's DeepSeek API key is sensitive user data. The launch design must guara
 - Sentry configuration must avoid default PII capture and must scrub known sensitive header names if request context is attached later.
 - Stored API keys are encrypted at rest with `API_KEY_ENCRYPTION_SECRET`.
 - Key rotation is a documented operational limitation for this release unless implemented with key versioning. Without versioning, rotating `API_KEY_ENCRYPTION_SECRET` invalidates previously stored encrypted API keys and requires users to re-save them.
+- Safe API key preview means a masked, non-credential-bearing representation such as the last 4 characters. Returning no preview is also acceptable. The preview must never be sufficient to use as a credential, including for unusually short inputs.
 
 ### Auth Session Requirements
 
@@ -232,11 +237,14 @@ The implementation should not introduce a new design system. It should keep the 
 
 Generation calls need explicit user-facing timeout behavior. The Web client should use a documented timeout for AI generation requests, show a recoverable error if the timeout is reached, and avoid automatic retry for publish or other state-changing operations. Backend AI retries may exist only inside service code where they cannot duplicate user-visible state changes.
 
+Generation timeout values must be explicit and configurable. The Web client timeout, backend DeepSeek request timeout, and any retry budget must be documented separately so operators can tune slow-model behavior without code changes.
+
 ### AI Generation Abuse And Cost Controls
 
 Launch-critical AI endpoints must protect both user-owned and system fallback DeepSeek usage:
 
 - Generation and analysis endpoints must be rate limited per user and/or IP.
+- Launch rate-limit values must be configurable or documented settings, not invisible hardcoded behavior. Defaults should be conservative and cover per-user generation requests per minute/day plus per-IP burst protection; exact values may follow existing project settings if the launch checklist records them.
 - In multi-instance production, rate limiting must use a shared backend such as Redis. In-memory per-process rate limiting is acceptable only for a documented single-instance deployment; otherwise each replica gets its own quota and system fallback costs can be bypassed by spreading traffic across replicas.
 - If system fallback `DEEPSEEK_API_KEY` is enabled, usage must be explicitly rate limited and documented as operator-funded.
 - Client-side timeout is a UI recovery boundary, not a guarantee that backend work has stopped. For generation and analysis calls, backend work may continue and persist results to the same non-completed `CheckIn`; user retry must reuse or refresh that existing state instead of creating duplicate drafts or checkins. For publish and other reward-bearing state changes, the Web client must not automatically retry after timeout.
@@ -264,6 +272,7 @@ The launch checklist must include:
 
 - Required backend environment variables.
 - Required Web environment variables.
+- Canonical production environment flag, currently `ENVIRONMENT=production`.
 - Backend test, lint, type, and migration commands.
 - Web lint and build commands.
 - Manual smoke steps for the full Web + backend loop.
@@ -273,6 +282,8 @@ The launch checklist must include:
 - AI generation timeout, retry, and cost-control rules.
 - CST date uniqueness rule for checkins and rewards.
 - XSS rendering rule for user and AI-generated content.
+- Configurable or documented rate-limit values for generation and analysis endpoints.
+- Safe API key preview behavior.
 
 ## Verification Plan
 
@@ -312,6 +323,8 @@ The release is ready to enter the final verification stage when:
 - Multi-instance deployments use shared rate-limit storage, or the launch checklist explicitly restricts the deployment to one backend instance.
 - Generated content rendering is escaped or sanitized, with no unsafe `dangerouslySetInnerHTML` use on launch-critical pages.
 - Production deployment variables and startup steps are documented.
+- Production environment detection uses the documented `ENVIRONMENT=production` flag.
+- Production CORS uses explicit origins and no wildcard origin when bearer Authorization headers or credentials are used.
 - README and AGENTS.md no longer conflict about the launch architecture.
 - Any remaining risks are explicitly listed as non-blocking.
 
@@ -335,8 +348,8 @@ The final implementation response must include a filled record in this shape:
 | BYOK redaction | Verify API keys/tokens absent from logs/Sentry-safe context/browser console | PASS/FAIL | |
 | Rendering safety | Verify launch-critical generated content renders escaped/sanitized and does not use unsafe HTML injection | PASS/FAIL | |
 | Web lint | `npm run lint` | PASS/FAIL | |
-| Web build | `npm run build` in CI or local non-sandbox environment | PASS/FAIL | |
-| Manual smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile | PASS/FAIL | |
+| Web build | `npm run build` in CI or local non-sandbox environment | PASS/FAIL/NOT RUN | If sandbox prevents build, record NOT RUN with the sandbox reason; do not mark PASS. |
+| Manual smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | PASS/FAIL | |
 
 ## Implementation Constraints
 
