@@ -31,7 +31,7 @@ Mini Program files may be touched only if they share code with the Web/backend p
 
 The repository already includes several production-oriented pieces:
 
-- FastAPI backend with request logging, request IDs, Sentry support, rate limiting, health check, metrics behind a non-production flag, Alembic migrations, Dockerfile, and a production start script.
+- FastAPI backend with request logging, request IDs, Sentry support, rate limiting, health check, metrics disabled in production by default, Alembic migrations, Dockerfile, and a production start script.
 - Web app using Next.js with the current routes for compose, topics, discuss, preview, profile, settings, login, drafts, and history.
 - BYOK DeepSeek API key support with request header, stored encrypted key, and optional system fallback.
 - Backend tests and migration smoke tests in the repository.
@@ -75,7 +75,25 @@ Production CORS must be explicit. Localhost origins should be treated as a relea
 
 Alembic must be the launch path for a fresh database. The backend startup script should run `alembic upgrade head` before serving traffic, and the migration smoke test must prove a fresh SQLite database can upgrade to head.
 
+Rollback is a launch-critical path, not a documentation afterthought. Every launch-critical Alembic revision must have an executable `downgrade()` and must be covered by a downgrade smoke test. The verification flow must prove at least:
+
+- Fresh database can upgrade to `head`.
+- Database at `head` can downgrade one revision and then upgrade back to `head`.
+- Any new launch-critical migration added during this work has a direct upgrade/downgrade test.
+
+If `alembic upgrade head` fails during deployment, the runbook must instruct the operator to stop application startup, keep the previous application version serving traffic if possible, capture the Alembic error, and restore from the most recent verified backup or run the tested downgrade path only when the migration reached a known revision. The app must not serve traffic against a partially migrated database.
+
 PostgreSQL remains the preferred production option because the Docker Compose file and database layer already support it. SQLite can remain documented for small self-hosted deployments, with a note that production backups and concurrency limits are the operator's responsibility.
+
+### BYOK Security Boundary
+
+The user's DeepSeek API key is sensitive user data. The launch design must guarantee:
+
+- `X-User-Api-Key`, stored encrypted API keys, decrypted API keys, and DeepSeek Authorization headers never appear in request logs, exception logs, Sentry events, metrics labels, or frontend console logs.
+- Request logging records route, method, status, duration, and request ID, but not sensitive headers or request bodies.
+- Sentry configuration must avoid default PII capture and must scrub known sensitive header names if request context is attached later.
+- Stored API keys are encrypted at rest with `API_KEY_ENCRYPTION_SECRET`.
+- Key rotation is a documented operational limitation for this release unless implemented with key versioning. Without versioning, rotating `API_KEY_ENCRYPTION_SECRET` invalidates previously stored encrypted API keys and requires users to re-save them.
 
 ### API Behavior
 
@@ -90,15 +108,29 @@ The following endpoint families are launch-critical:
 
 Launch-critical API responses must be deterministic enough for the Web app to show useful states:
 
-- Missing API key returns a clear 400 with user-actionable text.
-- Invalid or expired token returns 401.
-- Unauthorized admin access returns 403.
+- Missing API key returns a 400 with `error_code="missing_api_key"` and user-actionable text.
+- Invalid or expired token returns a 401 with `error_code="invalid_token"`.
+- Unauthorized admin access returns a 403 with `error_code="forbidden"`.
 - Duplicate or invalid publish actions return a client error and do not double-count points or streak.
 - Unhandled backend exceptions return a safe 500 with request ID.
 
+Use a minimal error response contract for launch-critical endpoints:
+
+```json
+{
+  "error_code": "missing_api_key",
+  "message": "请在设置页面配置您的 DeepSeek API Key",
+  "request_id": "optional-request-id"
+}
+```
+
+Existing FastAPI `detail` responses may remain for non-launch-critical endpoints, but Web launch-path code should normalize backend errors into this contract before rendering.
+
+Confirm publish must be backend-idempotent. Frontend loading states are useful but insufficient because users can double-click, refresh, or send concurrent requests. The backend must protect publish with a transaction plus either a database-level uniqueness constraint or an equivalent idempotency mechanism. Concurrent publish attempts for the same user/date/checkin must result in one successful points/streak calculation and all other attempts returning a client error or the already-completed result without applying rewards again.
+
 ### Observability
 
-Keep request ID propagation and request logging. Sentry remains opt-in with `SENTRY_DSN`. Prometheus metrics remain disabled in production by default unless protected by an internal gateway.
+Keep request ID propagation and request logging. Sentry remains opt-in with `SENTRY_DSN`. Prometheus metrics are disabled in production by default and may be enabled only behind an internal gateway or equivalent private network boundary.
 
 The health check must remain available at `/health` and report database connectivity. Deployment verification uses this endpoint before testing the user loop.
 
@@ -122,6 +154,8 @@ The implementation should not introduce a new design system. It should keep the 
 - API base URL comes from `NEXT_PUBLIC_API_URL`.
 - Production build and lint remain green.
 
+Generation calls need explicit user-facing timeout behavior. The Web client should use a documented timeout for AI generation requests, show a recoverable error if the timeout is reached, and avoid automatic retry for publish or other state-changing operations. Backend AI retries may exist only inside service code where they cannot duplicate user-visible state changes.
+
 ## Documentation Design
 
 Documentation must match the current launch target:
@@ -137,7 +171,8 @@ The launch checklist must include:
 - Backend test, lint, type, and migration commands.
 - Web lint and build commands.
 - Manual smoke steps for the full Web + backend loop.
-- Deployment health check and rollback notes.
+- Deployment health check and rollback procedure.
+- API key handling and logging redaction rules.
 
 ## Verification Plan
 
@@ -149,8 +184,9 @@ The release cannot be considered ready until these checks have run and their res
 - `ruff format --check app tests`.
 - `mypy app --ignore-missing-imports`.
 - Alembic fresh database migration smoke test.
+- Alembic downgrade and upgrade-back smoke test for launch-critical migrations.
 - Web `npm run lint`.
-- Web `npm run build`.
+- Web `npm run build` in CI or a local non-sandbox environment because the Codex sandbox blocks Turbopack process or port binding.
 - Manual or scripted smoke test of the Web + backend loop.
 
 If an external service is required, use mocked AI calls for automated tests. A real DeepSeek key is only needed for a final manual production-like smoke test.
@@ -161,7 +197,13 @@ The release is ready to enter the final verification stage when:
 
 - The Web + backend core writing loop is implemented and no known launch-blocking bug remains.
 - Backend and Web verification commands are documented and pass in the working environment or CI.
-- Fresh database migration is verified.
+- Fresh database upgrade is verified.
+- Launch-critical Alembic downgrades are executable and covered by downgrade/upgrade-back tests.
+- The deployment runbook defines what to do when migration fails before traffic is shifted.
+- BYOK secrets are redacted from logs, Sentry context, metrics, and frontend console output.
+- Publish is backend-idempotent under concurrent requests and cannot double-count points or streak.
+- Launch-critical API errors expose a stable error shape or are normalized by the Web client before display.
+- AI generation timeout behavior is documented and visible to users.
 - Production deployment variables and startup steps are documented.
 - README and AGENTS.md no longer conflict about the launch architecture.
 - Any remaining risks are explicitly listed as non-blocking.
