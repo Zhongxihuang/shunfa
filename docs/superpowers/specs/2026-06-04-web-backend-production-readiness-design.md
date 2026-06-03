@@ -89,6 +89,8 @@ PostgreSQL remains the preferred production option because the Docker Compose fi
 
 SQLite migration smoke is required for fast local and CI feedback. Production-like migration verification must also run against PostgreSQL before release readiness is claimed because enum behavior, timestamp behavior, JSON fields, transaction semantics, uniqueness constraints, and concurrent publish idempotency can differ from SQLite.
 
+The one-checkin-per-day invariant is based on China Standard Time, not UTC. The uniqueness boundary must use a persisted CST-derived `Date` column, currently `CheckIn.date`, populated only from `get_today_cst()` or an equivalent Asia/Shanghai calculation. The database constraint must be on `(user_id, date)` where `date` is this persisted CST date. Implementations must not derive the unique day from UTC timestamps or database server-local time at publish time.
+
 ### BYOK Security Boundary
 
 The user's DeepSeek API key is sensitive user data. The launch design must guarantee:
@@ -141,6 +143,8 @@ Use a minimal error response contract for launch-critical endpoints:
 
 Existing FastAPI `detail` responses may remain for non-launch-critical endpoints, but Web launch-path code should normalize backend errors into this contract before rendering.
 
+The Web launch path must consume one normalized error model regardless of the raw backend response. If a backend route still returns FastAPI's native `{"detail": ...}` shape, the Web API layer must map it to an internal `{error_code, message, request_id?}` representation before UI code renders it. UI components should never branch on raw backend error shapes.
+
 ### Launch-Critical API Matrix
 
 The implementation plan must inspect and verify each endpoint in this matrix. Endpoint behavior should be tested at the router or service layer, with Web behavior covered by manual or scripted smoke checks.
@@ -188,6 +192,7 @@ Launch publish rules:
 |---|---|---|---|
 | Anonymous | Open protected page | No API call or 401 from protected API. | Redirect to `/login`. |
 | Authenticated, no API key | Click AI generate/analyze endpoint | 400 `missing_api_key`; no draft, points, streak, or history mutation. | Show settings guidance and link to `/settings`. |
+| `topic_selected`, no API key | Quick/deep generation attempted after topic selection | Existing non-completed `CheckIn` remains reusable; no content, points, streak, or publish history mutation. | After saving an API key, user can continue from the same selected topic/checkin without creating a new daily record. |
 | API key configured | Save key | Encrypted key stored; status returns configured=true and safe preview. | Settings shows configured state without plaintext key. |
 | No checkin today | Select topic or hot topic | `CheckIn` created with `topic_selected`; `checkin_id` returned. | Navigate to `/compose` or `/discuss` with checkin context. |
 | `topic_selected` | Deep discussion message | Checkin moves to `discussing`; conversation history updates. | Chat shows assistant reply. |
@@ -202,6 +207,8 @@ Launch publish rules:
 Keep request ID propagation and request logging. Sentry remains opt-in with `SENTRY_DSN`. Prometheus metrics are disabled in production by default and may be enabled only behind an internal gateway or equivalent private network boundary.
 
 The health check must remain available at `/health` and report database connectivity. Deployment verification uses this endpoint before testing the user loop.
+
+If Redis-backed rate limiting, hot topic supply, or DeepSeek reachability become part of deployment verification, they should be reported through a readiness or diagnostics endpoint/runbook section separate from the basic liveness check. Database connectivity is required for `/health`; external dependencies may report `degraded` without marking the process as down unless the deployment gate explicitly requires them.
 
 ## Web Design
 
@@ -230,11 +237,20 @@ Generation calls need explicit user-facing timeout behavior. The Web client shou
 Launch-critical AI endpoints must protect both user-owned and system fallback DeepSeek usage:
 
 - Generation and analysis endpoints must be rate limited per user and/or IP.
+- In multi-instance production, rate limiting must use a shared backend such as Redis. In-memory per-process rate limiting is acceptable only for a documented single-instance deployment; otherwise each replica gets its own quota and system fallback costs can be bypassed by spreading traffic across replicas.
 - If system fallback `DEEPSEEK_API_KEY` is enabled, usage must be explicitly rate limited and documented as operator-funded.
-- Timeout behavior must define whether backend work is cancelled or may continue after the Web client gives up.
+- Client-side timeout is a UI recovery boundary, not a guarantee that backend work has stopped. For generation and analysis calls, backend work may continue and persist results to the same non-completed `CheckIn`; user retry must reuse or refresh that existing state instead of creating duplicate drafts or checkins. For publish and other reward-bearing state changes, the Web client must not automatically retry after timeout.
 - Automatic retries must not create duplicate drafts, duplicate checkins, or duplicate user-visible state.
 - Generation failures must not update points, streak, publish history, or completed status.
 - Repeated generate/revise actions should reuse the same non-completed `CheckIn` unless the user explicitly selects a new topic.
+
+### Rendering Safety
+
+Because the launch session model accepts localStorage bearer-token risk, the Web app must reduce XSS exposure in content rendering:
+
+- User text, AI-generated drafts, topics, and feedback must render as escaped text by default.
+- Launch-critical pages must not use `dangerouslySetInnerHTML` for generated content unless the input is sanitized by a reviewed sanitizer.
+- Browser console logging must not include JWTs, API keys, Authorization headers, generated prompts containing keys, or raw error objects that may contain sensitive headers.
 
 ## Documentation Design
 
@@ -255,6 +271,8 @@ The launch checklist must include:
 - API key handling and logging redaction rules.
 - Auth/session storage and logout behavior.
 - AI generation timeout, retry, and cost-control rules.
+- CST date uniqueness rule for checkins and rewards.
+- XSS rendering rule for user and AI-generated content.
 
 ## Verification Plan
 
@@ -267,7 +285,7 @@ The release cannot be considered ready until these checks have run and their res
 - `mypy app --ignore-missing-imports`.
 - Alembic fresh database migration smoke test.
 - Alembic downgrade and upgrade-back smoke test for launch-critical migrations.
-- PostgreSQL production-like migration smoke test before production deployment.
+- PostgreSQL production-like migration smoke test in CI with a PostgreSQL service container or in a staging/pre-deploy environment before production deployment.
 - Web `npm run lint`.
 - Web `npm run build` in CI or a local non-sandbox environment because the Codex sandbox blocks Turbopack process or port binding.
 - Manual or scripted smoke test of the Web + backend loop.
@@ -282,14 +300,17 @@ The release is ready to enter the final verification stage when:
 - Backend and Web verification commands are documented and pass in the working environment or CI.
 - Fresh database upgrade is verified.
 - Launch-critical Alembic downgrades are executable and covered by downgrade/upgrade-back tests.
-- PostgreSQL production-like migration verification has passed before deployment.
+- PostgreSQL production-like migration verification has passed in CI with a PostgreSQL service container or in a staging/pre-deploy environment before production deployment. If neither environment is available, readiness is blocked by verification infrastructure rather than application code.
 - The deployment runbook defines what to do when migration fails before traffic is shifted.
 - BYOK secrets are redacted from logs, Sentry context, metrics, and frontend console output.
 - Auth/session storage, logout, expired-token behavior, and HTTPS requirements are documented and verified.
 - Publish is backend-idempotent under concurrent requests and cannot double-count points or streak.
+- The reward/checkin uniqueness constraint uses a persisted CST date, not UTC-derived dates or server-local timestamp truncation.
 - Launch-critical API errors expose a stable error shape or are normalized by the Web client before display.
 - AI generation timeout behavior is documented and visible to users.
 - AI generation endpoints have launch-appropriate rate limits and cost controls.
+- Multi-instance deployments use shared rate-limit storage, or the launch checklist explicitly restricts the deployment to one backend instance.
+- Generated content rendering is escaped or sanitized, with no unsafe `dangerouslySetInnerHTML` use on launch-critical pages.
 - Production deployment variables and startup steps are documented.
 - README and AGENTS.md no longer conflict about the launch architecture.
 - Any remaining risks are explicitly listed as non-blocking.
@@ -308,8 +329,11 @@ The final implementation response must include a filled record in this shape:
 | SQLite migration | Fresh DB `alembic upgrade head` | PASS/FAIL | |
 | Alembic downgrade | DB at head, downgrade one revision, upgrade back to head | PASS/FAIL | |
 | PostgreSQL migration | Production-like PostgreSQL `alembic upgrade head` | PASS/FAIL | |
+| CST uniqueness | Verify `(user_id, CheckIn.date)` uses persisted CST date from `get_today_cst()` | PASS/FAIL | |
+| Rate-limit storage | Verify Redis/shared limiter for multi-instance or documented single-instance limit | PASS/FAIL | |
 | Concurrent publish | Two concurrent `/api/confirm_publish` requests for one `checkin_id` | PASS/FAIL | |
 | BYOK redaction | Verify API keys/tokens absent from logs/Sentry-safe context/browser console | PASS/FAIL | |
+| Rendering safety | Verify launch-critical generated content renders escaped/sanitized and does not use unsafe HTML injection | PASS/FAIL | |
 | Web lint | `npm run lint` | PASS/FAIL | |
 | Web build | `npm run build` in CI or local non-sandbox environment | PASS/FAIL | |
 | Manual smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile | PASS/FAIL | |
