@@ -81,9 +81,13 @@ Rollback is a launch-critical path, not a documentation afterthought. Every laun
 - Database at `head` can downgrade one revision and then upgrade back to `head`.
 - Any new launch-critical migration added during this work has a direct upgrade/downgrade test.
 
+Downgrade smoke tests improve migration confidence, but production rollback should prefer backup restore, traffic rollback, and forward-compatible migrations. Destructive or irreversible migrations must be explicitly marked and require backup verification before deployment. A runnable downgrade is not by itself proof that production data can be safely rolled back after the new app version has written new-schema data.
+
 If `alembic upgrade head` fails during deployment, the runbook must instruct the operator to stop application startup, keep the previous application version serving traffic if possible, capture the Alembic error, and restore from the most recent verified backup or run the tested downgrade path only when the migration reached a known revision. The app must not serve traffic against a partially migrated database.
 
 PostgreSQL remains the preferred production option because the Docker Compose file and database layer already support it. SQLite can remain documented for small self-hosted deployments, with a note that production backups and concurrency limits are the operator's responsibility.
+
+SQLite migration smoke is required for fast local and CI feedback. Production-like migration verification must also run against PostgreSQL before release readiness is claimed because enum behavior, timestamp behavior, JSON fields, transaction semantics, uniqueness constraints, and concurrent publish idempotency can differ from SQLite.
 
 ### BYOK Security Boundary
 
@@ -94,6 +98,17 @@ The user's DeepSeek API key is sensitive user data. The launch design must guara
 - Sentry configuration must avoid default PII capture and must scrub known sensitive header names if request context is attached later.
 - Stored API keys are encrypted at rest with `API_KEY_ENCRYPTION_SECRET`.
 - Key rotation is a documented operational limitation for this release unless implemented with key versioning. Without versioning, rotating `API_KEY_ENCRYPTION_SECRET` invalidates previously stored encrypted API keys and requires users to re-save them.
+
+### Auth Session Requirements
+
+The current Web app uses bearer JWTs stored in `localStorage` and sent via the `Authorization` header. Launch readiness must make that boundary explicit:
+
+- The Web app must handle expired or invalid tokens by clearing local auth state and redirecting to `/login`.
+- Logout must clear client-side auth state, including stored token and any legacy client-side API key cache.
+- Production deployment must use HTTPS.
+- Bearer tokens and authorization headers must never be logged to the browser console, backend logs, Sentry context, or metrics labels.
+- If the implementation switches to cookies later, cookies must be `Secure`, `HttpOnly` where applicable, and configured with an explicit `SameSite` policy.
+- The localStorage bearer-token risk is accepted for this launch only if documented in the launch checklist.
 
 ### API Behavior
 
@@ -126,7 +141,61 @@ Use a minimal error response contract for launch-critical endpoints:
 
 Existing FastAPI `detail` responses may remain for non-launch-critical endpoints, but Web launch-path code should normalize backend errors into this contract before rendering.
 
-Confirm publish must be backend-idempotent. Frontend loading states are useful but insufficient because users can double-click, refresh, or send concurrent requests. The backend must protect publish with a transaction plus either a database-level uniqueness constraint or an equivalent idempotency mechanism. Concurrent publish attempts for the same user/date/checkin must result in one successful points/streak calculation and all other attempts returning a client error or the already-completed result without applying rewards again.
+### Launch-Critical API Matrix
+
+The implementation plan must inspect and verify each endpoint in this matrix. Endpoint behavior should be tested at the router or service layer, with Web behavior covered by manual or scripted smoke checks.
+
+| Area | Endpoint | Method | Auth | Web page | Success behavior | Failure behavior | Test required |
+|---|---|---|---|---|---|---|---|
+| Auth | `/api/register` | POST | No | `/login` | Creates a Web user and returns JWT plus user status. | Duplicate username returns client error; weak payload validation returns 422. | Register success and duplicate-user test. |
+| Auth | `/api/auth_login` | POST | No | `/login` | Returns JWT plus user status for valid credentials. | Invalid credentials return 401. | Login success and invalid-credentials test. |
+| Session | `/api/user_status` | GET | Yes | `/`, `/profile`, auth provider | Returns streak, points, level, diamonds, reminder, and today status. | Invalid token returns 401 and Web clears auth state. | User status success and expired-token Web handling test or smoke step. |
+| API key | `/api/user/api_key/status` | GET | Yes | `/settings`, auth provider | Returns configured flag and safe preview only. | Invalid token returns 401; plaintext key is never returned. | Status test proving no plaintext key leakage. |
+| API key | `/api/user/api_key` | POST | Yes | `/settings` | Encrypts and stores key; returns configured flag and safe preview. | Invalid token returns 401; invalid body returns 422. | Save-key test and log-redaction check. |
+| API key | `/api/user/api_key` | DELETE | Yes | `/settings` | Deletes stored key and returns configured=false. | Invalid token returns 401. | Delete-key test. |
+| Hot topics | `/api/hot_topics/today` | GET | Yes | `/topics` | Returns today's topic cards. | Invalid token returns 401; degraded supply remains visible through health/runbook. | Hot topics success test. |
+| Hot topics | `/api/hot_topics/{topic_id}` | GET | Yes | `/compose` | Returns today's hot topic detail. | Unknown or non-today topic returns 404. | Detail success and not-found test. |
+| Hot topics | `/api/hot_topics/{topic_id}/analysis` | POST | Yes plus API key | `/compose` | Returns analysis for selected topic and angle. | Missing API key returns `missing_api_key`; timeout shows recoverable Web error. | Analysis success with mocked AI and missing-key test. |
+| Topic selection | `/api/daily_topics` | POST | Yes plus API key | `/topics` | Returns AI topic suggestions and refresh count. | Missing API key returns `missing_api_key`; refresh limit returns client error. | Success, missing-key, and refresh-limit test. |
+| Topic selection | `/api/select_topic` | POST | Yes | `/topics`, `/compose` | Creates or resets today's `CheckIn` and returns `checkin_id`. | Already completed today returns client error; invalid hot topic returns 404. | Select-topic success and completed-day test. |
+| Generation | `/api/quick_generate` | POST | Yes plus API key | `/compose` | Generates draft content and persists it when `checkin_id` is supplied. | Missing API key returns `missing_api_key`; completed checkin returns client error; timeout shows recoverable Web error. | Quick-generate success, missing-key, completed-checkin, and timeout behavior test/smoke. |
+| Generation | `/api/generate_content` | POST | Yes plus API key | `/discuss` | Advances discussion and may produce a draft. | Missing API key returns `missing_api_key`; invalid checkin state returns client error. | Discussion success, draft-ready transition, missing-key, and invalid-state test. |
+| Preview | `/api/checkin/{checkin_id}` | GET | Yes | `/preview` | Returns topic, content, status, feedback, and generation context for the owning user. | Unknown or unauthorized checkin returns 404. | Owner success and cross-user denial test. |
+| Preview quality | `/api/confirm_content` | POST | Yes plus API key | `/preview` | Saves edited content, runs quality checks, and moves checkin toward publishable state. | Missing API key returns `missing_api_key`; invalid status returns client error. | Confirm-content success and invalid-state test. |
+| Preview quality | `/api/review_content` | POST | Yes plus API key | `/preview` | Reviews content without changing completed status. | Missing API key returns `missing_api_key`; unknown checkin returns 404. | Review-content success test. |
+| Preview quality | `/api/revise_content` | POST | Yes plus API key | `/preview` | Revises draft and keeps state safe for publish. | Missing API key returns `missing_api_key`; invalid status returns client error. | Revise-content success and duplicate-state safety test. |
+| Compose assets | `/api/compose_post_assets` | POST | Yes plus API key | `/preview` | Generates post pages/title/tags for image rendering. | Missing API key returns `missing_api_key`; unknown checkin returns 404. | Compose-assets success with mocked AI and missing-key test. |
+| Publish | `/api/confirm_publish` | POST | Yes | `/preview` | Completes one `CheckIn` and updates points/streak exactly once. | Duplicate publish returns 409 or already-published result without duplicate rewards. | Publish success and concurrent duplicate-publish test. |
+| Feedback | `/api/content_feedback` | POST | Yes | `/preview` | Stores feedback on draft/pending/completed content. | Invalid state returns client error. | Feedback success and invalid-state test. |
+| Profile/history | `/api/my/checkins` | GET | Yes | `/`, `/drafts`, `/history`, `/profile` | Returns paginated checkins with status filters. | Invalid token returns 401. | Pagination/filter test. |
+
+### Publish State Model
+
+For launch, the publish operation is tied to `CheckIn.id` (`checkin_id`). A generated draft is the `content` field on a `CheckIn`; there is no separate stable `draft_id` or `generation_id` in the current data model.
+
+Launch publish rules:
+
+- A `CheckIn` can be published only once.
+- The same user can have at most one reward-bearing completed `CheckIn` for a given CST date.
+- The same user may edit, revise, or regenerate the same day's non-completed `CheckIn` before publish.
+- Duplicate publish for the same `checkin_id` must return either 409 conflict or the already-published result. In both cases, points, streak, diamonds, achievements, and completed timestamp must not be applied twice.
+- The implementation must use a transaction plus a database-level uniqueness constraint or an equivalent idempotency key. A row lock alone is insufficient for SQLite and must be verified against PostgreSQL.
+- If future work adds `draft_id` or `generation_id`, the publish object must be revisited and this spec updated.
+
+### State Transition Table
+
+| State | Trigger | Backend result | Web result |
+|---|---|---|---|
+| Anonymous | Open protected page | No API call or 401 from protected API. | Redirect to `/login`. |
+| Authenticated, no API key | Click AI generate/analyze endpoint | 400 `missing_api_key`; no draft, points, streak, or history mutation. | Show settings guidance and link to `/settings`. |
+| API key configured | Save key | Encrypted key stored; status returns configured=true and safe preview. | Settings shows configured state without plaintext key. |
+| No checkin today | Select topic or hot topic | `CheckIn` created with `topic_selected`; `checkin_id` returned. | Navigate to `/compose` or `/discuss` with checkin context. |
+| `topic_selected` | Deep discussion message | Checkin moves to `discussing`; conversation history updates. | Chat shows assistant reply. |
+| `topic_selected` or `discussing` | Quick/deep generation succeeds | Checkin content is saved; status becomes `draft_ready`. | Navigate to or display `/preview`. |
+| `draft_ready` | Confirm content | Edited content saved; quality/fact/discussion checks recorded; status becomes `pending`. | Preview shows quality guidance and publish action. |
+| `pending` | Confirm publish | Checkin becomes `completed`; points/streak/level/diamonds/achievements update once. | Success screen and profile reflect updated state. |
+| `completed` | Repeated publish | No reward mutation; returns 409 or already-published result. | Show already published state; no duplicate reward UI. |
+| Any state | Invalid/expired token | 401. | Clear local auth state and redirect to `/login`. |
 
 ### Observability
 
@@ -156,6 +225,17 @@ The implementation should not introduce a new design system. It should keep the 
 
 Generation calls need explicit user-facing timeout behavior. The Web client should use a documented timeout for AI generation requests, show a recoverable error if the timeout is reached, and avoid automatic retry for publish or other state-changing operations. Backend AI retries may exist only inside service code where they cannot duplicate user-visible state changes.
 
+### AI Generation Abuse And Cost Controls
+
+Launch-critical AI endpoints must protect both user-owned and system fallback DeepSeek usage:
+
+- Generation and analysis endpoints must be rate limited per user and/or IP.
+- If system fallback `DEEPSEEK_API_KEY` is enabled, usage must be explicitly rate limited and documented as operator-funded.
+- Timeout behavior must define whether backend work is cancelled or may continue after the Web client gives up.
+- Automatic retries must not create duplicate drafts, duplicate checkins, or duplicate user-visible state.
+- Generation failures must not update points, streak, publish history, or completed status.
+- Repeated generate/revise actions should reuse the same non-completed `CheckIn` unless the user explicitly selects a new topic.
+
 ## Documentation Design
 
 Documentation must match the current launch target:
@@ -173,6 +253,8 @@ The launch checklist must include:
 - Manual smoke steps for the full Web + backend loop.
 - Deployment health check and rollback procedure.
 - API key handling and logging redaction rules.
+- Auth/session storage and logout behavior.
+- AI generation timeout, retry, and cost-control rules.
 
 ## Verification Plan
 
@@ -185,6 +267,7 @@ The release cannot be considered ready until these checks have run and their res
 - `mypy app --ignore-missing-imports`.
 - Alembic fresh database migration smoke test.
 - Alembic downgrade and upgrade-back smoke test for launch-critical migrations.
+- PostgreSQL production-like migration smoke test before production deployment.
 - Web `npm run lint`.
 - Web `npm run build` in CI or a local non-sandbox environment because the Codex sandbox blocks Turbopack process or port binding.
 - Manual or scripted smoke test of the Web + backend loop.
@@ -199,14 +282,37 @@ The release is ready to enter the final verification stage when:
 - Backend and Web verification commands are documented and pass in the working environment or CI.
 - Fresh database upgrade is verified.
 - Launch-critical Alembic downgrades are executable and covered by downgrade/upgrade-back tests.
+- PostgreSQL production-like migration verification has passed before deployment.
 - The deployment runbook defines what to do when migration fails before traffic is shifted.
 - BYOK secrets are redacted from logs, Sentry context, metrics, and frontend console output.
+- Auth/session storage, logout, expired-token behavior, and HTTPS requirements are documented and verified.
 - Publish is backend-idempotent under concurrent requests and cannot double-count points or streak.
 - Launch-critical API errors expose a stable error shape or are normalized by the Web client before display.
 - AI generation timeout behavior is documented and visible to users.
+- AI generation endpoints have launch-appropriate rate limits and cost controls.
 - Production deployment variables and startup steps are documented.
 - README and AGENTS.md no longer conflict about the launch architecture.
 - Any remaining risks are explicitly listed as non-blocking.
+
+## Final Verification Record Template
+
+The final implementation response must include a filled record in this shape:
+
+| Check | Command / Steps | Result | Notes |
+|---|---|---|---|
+| Backend dependencies | Create/use isolated Python env and install `backend/requirements.txt` plus lint/type tools | PASS/FAIL | |
+| Backend tests | `pytest` | PASS/FAIL | |
+| Ruff check | `ruff check app tests` | PASS/FAIL | |
+| Ruff format | `ruff format --check app tests` | PASS/FAIL | |
+| Mypy | `mypy app --ignore-missing-imports` | PASS/FAIL | |
+| SQLite migration | Fresh DB `alembic upgrade head` | PASS/FAIL | |
+| Alembic downgrade | DB at head, downgrade one revision, upgrade back to head | PASS/FAIL | |
+| PostgreSQL migration | Production-like PostgreSQL `alembic upgrade head` | PASS/FAIL | |
+| Concurrent publish | Two concurrent `/api/confirm_publish` requests for one `checkin_id` | PASS/FAIL | |
+| BYOK redaction | Verify API keys/tokens absent from logs/Sentry-safe context/browser console | PASS/FAIL | |
+| Web lint | `npm run lint` | PASS/FAIL | |
+| Web build | `npm run build` in CI or local non-sandbox environment | PASS/FAIL | |
+| Manual smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile | PASS/FAIL | |
 
 ## Implementation Constraints
 
