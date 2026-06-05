@@ -22,3 +22,11 @@
 | Web lint | `npm run lint` | NOT RUN | |
 | Web build | `npm run build` in CI or local non-sandbox environment | NOT RUN | If sandbox blocks Turbopack, keep NOT RUN and record reason. |
 | Manual smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | |
+
+## Rate Limits
+
+- `RATE_LIMIT_DEFAULT=100/minute`
+- `GENERATION_RATE_LIMIT=10/minute`
+- `AI_ANALYSIS_RATE_LIMIT=10/minute`
+- `PUBLISH_RATE_LIMIT=20/minute`
+- Multi-instance deployments must set `RATE_LIMIT_STORAGE_URI=redis://redis:6379/0`; otherwise the launch is single-instance only.

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..dependencies import get_current_user, get_db, get_resolved_api_key
 from ..models import CheckIn, CheckInStatus, HotTopic, User
 from ..rate_limit import limiter
@@ -75,7 +76,7 @@ def get_checkin_for_update(checkin_id: int, user_id: int, db: Session) -> CheckI
 
 
 @router.post("/quick_generate", response_model=QuickGenerateResponse)
-@limiter.limit("10/minute")
+@limiter.limit(settings.generation_rate_limit)
 async def quick_generate_endpoint(
     request: Request,
     body: QuickGenerateRequest,
@@ -157,7 +158,7 @@ async def quick_generate_endpoint(
 
 
 @router.post("/generate_content", response_model=MessageResponse)
-@limiter.limit("10/minute")
+@limiter.limit(settings.generation_rate_limit)
 async def generate_content(
     request: Request,
     body: MessageRequest,
@@ -239,7 +240,7 @@ async def confirm_content_endpoint(
 
 
 @router.post("/review_content", response_model=ReviewContentResponse)
-@limiter.limit("20/minute")
+@limiter.limit(settings.ai_analysis_rate_limit)
 async def review_content_endpoint(
     request: Request,
     body: ReviewContentRequest,
@@ -263,7 +264,7 @@ async def review_content_endpoint(
 
 
 @router.post("/revise_content", response_model=ReviseContentResponse)
-@limiter.limit("10/minute")
+@limiter.limit(settings.generation_rate_limit)
 async def revise_content_endpoint(
     request: Request,
     body: ReviseContentRequest,
@@ -331,13 +332,15 @@ async def get_checkin(
     }
 
 @router.post("/confirm_publish", response_model=PublishResponse)
+@limiter.limit(settings.publish_rate_limit)
 async def confirm_publish_endpoint(
-    request: ConfirmPublishRequest,
+    request: Request,
+    body: ConfirmPublishRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """User confirms publish. Final step."""
-    checkin = get_checkin_for_update(request.checkin_id, current_user.id, db)
+    checkin = get_checkin_for_update(body.checkin_id, current_user.id, db)
 
     try:
         result = await confirm_publish(checkin, db, current_user)
@@ -347,7 +350,7 @@ async def confirm_publish_endpoint(
 
 
 @router.post("/compose_post_assets", response_model=ComposePostAssetsResponse)
-@limiter.limit("20/minute")
+@limiter.limit(settings.ai_analysis_rate_limit)
 async def compose_post_assets_endpoint(
     request: Request,
     body: ComposePostAssetsRequest,

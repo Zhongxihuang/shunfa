@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..dependencies import get_current_user, get_db, get_resolved_api_key
 from ..models import HotTopic, User
+from ..rate_limit import limiter
 from ..schemas import (
     HotTopicAnalysisRequest,
     HotTopicAnalysisResponse,
@@ -77,7 +79,9 @@ async def get_hot_topic_detail(
 
 
 @router.post("/hot_topics/{topic_id}/analysis", response_model=HotTopicAnalysisResponse)
+@limiter.limit(settings.ai_analysis_rate_limit)
 async def analyze_hot_topic_endpoint(
+    request: Request,
     topic_id: int,
     body: HotTopicAnalysisRequest | None = None,
     current_user: User = Depends(get_current_user),

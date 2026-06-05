@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     jwt_expire_hours: int = 720
     database_url: str = "sqlite:///./shunfa.db"  # or postgresql://user:pass@host:5432/dbname
     environment: str = "development"
+    rate_limit_storage_uri: str = ""
+    rate_limit_default: str = "100/minute"
+    generation_rate_limit: str = "10/minute"
+    ai_analysis_rate_limit: str = "10/minute"
+    publish_rate_limit: str = "20/minute"
+    deepseek_request_timeout_seconds: int = 60
     admin_password: str = ""
     cors_allow_origins: list[str] = [
         "http://localhost:3000",
@@ -85,6 +91,10 @@ class Settings(BaseSettings):
         """
         origins = self.cors_allow_origins
         if self.environment == "production":
+            if "*" in origins:
+                raise ValueError(
+                    "CORS_ALLOW_ORIGINS must not contain '*' in production when Authorization headers are used."
+                )
             localhost_origins = [o for o in origins if "localhost" in o or "127.0.0.1" in o]
             if localhost_origins:
                 logger = logging.getLogger("config")
