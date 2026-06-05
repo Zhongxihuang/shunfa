@@ -19,8 +19,8 @@
 | SQLite migration | `pytest tests/test_migrations.py::test_alembic_upgrade_head_on_fresh_sqlite -v` | PASS | Also covered by full `tests/test_migrations.py`. |
 | Alembic downgrade | `pytest tests/test_migrations.py::test_alembic_downgrade_one_revision_and_upgrade_back_on_sqlite -v` | PASS | Downgrade one revision and upgrade back passed on SQLite. |
 | PostgreSQL migration | `POSTGRES_TEST_DATABASE_URL=postgresql://shunfa:shunfa@localhost:5432/shunfa_test pytest tests/test_migrations.py::test_alembic_upgrade_head_on_postgresql -v` | CI CONFIGURED / LOCAL SKIPPED | `.github/workflows/backend-test.yml` now provides a PostgreSQL service container and `POSTGRES_TEST_DATABASE_URL`. Local run remains skipped because the variable was unset and Docker daemon was not running. CI/staging must produce the final PASS before production. |
-| Web lint | `npm run lint` | PASS | |
-| Web build | `npm run build` in CI or local non-sandbox environment | PASS | Ran successfully in this environment with Next.js/Turbopack. |
+| Web lint | `npm run lint` | PASS | Also configured in `.github/workflows/web-test.yml`. |
+| Web build | `npm run build` in CI or local non-sandbox environment | PASS | Ran successfully in this environment with Next.js/Turbopack; also configured in `.github/workflows/web-test.yml`. |
 | Scripted launch smoke | `pytest tests/test_launch_smoke.py -v` | PASS | Covers register -> save key -> select topic -> generate -> preview -> compose assets -> publish -> profile with mocked AI providers; duplicate publish leaves points/streak unchanged. |
 | Manual browser smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | Requires browser/API smoke against a configured runtime and real/sandbox DeepSeek key. |
 
