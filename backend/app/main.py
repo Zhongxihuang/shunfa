@@ -1,23 +1,22 @@
 import os
 from contextlib import asynccontextmanager
 
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.dependencies import get_db
+from app.errors import normalize_http_error
 from app.logging_config import get_logger, setup_logging
 from app.middleware import RequestIDMiddleware, RequestLoggingMiddleware
 from app.routers import content, coze_plugin, hot_topics, reminder, topics, user
 from app.routers.my import router as my_router
-from app.rate_limit import limiter
 
 
 @asynccontextmanager
@@ -44,8 +43,9 @@ async def lifespan(app: FastAPI):
 
     # Development: auto-upgrade to latest migration
     if settings.environment == "development":
-        from alembic import command
         from alembic.config import Config
+
+        from alembic import command
 
         logger.debug("Running database migrations...")
         alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
@@ -97,6 +97,27 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
         content={"detail": "请求过于频繁，请稍后再试"},
         headers={"Retry-After": str(exc.detail)},
     )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=normalize_http_error(request, exc),
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    request_id = request.headers.get("X-Request-ID")
+    content = {
+        "error_code": "validation_error",
+        "message": "请求参数不正确",
+    }
+    if request_id:
+        content["request_id"] = request_id
+    return JSONResponse(status_code=422, content=content)
 
 
 # Global exception handler

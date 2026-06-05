@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import SessionLocal
+from .errors import raise_api_error
 
 security = HTTPBearer()
 
@@ -28,8 +29,8 @@ def get_current_user(
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         user_id = int(payload.get("sub"))
         token_version = payload.get("tv", 0)
-    except (JWTError, ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except (JWTError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
 
     from .models import User
     user = db.query(User).filter(User.id == user_id).first()
@@ -51,8 +52,8 @@ def get_admin_user(
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         user_id = int(payload.get("sub"))
         token_version = payload.get("tv", 0)
-    except (JWTError, ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    except (JWTError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
 
     from .models import User
     user = db.query(User).filter(User.id == user_id).first()
@@ -93,7 +94,8 @@ async def get_resolved_api_key(
     if settings.deepseek_api_key and not settings.require_user_api_key:
         return settings.deepseek_api_key
 
-    raise HTTPException(
+    raise_api_error(
         status_code=400,
-        detail="请在设置页面配置您的 DeepSeek API Key（https://platform.deepseek.com/api_keys）",
+        error_code="missing_api_key",
+        message="请在设置页面配置您的 DeepSeek API Key（https://platform.deepseek.com/api_keys）",
     )

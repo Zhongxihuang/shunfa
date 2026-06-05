@@ -2,6 +2,60 @@ import { DEV_PREVIEW_TOKEN } from './devPreview';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
+export interface ApiErrorData {
+  error_code: string;
+  message: string;
+  request_id?: string;
+}
+
+export class ApiError extends Error {
+  status: number;
+  data: ApiErrorData;
+
+  constructor(status: number, data: ApiErrorData) {
+    super(data.message);
+    this.status = status;
+    this.data = data;
+  }
+}
+
+function normalizeError(status: number, raw: unknown): ApiErrorData {
+  if (raw && typeof raw === 'object') {
+    const data = raw as {
+      detail?: unknown;
+      error_code?: unknown;
+      message?: unknown;
+      request_id?: unknown;
+    };
+
+    if (typeof data.error_code === 'string' && typeof data.message === 'string') {
+      return {
+        error_code: data.error_code,
+        message: data.message,
+        request_id: typeof data.request_id === 'string' ? data.request_id : undefined,
+      };
+    }
+
+    if (typeof data.detail === 'string') {
+      return {
+        error_code: status === 401 ? 'invalid_token' : 'request_failed',
+        message: data.detail,
+      };
+    }
+  }
+
+  return {
+    error_code: status === 401 ? 'invalid_token' : 'request_failed',
+    message: '请求失败，请稍后重试',
+  };
+}
+
+export function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) return error.data.message;
+  if (error instanceof Error) return error.message || fallback;
+  return fallback;
+}
+
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('token');
@@ -36,15 +90,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         window.dispatchEvent(new Event('auth:expired'));
       }
     }
-    throw Object.assign(new Error('Unauthorized'), {
-      status: 401,
-      data: { detail: '登录已失效，请重新登录' },
-    });
+    throw new ApiError(401, { error_code: 'invalid_token', message: '登录已失效，请重新登录' });
   }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw Object.assign(new Error(err.detail ?? 'Request failed'), { status: res.status, data: err });
+    throw new ApiError(res.status, normalizeError(res.status, err));
   }
 
   return res.json();
