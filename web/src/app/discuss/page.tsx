@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import ChatBubble from '@/components/ChatBubble';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -40,7 +40,7 @@ function DiscussContent() {
     hasSentInit.current = true;
     setLoading(true);
 
-    api.post<{ reply: string; status: string; draft?: string }>('/api/generate_content', {
+    api.postGeneration<{ reply: string; status: string; draft?: string }>('/api/generate_content', {
       checkin_id: checkinId,
       message: '__auto_suggest_angles__',
       angle,
@@ -53,7 +53,7 @@ function DiscussContent() {
       })
       .catch((e: unknown) => {
         setLoading(false);
-        const detail = (e as { data?: { detail?: string } })?.data?.detail ?? '';
+        const detail = getErrorMessage(e, '');
         if (detail.includes('API Key')) {
           setApiKeyMissing(true);
         } else {
@@ -76,7 +76,7 @@ function DiscussContent() {
     setLoading(true);
 
     try {
-      const data = await api.post<{ reply: string; status: string; draft?: string }>('/api/generate_content', {
+      const data = await api.postGeneration<{ reply: string; status: string; draft?: string }>('/api/generate_content', {
         checkin_id: checkinId,
         message: trimmed,
         angle,
@@ -100,7 +100,7 @@ function DiscussContent() {
       }
     } catch (e: unknown) {
       setLoading(false);
-      const detail = (e as { data?: { detail?: string } })?.data?.detail ?? '';
+      const detail = getErrorMessage(e, '');
       if (detail.includes('API Key')) {
         setApiKeyMissing(true);
       } else {
@@ -116,7 +116,7 @@ function DiscussContent() {
     if (loading) return;
     setLoading(true);
     try {
-      const data = await api.post<{ reply: string; status: string }>('/api/generate_content', {
+      const data = await api.postGeneration<{ reply: string; status: string }>('/api/generate_content', {
         checkin_id: checkinId,
         message: '__refresh_angles__',
         angle,

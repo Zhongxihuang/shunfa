@@ -49,3 +49,11 @@
 - New or launch-touched migrations must include tested downgrade behavior.
 - Production rollback prefers backup restore, traffic rollback, and forward-compatible migrations over data-destructive downgrade.
 - PostgreSQL migration verification must run in CI with a PostgreSQL service container or in staging before production deployment.
+
+## Timeout Policy
+
+- `NEXT_PUBLIC_API_TIMEOUT_MS=30000`
+- `NEXT_PUBLIC_GENERATION_TIMEOUT_MS=90000`
+- `DEEPSEEK_REQUEST_TIMEOUT_SECONDS=60`
+- Client timeout does not prove backend work stopped. Generation retries must reuse the existing non-completed `CheckIn`.
+- Publish is not automatically retried after timeout.

@@ -1,6 +1,12 @@
 import { DEV_PREVIEW_TOKEN } from './devPreview';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const DEFAULT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS ?? 30000);
+const GENERATION_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_GENERATION_TIMEOUT_MS ?? 90000);
+
+interface RequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
 
 export interface ApiErrorData {
   error_code: string;
@@ -66,9 +72,10 @@ function getUserApiKey(): string | null {
   return localStorage.getItem('shunfa_api_key');
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = getToken();
   const userApiKey = getUserApiKey();
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -81,7 +88,23 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['X-User-Api-Key'] = userApiKey;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { ...fetchOptions, headers, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ApiError(408, {
+        error_code: 'request_timeout',
+        message: '生成时间较长，请稍后刷新草稿或重试。',
+      });
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
 
   if (res.status === 401) {
     if (token !== DEV_PREVIEW_TOKEN) {
@@ -103,7 +126,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  post: <T>(path: string, data?: unknown, options: RequestOptions = {}) =>
+    request<T>(path, { ...options, method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  postGeneration: <T>(path: string, data?: unknown) =>
+    request<T>(path, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+      timeoutMs: GENERATION_TIMEOUT_MS,
+    }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };

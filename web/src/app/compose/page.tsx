@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 
 type Platform = 'xiaohongshu' | 'twitter' | 'weibo' | 'wechat_short' | 'generic';
 
@@ -79,8 +79,7 @@ function ComposeContent() {
         setSelectedAngle(data.ai_angle || data.ai_counter_angle || `我更关心「${data.title}」背后的行业信号`);
       })
       .catch((e: unknown) => {
-        const err = e as { data?: { detail?: string } };
-        setError(err?.data?.detail ?? '热点详情加载失败');
+        setError(getErrorMessage(e, '热点详情加载失败'));
       })
       .finally(() => setLoading(false));
   }, [topicId]);
@@ -116,7 +115,7 @@ function ComposeContent() {
     setDigging(true);
     setError('');
     try {
-      const data = await api.post<HotTopicAnalysis>(`/api/hot_topics/${topic.id}/analysis`, {
+      const data = await api.postGeneration<HotTopicAnalysis>(`/api/hot_topics/${topic.id}/analysis`, {
         angle: selectedAngle,
       });
       setAnalysis(data);
@@ -124,8 +123,7 @@ function ComposeContent() {
         setSelectedAngle(data.recommended_stance);
       }
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '深挖失败，当前轻分析仍可继续生成');
+      setError(getErrorMessage(e, '深挖失败，当前轻分析仍可继续生成'));
     } finally {
       setDigging(false);
     }
@@ -141,7 +139,7 @@ function ComposeContent() {
     setError('');
     try {
       const selected = await createCheckin();
-      const draft = await api.post<{ content: string; platform: Platform; char_count: number }>('/api/quick_generate', {
+      const draft = await api.postGeneration<{ content: string; platform: Platform; char_count: number }>('/api/quick_generate', {
         topic_id: topic.id,
         checkin_id: selected.checkin_id,
         hot_topic: topic.title,
@@ -153,8 +151,7 @@ function ComposeContent() {
       sessionStorage.setItem('current_draft', draft.content);
       router.push(`/preview?checkin_id=${selected.checkin_id}`);
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '生成草稿失败');
+      setError(getErrorMessage(e, '生成草稿失败'));
       setSubmitting(null);
     }
   }
@@ -173,8 +170,7 @@ function ComposeContent() {
       });
       router.push(`/discuss?${query.toString()}`);
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '进入深度讨论失败');
+      setError(getErrorMessage(e, '进入深度讨论失败'));
       setSubmitting(null);
     }
   }

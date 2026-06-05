@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import TopicCard from '@/components/TopicCard';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 
 interface TopicItem {
   topic: string;
@@ -44,10 +44,10 @@ function TopicsContent() {
   const [submitting, setSubmitting] = useState(false);
 
   function reportError(e: unknown, fallback: string) {
-    const err = e as { status?: number; data?: { detail?: string } };
+    const err = e as { status?: number };
     const is401 = err?.status === 401;
     setAuthError(is401);
-    setError(err?.data?.detail ?? (is401 ? '登录已失效，请重新登录' : fallback));
+    setError(getErrorMessage(e, is401 ? '登录已失效，请重新登录' : fallback));
   }
 
   async function loadHotTopics() {
@@ -98,7 +98,7 @@ function TopicsContent() {
     setError('');
     setAuthError(false);
     try {
-      const data = await api.post<{ topics: TopicItem[]; refresh_count: number; max_refreshes: number }>('/api/daily_topics');
+      const data = await api.postGeneration<{ topics: TopicItem[]; refresh_count: number; max_refreshes: number }>('/api/daily_topics');
       setTopics(data.topics);
       setRefreshCount(data.refresh_count);
       setMaxRefreshes(data.max_refreshes);

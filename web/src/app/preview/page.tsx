@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 import TemplateBeige from '@/components/post-templates/TemplateBeige';
 import TemplateMagazine from '@/components/post-templates/TemplateMagazine';
 import { renderPageToPng, downloadAsZip, downloadSinglePng } from '@/lib/composeImage';
@@ -110,7 +110,7 @@ function PreviewContent() {
     setStep('quality_check');
     try {
       const reviewEndpoint = checkinStatus === 'completed' ? '/api/review_content' : '/api/confirm_content';
-      const review = await api.post<{
+      const review = await api.postGeneration<{
         content_approved: boolean;
         quality_issues: string[];
         fact_pass?: boolean;
@@ -129,8 +129,7 @@ function PreviewContent() {
       ]);
       setStep('quality_result');
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '质量提示获取失败，请重试');
+      setError(getErrorMessage(e, '质量提示获取失败，请重试'));
       setStep('preview');
     } finally {
       setSubmitting(false);
@@ -142,7 +141,7 @@ function PreviewContent() {
     setError('');
     setStep('composing');
     try {
-      const assets = await api.post<ComposeAssets>('/api/compose_post_assets', {
+      const assets = await api.postGeneration<ComposeAssets>('/api/compose_post_assets', {
         checkin_id: checkinId,
         template,
         regenerate,
@@ -152,8 +151,7 @@ function PreviewContent() {
       setCopiedTags(false);
       setStep('compose_ready');
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '图文素材生成失败，请重试');
+      setError(getErrorMessage(e, '图文素材生成失败，请重试'));
       setStep('quality_result');
     } finally {
       setSubmitting(false);
@@ -168,8 +166,7 @@ function PreviewContent() {
       const data = await api.post<PublishResult>('/api/confirm_publish', { checkin_id: checkinId });
       setResult(data);
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '发布失败，请重试');
+      setError(getErrorMessage(e, '发布失败，请重试'));
       setStep('compose_ready');
       setSubmitting(false);
     }
@@ -194,7 +191,7 @@ function PreviewContent() {
     setSubmitting(true);
     setError('');
     try {
-      const revised = await api.post<{
+      const revised = await api.postGeneration<{
         content: string;
         char_count: number;
         fact_pass?: boolean;
@@ -216,8 +213,7 @@ function PreviewContent() {
       ]);
       setStep('preview');
     } catch (e: unknown) {
-      const err = e as { data?: { detail?: string } };
-      setError(err?.data?.detail ?? '按提示改写失败，请稍后重试');
+      setError(getErrorMessage(e, '按提示改写失败，请稍后重试'));
     } finally {
       setSubmitting(false);
     }
