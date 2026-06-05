@@ -85,9 +85,17 @@ npm run dev
 
 ```bash
 cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+
 DEEPSEEK_API_KEY=test JWT_SECRET_KEY=supersecretkey123456789 \
   API_KEY_ENCRYPTION_SECRET=testencryptionsecretkey12345678 \
   pytest -v
+
+ruff check app tests
+ruff format --check app tests
+mypy app --ignore-missing-imports
 ```
 
 所有测试均 mock AI 调用，无需真实 API Key，全套 152 个测试用例。
