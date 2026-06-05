@@ -30,3 +30,9 @@
 - `AI_ANALYSIS_RATE_LIMIT=10/minute`
 - `PUBLISH_RATE_LIMIT=20/minute`
 - Multi-instance deployments must set `RATE_LIMIT_STORAGE_URI=redis://redis:6379/0`; otherwise the launch is single-instance only.
+
+## BYOK Redaction
+
+- API key preview is either `...last4` for sufficiently long keys or omitted.
+- `Authorization` and `X-User-Api-Key` must not appear in backend logs, Sentry events, metrics labels, or browser console output.
+- Rotating `API_KEY_ENCRYPTION_SECRET` invalidates stored user keys unless key versioning is implemented.

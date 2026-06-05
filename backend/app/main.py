@@ -32,12 +32,21 @@ async def lifespan(app: FastAPI):
         import sentry_sdk
         from sentry_sdk.integrations.fastapi import FastApiIntegration
 
+        def before_send(event, hint):
+            request = event.get("request") or {}
+            headers = request.get("headers") or {}
+            for key in list(headers.keys()):
+                if key.lower() in {"authorization", "x-user-api-key"}:
+                    headers[key] = "[Filtered]"
+            return event
+
         sentry_sdk.init(
             dsn=os.getenv("SENTRY_DSN"),
             integrations=[FastApiIntegration()],
             environment=settings.environment,
             traces_sample_rate=0.1,
             send_default_pii=False,
+            before_send=before_send,
         )
         logger.info("Sentry initialized")
 

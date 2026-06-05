@@ -65,10 +65,10 @@ async def get_wechat_openid(code: str) -> str:
             response = await client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
-    except (httpx.RequestError, httpx.HTTPStatusError, ValueError):
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
         if settings.environment != "production":
             return _dev_wechat_openid()
-        raise HTTPException(status_code=503, detail="WeChat service unavailable")
+        raise HTTPException(status_code=503, detail="WeChat service unavailable") from exc
 
     if "errcode" in data and data["errcode"] != 0:
         if settings.environment != "production":
@@ -119,6 +119,13 @@ def _build_login_response(user: User, today: date, db: Session) -> LoginResponse
     return LoginResponse(token=token, user=user_status)
 
 
+def _safe_api_key_preview(plaintext: str) -> str | None:
+    key = plaintext.strip()
+    if len(key) < 12:
+        return None
+    return f"...{key[-4:]}"
+
+
 # ── WeChat mini program login ─────────────────────────────────────────────────
 
 @router.post("/login", response_model=LoginResponse)
@@ -161,9 +168,9 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="用户名已存在")
+        raise HTTPException(status_code=400, detail="用户名已存在") from exc
 
     return _build_login_response(user, get_today_cst(), db)
 
@@ -213,7 +220,7 @@ async def get_api_key_status(current_user: User = Depends(get_current_user)):
     try:
         from ..utils.crypto import decrypt_api_key
         plaintext = decrypt_api_key(current_user.deepseek_api_key)
-        preview = f"...{plaintext[-4:]}" if len(plaintext) >= 4 else "..."
+        preview = _safe_api_key_preview(plaintext)
         return ApiKeyStatusResponse(configured=True, preview=preview)
     except Exception:
         return ApiKeyStatusResponse(configured=True, preview=None)
@@ -229,7 +236,7 @@ async def save_api_key(
     from ..utils.crypto import encrypt_api_key
     current_user.deepseek_api_key = encrypt_api_key(request.api_key.strip())
     db.commit()
-    preview = f"...{request.api_key.strip()[-4:]}"
+    preview = _safe_api_key_preview(request.api_key)
     return ApiKeyStatusResponse(configured=True, preview=preview)
 
 
