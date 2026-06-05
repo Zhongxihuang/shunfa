@@ -1,0 +1,104 @@
+name: Launch Browser Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "web/**"
+      - ".github/workflows/launch-smoke.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "web/**"
+      - ".github/workflows/launch-smoke.yml"
+
+jobs:
+  browser-smoke:
+    name: Web + FastAPI Launch Path
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Start mock DeepSeek
+        working-directory: backend
+        run: |
+          python -m scripts.mock_deepseek_server --port 1081 &
+
+      - name: Start backend
+        working-directory: backend
+        env:
+          DEEPSEEK_API_KEY: test
+          JWT_SECRET_KEY: supersecretkey123456789
+          API_KEY_ENCRYPTION_SECRET: testencryptionsecretkey12345678
+          DATABASE_URL: sqlite:////tmp/shunfa-launch-smoke.db
+          DEEPSEEK_BASE_URL: http://127.0.0.1:1081/v1
+          REQUIRE_USER_API_KEY: "true"
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8080 &
+
+      - name: Wait for backend
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          curl -v http://127.0.0.1:8080/health
+
+      - name: Start web
+        working-directory: web
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8080
+          NEXT_PUBLIC_API_TIMEOUT_MS: "30000"
+          NEXT_PUBLIC_GENERATION_TIMEOUT_MS: "90000"
+        run: |
+          npm run dev -- --hostname 127.0.0.1 --port 3000 &
+
+      - name: Wait for web
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/login >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          curl -v http://127.0.0.1:3000/login
+
+      - name: Run browser smoke
+        working-directory: web
+        env:
+          TARGET_URL: http://127.0.0.1:3000
+          HEADLESS: "true"
+          SLOW_MO_MS: "0"
+          SCREENSHOT_PATH: /tmp/shunfa-browser-smoke-profile.png
+        run: npm run smoke:browser
