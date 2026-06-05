@@ -24,7 +24,8 @@
 | Web build | `npm run build` in CI or local non-sandbox environment | PASS | Ran successfully in this environment with Next.js/Turbopack; also configured in `.github/workflows/web-test.yml`. |
 | Scripted launch smoke | `pytest tests/test_launch_smoke.py -v` | PASS | Covers register -> save key -> select topic -> generate -> preview -> compose assets -> publish -> profile with mocked AI providers; duplicate publish leaves points/streak unchanged. |
 | Mock DeepSeek service | `python -m scripts.mock_deepseek_server --port 1081`, then POST `/v1/chat/completions` | PASS | Verified locally with HTTP 200 and OpenAI-compatible `choices[0].message.content`; sandbox required elevated local loopback access. Use `DEEPSEEK_BASE_URL=http://127.0.0.1:1081/v1` for local smoke. |
-| Manual browser smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | Requires browser/API smoke against a configured runtime and real/sandbox DeepSeek key. |
+| Browser smoke with mock DeepSeek | Start mock DeepSeek on `1081`, backend on `8080`, Web on `3000`, then run `TARGET_URL=http://127.0.0.1:3000 node web/scripts/browser_smoke.js` from an environment with Playwright installed | PASS | Verified register -> save key -> select topic -> generate -> preview -> compose assets -> publish -> profile. Console error count: 0. Screenshot: `/private/tmp/shunfa-browser-smoke-profile.png`. |
+| Real DeepSeek browser smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | Requires browser/API smoke against a configured runtime and real/sandbox DeepSeek key. |
 
 ## Rate Limits
 
