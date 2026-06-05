@@ -33,32 +33,35 @@ from ..services.draft_service import (
     review_content_quality,
     revise_content_with_feedback,
 )
+from ..services.fact_enrichment_service import enrich_facts
 from ..services.generation_context import (
     build_discussion_brief,
     build_fact_block_from_checkin,
     parse_generation_context,
     update_generation_context,
 )
+from ..services.prompt_templates import prompts
 from ..utils.time_utils import get_now_cst, get_today_cst
 
 router = APIRouter()
 
 
 def get_today_hot_topic_or_404(topic_id: int, db: Session) -> HotTopic:
-    topic = db.query(HotTopic).filter(
-        HotTopic.id == topic_id,
-        HotTopic.topic_date == get_today_cst(),
-    ).first()
+    topic = (
+        db.query(HotTopic)
+        .filter(
+            HotTopic.id == topic_id,
+            HotTopic.topic_date == get_today_cst(),
+        )
+        .first()
+    )
     if not topic:
         raise HTTPException(status_code=404, detail="Today's hot topic not found")
     return topic
 
 
 def get_checkin_or_404(checkin_id: int, user_id: int, db: Session) -> CheckIn:
-    checkin = db.query(CheckIn).filter(
-        CheckIn.id == checkin_id,
-        CheckIn.user_id == user_id
-    ).first()
+    checkin = db.query(CheckIn).filter(CheckIn.id == checkin_id, CheckIn.user_id == user_id).first()
     if not checkin:
         raise HTTPException(status_code=404, detail="CheckIn not found")
     return checkin
@@ -66,10 +69,12 @@ def get_checkin_or_404(checkin_id: int, user_id: int, db: Session) -> CheckIn:
 
 def get_checkin_for_update(checkin_id: int, user_id: int, db: Session) -> CheckIn:
     """Fetch checkin with row lock to prevent concurrent updates (e.g. double-publish)."""
-    checkin = db.query(CheckIn).filter(
-        CheckIn.id == checkin_id,
-        CheckIn.user_id == user_id
-    ).with_for_update().first()
+    checkin = (
+        db.query(CheckIn)
+        .filter(CheckIn.id == checkin_id, CheckIn.user_id == user_id)
+        .with_for_update()
+        .first()
+    )
     if not checkin:
         raise HTTPException(status_code=404, detail="CheckIn not found")
     return checkin
@@ -89,6 +94,12 @@ async def quick_generate_endpoint(
     fact_block = None
     topic_record = None
     counter_angle = ""
+    checkin = None
+    if body.checkin_id is not None:
+        checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+        if checkin.status == CheckInStatus.completed:
+            raise HTTPException(status_code=400, detail="今日已完成发布")
+
     if body.topic_id is not None:
         topic_record = get_today_hot_topic_or_404(body.topic_id, db)
         hot_topic = topic_record.title
@@ -100,15 +111,38 @@ async def quick_generate_endpoint(
             published_at=topic_record.published_at,
             url=topic_record.url,
         )
-    elif body.checkin_id is not None:
-        checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+    elif checkin is not None:
         context = parse_generation_context(checkin)
         counter_angle = context.get("counter_angle", "")
-        if any([checkin.topic_source, checkin.topic_summary, checkin.topic_url, checkin.topic_published_at]):
+        if any(
+            [
+                checkin.topic_source,
+                checkin.topic_summary,
+                checkin.topic_url,
+                checkin.topic_published_at,
+            ]
+        ):
             hot_topic = checkin.topic
             fact_block = build_quick_generate_context_from_checkin(checkin)
 
     effective_fact_block = fact_block or build_quick_generate_context(hot_topic)
+
+    # Fact enrichment: try to get more context before drafting
+    article_url = (
+        (topic_record.url if topic_record else None) or (checkin.topic_url if checkin else "") or ""
+    )
+    ctx_cache = parse_generation_context(checkin) if checkin else {}
+    if ctx_cache.get("enriched_facts"):
+        # Reuse cached enrichment from a prior generate/revise call
+        effective_fact_block = ctx_cache["enriched_facts"]
+    else:
+        effective_fact_block = await enrich_facts(
+            base_fact_block=effective_fact_block,
+            article_url=article_url,
+            hot_topic=hot_topic,
+            angle=body.angle,
+        )
+
     discussion_brief = body.discussion_brief or build_discussion_brief(
         topic=hot_topic,
         fact_block=effective_fact_block,
@@ -126,10 +160,7 @@ async def quick_generate_endpoint(
         discussion_brief=discussion_brief,
         api_key=api_key,
     )
-    if body.checkin_id is not None:
-        checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
-        if checkin.status == CheckInStatus.completed:
-            raise HTTPException(status_code=400, detail="今日已完成发布")
+    if checkin is not None:
         checkin.topic = hot_topic
         if topic_record is not None:
             checkin.topic_source = topic_record.source
@@ -146,12 +177,17 @@ async def quick_generate_endpoint(
             discussion_brief=discussion_brief,
             char_count=result["char_count"],
             fact_guard_result={"pass": result["fact_pass"], "issues": result["fact_issues"]},
-            discussion_guard_result={"pass": result["discussion_pass"], "issues": result["discussion_issues"]},
+            discussion_guard_result={
+                "pass": result["discussion_pass"],
+                "issues": result["discussion_issues"],
+            },
             hot_topic_id=topic_record.id if topic_record else None,
             hot_topic_score=topic_record.score if topic_record else None,
             hot_topic_category=topic_record.category if topic_record else None,
             source_angle=topic_record.ai_angle if topic_record else None,
             counter_angle=topic_record.ai_counter_angle if topic_record else counter_angle,
+            prompt_version=prompts.version,
+            enriched_facts=effective_fact_block,
         )
         db.commit()
     return QuickGenerateResponse(**result)
@@ -164,7 +200,7 @@ async def generate_content(
     body: MessageRequest,
     current_user: User = Depends(get_current_user),
     api_key: str = Depends(get_resolved_api_key),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Send a message in the discussion flow."""
     checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
@@ -173,7 +209,9 @@ async def generate_content(
         raise HTTPException(status_code=400, detail="今日已完成发布")
 
     if checkin.status not in (CheckInStatus.topic_selected, CheckInStatus.discussing):
-        raise HTTPException(status_code=400, detail=f"当前状态不支持发送消息: {checkin.status.value}")
+        raise HTTPException(
+            status_code=400, detail=f"当前状态不支持发送消息: {checkin.status.value}"
+        )
 
     if checkin.status == CheckInStatus.topic_selected:
         checkin.status = CheckInStatus.discussing
@@ -187,17 +225,35 @@ async def generate_content(
             platform=body.platform.value if body.platform else None,
             discussion_brief=body.discussion_brief,
             generation_mode="deep",
+            prompt_version=prompts.version,
         )
         db.commit()
     platform = body.platform.value if body.platform else context.get("platform", "xiaohongshu")
     angle = body.angle or context.get("selected_angle", "")
     fact_block = build_fact_block_from_checkin(checkin)
-    discussion_brief = body.discussion_brief or context.get("discussion_brief") or build_discussion_brief(
-        topic=checkin.topic,
-        fact_block=fact_block,
-        angle=angle,
-        platform=platform,
-        counter_angle=context.get("counter_angle", ""),
+    # Fact enrichment: reuse cached enrichment if available, else fetch
+    if context.get("enriched_facts"):
+        fact_block = context["enriched_facts"]
+    else:
+        fact_block = await enrich_facts(
+            base_fact_block=fact_block,
+            article_url=checkin.topic_url or "",
+            hot_topic=checkin.topic,
+            angle=angle,
+        )
+        if fact_block != build_fact_block_from_checkin(checkin):
+            update_generation_context(checkin, enriched_facts=fact_block)
+            db.commit()
+    discussion_brief = (
+        body.discussion_brief
+        or context.get("discussion_brief")
+        or build_discussion_brief(
+            topic=checkin.topic,
+            fact_block=fact_block,
+            angle=angle,
+            platform=platform,
+            counter_angle=context.get("counter_angle", ""),
+        )
     )
     result = await process_message(
         checkin,
@@ -211,12 +267,13 @@ async def generate_content(
     )
     return MessageResponse(**result)
 
+
 @router.post("/confirm_content")
 async def confirm_content_endpoint(
     request: ConfirmContentRequest,
     current_user: User = Depends(get_current_user),
     api_key: str = Depends(get_resolved_api_key),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """User confirms (possibly edited) draft content. Returns quality check result."""
     checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
@@ -233,7 +290,7 @@ async def confirm_content_endpoint(
             "discussion_pass": qc_result["discussion_pass"],
             "discussion_issues": qc_result["discussion_issues"],
             "topic": qc_result["topic"],
-            "message": "内容已确认。以下为质量提示，不影响发布。"
+            "message": "内容已确认。以下为质量提示，不影响发布。",
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -292,10 +349,14 @@ async def revise_content_endpoint(
 async def content_feedback_endpoint(
     request: ContentFeedbackRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
-    if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.pending, CheckInStatus.completed):
+    if checkin.status not in (
+        CheckInStatus.draft_ready,
+        CheckInStatus.pending,
+        CheckInStatus.completed,
+    ):
         raise HTTPException(status_code=400, detail="当前阶段暂不支持反馈")
 
     checkin.content_feedback = request.feedback
@@ -309,11 +370,12 @@ async def content_feedback_endpoint(
 
     return ContentFeedbackResponse(checkin_id=checkin.id, feedback=request.feedback)
 
+
 @router.get("/checkin/{checkin_id}")
 async def get_checkin(
     checkin_id: int = Path(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get checkin data including topic."""
     checkin = get_checkin_or_404(checkin_id, current_user.id, db)
@@ -331,13 +393,14 @@ async def get_checkin(
         "generation_context": parse_generation_context(checkin),
     }
 
+
 @router.post("/confirm_publish", response_model=PublishResponse)
 @limiter.limit(settings.publish_rate_limit)
 async def confirm_publish_endpoint(
     request: Request,
     body: ConfirmPublishRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """User confirms publish. Final step."""
     checkin = get_checkin_for_update(body.checkin_id, current_user.id, db)

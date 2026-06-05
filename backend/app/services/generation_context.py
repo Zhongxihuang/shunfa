@@ -50,7 +50,7 @@ def build_discussion_brief(
 ) -> dict[str, Any]:
     clean_opportunities = [item.strip() for item in opportunities or [] if item.strip()]
     clean_risks = [item.strip() for item in risks or [] if item.strip()]
-    selected_stance = angle.strip() or f"围绕「{topic}」给出一个明确判断"
+    analysis_frame = angle.strip() or f"把「{topic}」作为行业变化的信号，分析其现象、机制和二阶影响"
     return {
         "topic": topic,
         "facts": [line for line in fact_block.splitlines() if line.strip()],
@@ -58,14 +58,15 @@ def build_discussion_brief(
             "只使用事实素材中明确给出的标题、来源、时间、摘要和链接",
             "不要补充素材外的数字、公司关系、发布时间线或监管结论",
         ],
-        "heat_reason": clean_opportunities[0] if clean_opportunities else "这件事值得讨论，因为它暴露了热点背后的判断分歧。",
-        "controversy_axis": counter_angle or "真正的分歧在于：这是短期新闻噪音，还是会改变用户、产品或行业判断的信号。",
-        "supporting_camp": "赞同方会认为这件事释放了明确变化信号。",
-        "opposing_camp": counter_angle or "反对方会认为这只是短期热度，不能过度解读。",
-        "selected_stance": selected_stance,
-        "stance_reason": "这个立场比单纯复述新闻更适合引发讨论。",
-        "opening_hook": selected_stance,
-        "discussion_trigger": "结尾留下一个可被赞同或反驳的判断，不使用“大家怎么看”式提问。",
+        "analysis_frame": analysis_frame,
+        "structural_tension": counter_angle
+        or "核心张力：这是一次结构性变化，还是短期热度？它改变了哪个层面的规则？",
+        "primary_view": clean_opportunities[0]
+        if clean_opportunities
+        else "这件事释放了可分析的行业信号。",
+        "counter_view": counter_angle or "反方视角：事件的影响被高估，或因果链尚不清晰。",
+        "lead_judgment": analysis_frame,
+        "analysis_closer": "结尾给出一个有边界的趋势判断，不召唤读者「大家怎么看」。",
         "opportunities": clean_opportunities,
         "risks": clean_risks,
         "platform": platform,
@@ -74,19 +75,19 @@ def build_discussion_brief(
 
 def format_discussion_brief(brief: dict[str, Any] | None) -> str:
     if not brief:
-        return "暂无结构化讨论策略。"
+        return "暂无结构化分析策略。"
     lines = [
-        f"核心立场：{brief.get('selected_stance', '')}",
-        f"热度原因：{brief.get('heat_reason', '')}",
-        f"争议轴：{brief.get('controversy_axis', '')}",
-        f"反方观点：{brief.get('opposing_camp', '')}",
-        f"开头钩子：{brief.get('opening_hook', '')}",
-        f"讨论触发：{brief.get('discussion_trigger', '')}",
+        f"分析框架：{brief.get('analysis_frame', '') or brief.get('selected_stance', '')}",
+        f"结构性张力：{brief.get('structural_tension', '') or brief.get('controversy_axis', '')}",
+        f"主要视角：{brief.get('primary_view', '') or brief.get('heat_reason', '')}",
+        f"反向视角：{brief.get('counter_view', '') or brief.get('opposing_camp', '')}",
+        f"开篇判断：{brief.get('lead_judgment', '') or brief.get('opening_hook', '')}",
+        f"分析收尾：{brief.get('analysis_closer', '') or brief.get('discussion_trigger', '')}",
     ]
     opportunities = brief.get("opportunities") or []
     risks = brief.get("risks") or []
     if opportunities:
-        lines.append("机会点：" + "；".join(opportunities[:4]))
+        lines.append("分析切入点：" + "；".join(opportunities[:4]))
     if risks:
         lines.append("风险提示：" + "；".join(risks[:4]))
     boundaries = brief.get("fact_boundaries") or []

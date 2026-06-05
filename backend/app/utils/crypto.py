@@ -6,6 +6,7 @@ from cryptography.fernet import Fernet
 
 def _get_fernet() -> Fernet:
     from ..config import settings
+
     raw = hashlib.sha256(settings.api_key_encryption_secret.encode()).digest()
     return Fernet(base64.urlsafe_b64encode(raw))
 

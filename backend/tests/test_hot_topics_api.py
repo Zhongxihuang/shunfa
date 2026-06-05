@@ -7,40 +7,50 @@ from app.schemas import ScoredTopic, TopicCategory
 from app.utils.time_utils import get_today_cst
 
 
+def _create_admin_token(db) -> str:
+    admin = User(openid="web_admin")
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    return create_jwt_token(admin.id)
+
+
 def test_hot_topics_today_returns_structured_topics(client, db):
     user = User(openid="hot_topics_user")
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    db.add_all([
-        HotTopic(
-            topic_date=get_today_cst(),
-            rank=1,
-            title="OpenAI 发布新定价",
-            summary="一档新的中间层价格带出现了。",
-            source="TechCrunch AI",
-            url="https://example.com/openai-pricing",
-            published_at="2026-04-10T08:00:00Z",
-            category="ai_model",
-            score=9,
-            ai_angle="AI 服务开始做价格分层",
-            ai_counter_angle="仍然太贵，离大众太远",
-        ),
-        HotTopic(
-            topic_date=get_today_cst(),
-            rank=2,
-            title="Claude Code 工作流走红",
-            summary="开发者开始讨论人机协作流程。",
-            source="VentureBeat AI",
-            url="https://example.com/claude-code",
-            published_at="2026-04-10T09:00:00Z",
-            category="startup",
-            score=8,
-            ai_angle="真正的壁垒变成流程设计",
-            ai_counter_angle="明星工作流不一定可复制",
-        ),
-    ])
+    db.add_all(
+        [
+            HotTopic(
+                topic_date=get_today_cst(),
+                rank=1,
+                title="OpenAI 发布新定价",
+                summary="一档新的中间层价格带出现了。",
+                source="TechCrunch AI",
+                url="https://example.com/openai-pricing",
+                published_at="2026-04-10T08:00:00Z",
+                category="ai_model",
+                score=9,
+                ai_angle="AI 服务开始做价格分层",
+                ai_counter_angle="仍然太贵，离大众太远",
+            ),
+            HotTopic(
+                topic_date=get_today_cst(),
+                rank=2,
+                title="Claude Code 工作流走红",
+                summary="开发者开始讨论人机协作流程。",
+                source="VentureBeat AI",
+                url="https://example.com/claude-code",
+                published_at="2026-04-10T09:00:00Z",
+                category="startup",
+                score=8,
+                ai_angle="真正的壁垒变成流程设计",
+                ai_counter_angle="明星工作流不一定可复制",
+            ),
+        ]
+    )
     db.commit()
 
     token = create_jwt_token(user.id)
@@ -155,13 +165,10 @@ def test_hot_topics_health_reports_current_supply(client, db):
 
 
 def test_hot_topics_refresh_seeds_fallback_when_rss_empty(client, db):
-    user = User(openid="hot_topics_refresh_empty_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    token = create_jwt_token(user.id)
-    with patch("app.services.hot_topic_refresh_service.fetch_all_sources", new_callable=AsyncMock) as mock_fetch:
+    token = _create_admin_token(db)
+    with patch(
+        "app.services.hot_topic_refresh_service.fetch_all_sources", new_callable=AsyncMock
+    ) as mock_fetch:
         mock_fetch.return_value = []
         response = client.post(
             "/api/hot_topics/refresh",
@@ -177,12 +184,26 @@ def test_hot_topics_refresh_seeds_fallback_when_rss_empty(client, db):
     assert today_count == 3
 
 
-def test_hot_topics_refresh_replaces_with_fresh_topics(client, db):
-    user = User(openid="hot_topics_refresh_fresh_user")
+def test_hot_topics_refresh_rejects_regular_user(client, db):
+    user = User(openid="hot_topics_refresh_regular_user")
     db.add(user)
     db.commit()
     db.refresh(user)
 
+    token = create_jwt_token(user.id)
+    with patch(
+        "app.services.hot_topic_refresh_service.fetch_all_sources", new_callable=AsyncMock
+    ) as mock_fetch:
+        response = client.post(
+            "/api/hot_topics/refresh",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 403
+    mock_fetch.assert_not_awaited()
+
+
+def test_hot_topics_refresh_replaces_with_fresh_topics(client, db):
     fresh_topic = ScoredTopic(
         hot_topic="OpenAI 发布企业新能力",
         hot_source="TechCrunch AI",
@@ -194,10 +215,14 @@ def test_hot_topics_refresh_replaces_with_fresh_topics(client, db):
         score=9,
     )
 
-    token = create_jwt_token(user.id)
+    token = _create_admin_token(db)
     with (
-        patch("app.services.hot_topic_refresh_service.fetch_all_sources", new_callable=AsyncMock) as mock_fetch,
-        patch("app.services.hot_topic_refresh_service.score_and_filter", new_callable=AsyncMock) as mock_score,
+        patch(
+            "app.services.hot_topic_refresh_service.fetch_all_sources", new_callable=AsyncMock
+        ) as mock_fetch,
+        patch(
+            "app.services.hot_topic_refresh_service.score_and_filter", new_callable=AsyncMock
+        ) as mock_score,
     ):
         mock_fetch.return_value = [object()]
         mock_score.return_value = [fresh_topic]
@@ -309,7 +334,7 @@ def test_hot_topic_analysis_builds_prompt_and_parses_json(client, db):
         mock_ai.return_value = (
             '{"opportunities":["可写工作流变化"],'
             '"risks":["不要编造产品细节"],'
-            '"recommended_stance":"团队工作流才是重点",'
+            '"recommended_frame":"团队工作流才是重点",'
             '"angles":["从团队协作写","从产品形态写"]}'
         )
         response = client.post(
@@ -320,7 +345,7 @@ def test_hot_topic_analysis_builds_prompt_and_parses_json(client, db):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["recommended_stance"] == "团队工作流才是重点"
+    assert data["recommended_frame"] == "团队工作流才是重点"
     assert data["opportunities"] == ["可写工作流变化"]
 
     prompt_text = mock_ai.await_args.kwargs["messages"][0]["content"]

@@ -17,6 +17,7 @@ def _get_client(api_key: str) -> AsyncOpenAI:
 
 def get_system_api_key() -> str:
     from ..config import settings
+
     if not settings.deepseek_api_key:
         raise RuntimeError(
             "DEEPSEEK_API_KEY is not configured. "

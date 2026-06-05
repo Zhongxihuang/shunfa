@@ -1,6 +1,4 @@
-
 from datetime import date, timedelta
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -21,7 +19,9 @@ router = APIRouter()
 
 @router.get("/my/checkins", response_model=CheckInHistoryResponse)
 async def get_my_checkins(
-    status_filter: str | None = Query(None, description="Filter by status: completed, draft, discussing"),
+    status_filter: str | None = Query(
+        None, description="Filter by status: completed, draft, discussing"
+    ),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -35,16 +35,13 @@ async def get_my_checkins(
     elif status_filter == "draft":
         query = query.filter(CheckIn.status != CheckInStatus.completed)
     elif status_filter == "discussing":
-        query = query.filter(CheckIn.status.in_([CheckInStatus.discussing, CheckInStatus.topic_selected]))
+        query = query.filter(
+            CheckIn.status.in_([CheckInStatus.discussing, CheckInStatus.topic_selected])
+        )
 
     total = query.count()
 
-    checkins = (
-        query.order_by(CheckIn.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    checkins = query.order_by(CheckIn.created_at.desc()).offset(offset).limit(limit).all()
 
     # draft count
     draft_count = (

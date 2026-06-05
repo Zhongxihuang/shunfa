@@ -1,8 +1,6 @@
-import pytest
 from datetime import date, timedelta
-from unittest.mock import patch, AsyncMock
 
-from app.models import User, CheckIn, CheckInStatus
+from app.models import CheckIn, CheckInStatus, User
 from app.routers.user import create_jwt_token
 
 
@@ -11,7 +9,9 @@ def _auth_headers(user_id: int):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _create_checkin(db, user_id: int, d: date, content_approved: bool = True, status = CheckInStatus.completed):
+def _create_checkin(
+    db, user_id: int, d: date, content_approved: bool = True, status=CheckInStatus.completed
+):
     checkin = CheckIn(
         user_id=user_id,
         date=d,
@@ -62,12 +62,16 @@ class TestMyCheckins:
         _create_checkin(db, user.id, today, status=CheckInStatus.completed)
         _create_checkin(db, user.id, today - timedelta(days=1), status=CheckInStatus.discussing)
 
-        response = client.get("/api/my/checkins?status_filter=completed", headers=_auth_headers(user.id))
+        response = client.get(
+            "/api/my/checkins?status_filter=completed", headers=_auth_headers(user.id)
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 1
 
-        response = client.get("/api/my/checkins?status_filter=draft", headers=_auth_headers(user.id))
+        response = client.get(
+            "/api/my/checkins?status_filter=draft", headers=_auth_headers(user.id)
+        )
         data = response.json()
         assert data["draft_count"] == 1
 

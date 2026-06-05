@@ -62,12 +62,16 @@ class CheckIn(Base):
     topic_url = Column(Text, nullable=True)
     topic_summary = Column(Text, nullable=True)
     topic_published_at = Column(String, nullable=True)
-    generation_context = Column(Text, nullable=True)  # JSON: platform, selected angle, discussion brief, guard results
+    generation_context = Column(
+        Text, nullable=True
+    )  # JSON: platform, selected angle, discussion brief, guard results
     content = Column(Text, nullable=True)  # final published content
     conversation_history = Column(Text, nullable=True)  # JSON string
     status = Column(SAEnum(CheckInStatus), default=CheckInStatus.topic_selected, nullable=False)
     refresh_count = Column(Integer, default=0, nullable=False)  # topic refresh count for the day
-    content_approved = Column(Boolean, default=False, nullable=False)  # 用户是否对初稿满意（质量反馈）
+    content_approved = Column(
+        Boolean, default=False, nullable=False
+    )  # 用户是否对初稿满意（质量反馈）
     content_feedback = Column(String, nullable=True)  # explicit user feedback: up / down
     content_feedback_at = Column(DateTime(timezone=True), nullable=True)
     points_earned = Column(Integer, default=0, nullable=False)
@@ -135,7 +139,4 @@ class HotTopic(Base):
     ai_counter_angle = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (
-        UniqueConstraint("topic_date", "title", name="uq_hot_topics_date_title"),
-    )
-
+    __table_args__ = (UniqueConstraint("topic_date", "title", name="uq_hot_topics_date_title"),)

@@ -7,11 +7,14 @@ from app.models import CheckIn, CheckInStatus, User
 from app.routers.user import create_jwt_token
 from app.utils.time_utils import get_today_cst
 
-VALID_LLM_RESPONSE = json.dumps({
-    "pages": ["这是第一段内容，介绍核心观点。", "这是第二段，补充细节。"],
-    "title": "🔥 两句话说透这件事",
-    "tags": ["AI", "热点", "科技", "观点", "独立思考"]
-}, ensure_ascii=False)
+VALID_LLM_RESPONSE = json.dumps(
+    {
+        "pages": ["这是第一段内容，介绍核心观点。", "这是第二段，补充细节。"],
+        "title": "🔥 两句话说透这件事",
+        "tags": ["AI", "热点", "科技", "观点", "独立思考"],
+    },
+    ensure_ascii=False,
+)
 
 
 @pytest.fixture
@@ -72,22 +75,26 @@ def test_compose_post_assets_success(user, checkin_with_content, client):
     assert isinstance(data["tags"], list) and len(data["tags"]) >= 1
 
 
-def test_compose_post_assets_truncates_to_3_pages(user, checkin_with_content, client):
+def test_compose_post_assets_respects_dynamic_page_count(user, checkin_with_content, client):
+    """Page count is determined by content, not hard-capped at 3."""
     token = create_jwt_token(user.id)
-    too_many_pages = json.dumps({
-        "pages": ["p1", "p2", "p3", "p4"],
-        "title": "标题",
-        "tags": ["a", "b"],
-    }, ensure_ascii=False)
+    four_pages = json.dumps(
+        {
+            "pages": ["p1", "p2", "p3", "p4"],
+            "title": "标题",
+            "tags": ["a", "b"],
+        },
+        ensure_ascii=False,
+    )
     with patch("app.services.compose_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.return_value = too_many_pages
+        mock_ai.return_value = four_pages
         response = client.post(
             "/api/compose_post_assets",
             json={"checkin_id": checkin_with_content.id, "template": "magazine"},
             headers={"Authorization": f"Bearer {token}"},
         )
     assert response.status_code == 200
-    assert len(response.json()["pages"]) == 3
+    assert len(response.json()["pages"]) == 4
 
 
 def test_compose_post_assets_invalid_json_retries_then_502(user, checkin_with_content, client):
@@ -113,12 +120,13 @@ def test_compose_post_assets_no_content_400(user, checkin_no_content, client):
     assert response.status_code == 400
 
 
-def test_compose_post_assets_unauthenticated_403(checkin_with_content, client):
+def test_compose_post_assets_unauthenticated_401(checkin_with_content, client):
     response = client.post(
         "/api/compose_post_assets",
         json={"checkin_id": checkin_with_content.id, "template": "beige"},
     )
-    assert response.status_code == 403  # HTTPBearer returns 403 when no auth header
+    assert response.status_code == 401
+    assert response.json()["error_code"] == "invalid_token"
 
 
 def test_compose_post_assets_wrong_user_404(checkin_with_content, client, db):

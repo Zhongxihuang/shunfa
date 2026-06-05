@@ -20,17 +20,20 @@ MAX_ARTICLE_AGE_DAYS = 3
 MAX_SUMMARY_CHARS = 150  # Display-friendly summary length
 
 # Boost Chinese sources slightly to prioritize them, but not at the expense of quality
-# English articles compete on quality; Chinese articles get a modest edge
 SOURCE_BOOST: dict[str, int] = {
-    "雷锋网": 5,         # Chinese AI/Tech
-    "36Kr": 5,           # Chinese tech news
-    "Hacker News": -5,   # English content; push to bottom
-    "VentureBeat AI": 0,
+    "36Kr": 5,
+    "机器之心": 5,
     "TechCrunch AI": 0,
+    "VentureBeat AI": 0,
     "MIT Tech Review": 0,
-    "The Verge": 0,
-    "Ars Technica": 0,
+    "The Verge AI": 0,
+    "AI News": 0,
+    "OpenAI Blog": 0,
+    "Import AI": 0,
 }
+
+# Sources that publish in Chinese — skip translation step
+CHINESE_SOURCES: frozenset[str] = frozenset({"36Kr", "机器之心"})
 
 
 def _is_recent(article: RawArticle) -> bool:
@@ -246,7 +249,7 @@ def _fallback_analysis(
     return {
         "opportunities": opportunities[:4],
         "risks": risks[:4],
-        "recommended_stance": ai_angle or f"把「{title}」当成行业变化的一个信号来写。",
+        "recommended_frame": ai_angle or f"把「{title}」当成行业变化的一个信号来写。",
         "angles": angles[:5],
     }
 
@@ -286,13 +289,15 @@ async def analyze_hot_topic(
             return _fallback_analysis(title, summary, ai_angle, ai_counter_angle)
         fallback = _fallback_analysis(title, summary, ai_angle, ai_counter_angle)
         return {
-            "opportunities": _coerce_string_list(data.get("opportunities"), 4) or fallback["opportunities"],
+            "opportunities": _coerce_string_list(data.get("opportunities"), 4)
+            or fallback["opportunities"],
             "risks": _coerce_string_list(data.get("risks"), 4) or fallback["risks"],
-            "recommended_stance": (
-                data.get("recommended_stance", "").strip()
-                if isinstance(data.get("recommended_stance"), str)
+            "recommended_frame": (
+                data.get("recommended_frame", "").strip()
+                if isinstance(data.get("recommended_frame"), str)
                 else ""
-            ) or fallback["recommended_stance"],
+            )
+            or fallback["recommended_frame"],
             "angles": _coerce_string_list(data.get("angles"), 5) or fallback["angles"],
         }
     except (json.JSONDecodeError, ValueError):
@@ -349,9 +354,7 @@ async def translate_titles(articles: list[RawArticle]) -> dict[int, str]:
 
     Returns dict mapping original index → translated title.
     """
-    articles_text = "\n".join(
-        f"[{i}] {a.title[:100]}" for i, a in enumerate(articles)
-    )
+    articles_text = "\n".join(f"[{i}] {a.title[:100]}" for i, a in enumerate(articles))
     prompt = TRANSLATE_TITLES_PROMPT.format(
         MaxChars=MAX_TITLE_CHARS,
         articles=articles_text,
@@ -373,9 +376,7 @@ async def translate_summaries(articles: list[RawArticle]) -> dict[int, str]:
 
     Returns dict mapping original index → translated summary.
     """
-    articles_text = "\n".join(
-        f"[{i}] {a.summary[:300]}" for i, a in enumerate(articles)
-    )
+    articles_text = "\n".join(f"[{i}] {a.summary[:300]}" for i, a in enumerate(articles))
     prompt = TRANSLATE_PROMPT.format(
         MaxChars=MAX_SUMMARY_CHARS,
         articles=articles_text,
@@ -405,19 +406,23 @@ async def score_and_filter(articles: list[RawArticle]) -> list[ScoredTopic]:
     if not articles:
         return []
 
-    # Step 1: Translate ALL English titles and summaries to Chinese BEFORE scoring
-    # This ensures the scoring prompt (in Chinese) evaluates Chinese text,
-    # and all stored titles/summaries are Chinese for consistent UX
-    translated_titles = await translate_titles(articles)
-    for i, article in enumerate(articles):
-        if i in translated_titles:
-            article.title = translated_titles[i]
+    # Step 1: Translate English titles and summaries to Chinese BEFORE scoring.
+    # Skip Chinese-language sources — they need no translation, only length trimming.
+    english_articles = [(i, a) for i, a in enumerate(articles) if a.source not in CHINESE_SOURCES]
+    if english_articles:
+        eng_subset = [a for _, a in english_articles]
+        translated_titles = await translate_titles(eng_subset)
+        translated_summaries = await translate_summaries(eng_subset)
+        for local_idx, (_orig_idx, article) in enumerate(english_articles):
+            if local_idx in translated_titles:
+                article.title = translated_titles[local_idx]
+            if local_idx in translated_summaries:
+                article.summary = translated_summaries[local_idx]
+            elif len(article.summary) > MAX_SUMMARY_CHARS:
+                article.summary = article.summary[:MAX_SUMMARY_CHARS]
 
-    translated_summaries = await translate_summaries(articles)
-    for i, article in enumerate(articles):
-        if i in translated_summaries:
-            article.summary = translated_summaries[i]
-        elif len(article.summary) > MAX_SUMMARY_CHARS:
+    for article in articles:
+        if article.source in CHINESE_SOURCES and len(article.summary) > MAX_SUMMARY_CHARS:
             article.summary = article.summary[:MAX_SUMMARY_CHARS]
 
     # Step 2: Score articles (now with Chinese summaries)
@@ -452,8 +457,7 @@ async def score_and_filter(articles: list[RawArticle]) -> list[ScoredTopic]:
         *(generate_angles(article.title, article.summary) for _, article, _, _ in qualifying)
     )
 
-    for (i, article, score, category), angles in zip(qualifying, angles_list, strict=False):
-
+    for (_i, article, score, category), angles in zip(qualifying, angles_list, strict=False):
         try:
             cat = TopicCategory(category)
         except ValueError:
@@ -473,5 +477,7 @@ async def score_and_filter(articles: list[RawArticle]) -> list[ScoredTopic]:
             )
         )
 
-    results.sort(key=lambda t: (t.score + SOURCE_BOOST.get(t.hot_source, 0), t.hot_topic), reverse=True)
+    results.sort(
+        key=lambda t: (t.score + SOURCE_BOOST.get(t.hot_source, 0), t.hot_topic), reverse=True
+    )
     return results

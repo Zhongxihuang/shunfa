@@ -9,6 +9,7 @@ Exported functions:
     - format_for_platform(content, platform) -> str
 """
 
+import asyncio
 import json
 import re
 
@@ -21,8 +22,12 @@ from ..services.prompt_templates import prompts
 
 FORBIDDEN_IDENTITY_PATTERNS = [
     re.compile(r"作为\s*(?:一名|一个)?\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者[，,、：:\s]*"),
-    re.compile(r"站在\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:的)?\s*(?:角度|视角)[，,、：:\s]*"),
-    re.compile(r"从\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:的)?\s*(?:角度|视角)\s*(?:来看|看)?[，,、：:\s]*"),
+    re.compile(
+        r"站在\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:的)?\s*(?:角度|视角)[，,、：:\s]*"
+    ),
+    re.compile(
+        r"从\s*(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:的)?\s*(?:角度|视角)\s*(?:来看|看)?[，,、：:\s]*"
+    ),
     re.compile(r"(?:AI|人工智能)?\s*(?:行业)?\s*从业者\s*(?:视角|角度)"),
     re.compile(r"作为\s*(?:一名|一个)?\s*(?:做)?AI(?:产品|方向)?的人[，,、：:\s]*"),
     re.compile(r"在AI公司工作(?:这些年)?[，,、：:\s]*"),
@@ -108,9 +113,7 @@ async def _check_quick_generate_grounding(draft: str, fact_block: str, api_key: 
         [
             {
                 "role": "user",
-                "content": prompts.fact_guard_prompt.format(
-                    fact_block=fact_block, draft=draft
-                ),
+                "content": prompts.fact_guard_prompt.format(fact_block=fact_block, draft=draft),
             }
         ],
         temperature=0.1,
@@ -127,14 +130,14 @@ async def _check_quick_generate_grounding(draft: str, fact_block: str, api_key: 
     except Exception:
         return {
             "pass": False,
-            "issues": [
-                "事实校验结果不可解析，请更保守地重写，只保留素材内能确认的事实。"
-            ],
+            "issues": ["事实校验结果不可解析，请更保守地重写，只保留素材内能确认的事实。"],
             "available": False,
         }
 
 
-async def _check_discussion_quality(draft: str, discussion_brief: dict | None, api_key: str = "") -> dict:
+async def _check_discussion_quality(
+    draft: str, discussion_brief: dict | None, api_key: str = ""
+) -> dict:
     issues: list[str] = []
     stripped = draft.strip()
     if not stripped:
@@ -147,6 +150,36 @@ async def _check_discussion_quality(draft: str, discussion_brief: dict | None, a
         issues.append("存在身份背书表达")
 
     return {"pass": not issues, "issues": issues, "available": False}
+
+
+async def _check_analysis_depth(
+    draft: str, discussion_brief: dict | None, api_key: str = ""
+) -> dict:
+    """Check whether the draft has real analytical depth (mechanism + concrete impact)."""
+    result = await chat_completion(
+        [
+            {
+                "role": "user",
+                "content": prompts.analysis_depth_check_prompt.format(
+                    draft=draft,
+                    discussion_brief=format_discussion_brief(discussion_brief),
+                ),
+            }
+        ],
+        temperature=0.1,
+        max_tokens=300,
+        api_key=api_key,
+    )
+    try:
+        parsed = json.loads(result)
+        return {
+            "pass": bool(parsed.get("pass", True)),
+            "issues": parsed.get("issues", []),
+            "available": True,
+        }
+    except Exception:
+        # On parse error, don't block publishing — treat as pass
+        return {"pass": True, "issues": [], "available": False}
 
 
 async def quick_generate(
@@ -164,6 +197,7 @@ async def quick_generate(
     """
     effective_fact_block = fact_block or build_quick_generate_context(hot_topic)
 
+    # Generate initial draft
     content = await _generate_quick_draft(
         hot_topic=hot_topic,
         angle=angle,
@@ -173,52 +207,39 @@ async def quick_generate(
         temperature=0.45,
         api_key=api_key,
     )
-    grounding = await _check_quick_generate_grounding(content, effective_fact_block, api_key)
-    if not grounding["pass"]:
-        fixes = (
-            "\n".join(f"- {issue}" for issue in grounding["issues"])
-            if grounding["issues"]
-            else "- 严格只使用事实素材，不补充素材外事实。"
-        )
-        content = await _generate_quick_draft(
-            hot_topic=hot_topic,
-            angle=angle,
-            platform=platform,
-            fact_block=effective_fact_block,
-            discussion_brief=discussion_brief,
-            temperature=0.2,
-            api_key=api_key,
-            extra_requirements=(
-                "上一版存在超出素材的事实，请严格删除或改写以下问题：\n"
-                f"{fixes}"
-            ),
-        )
-        grounding = await _check_quick_generate_grounding(content, effective_fact_block, api_key)
-
     content = remove_identity_framing(content.strip())
-    discussion = await _check_discussion_quality(content, discussion_brief, api_key)
+
+    # Run all three quality checks in parallel
+    grounding, discussion, depth = await asyncio.gather(
+        _check_quick_generate_grounding(content, effective_fact_block, api_key),
+        _check_discussion_quality(content, discussion_brief, api_key),
+        _check_analysis_depth(content, discussion_brief, api_key),
+    )
+
+    # Collect all failing issues and revise once if needed
+    all_issues: list[str] = []
+    if not grounding["pass"]:
+        all_issues.extend(grounding.get("issues", []) or ["严格只使用事实素材，不补充素材外事实。"])
     if not discussion["pass"]:
-        fixes = (
-            "\n".join(f"- {issue}" for issue in discussion["issues"])
-            if discussion["issues"]
-            else "- 内容要更像参与热点讨论，而不是新闻复述。"
-        )
+        all_issues.extend(discussion.get("issues", []) or ["内容要更有分析深度，不要仅复述新闻。"])
+    if not depth["pass"]:
+        all_issues.extend(depth.get("issues", []) or ["分析深度不足，请展开机制层和影响层。"])
+
+    if all_issues:
+        fixes = "\n".join(f"- {issue}" for issue in all_issues)
         content = await _generate_quick_draft(
             hot_topic=hot_topic,
             angle=angle,
             platform=platform,
             fact_block=effective_fact_block,
             discussion_brief=discussion_brief,
-            temperature=0.35,
+            temperature=0.25,
             api_key=api_key,
-            extra_requirements=(
-                "上一版讨论性不足，请保留事实边界并按以下要求重写：\n"
-                f"{fixes}"
-            ),
+            extra_requirements=f"上一版存在以下问题，请逐一修正：\n{fixes}",
         )
         content = remove_identity_framing(content.strip())
+        # Re-run grounding check only to update the response field
         grounding = await _check_quick_generate_grounding(content, effective_fact_block, api_key)
-        discussion = await _check_discussion_quality(content, discussion_brief, api_key)
 
     content = _format_for_platform(content, platform)
     return {
@@ -278,12 +299,14 @@ async def revise_content_with_feedback(
     )
     revised = _format_for_platform(remove_identity_framing(revised.strip()), platform)
 
-    has_snapshot_facts = any([
-        checkin.topic_source,
-        checkin.topic_summary,
-        checkin.topic_url,
-        checkin.topic_published_at,
-    ])
+    has_snapshot_facts = any(
+        [
+            checkin.topic_source,
+            checkin.topic_summary,
+            checkin.topic_url,
+            checkin.topic_published_at,
+        ]
+    )
     fact_result = (
         await _check_quick_generate_grounding(revised, fact_block, api_key)
         if has_snapshot_facts
@@ -299,7 +322,10 @@ async def revise_content_with_feedback(
         revision_source_issues=issues,
         revision_instruction=instruction.strip() or None,
         revision_fact_guard={"pass": fact_result["pass"], "issues": fact_result.get("issues", [])},
-        revision_discussion_guard={"pass": discussion_result["pass"], "issues": discussion_result.get("issues", [])},
+        revision_discussion_guard={
+            "pass": discussion_result["pass"],
+            "issues": discussion_result.get("issues", []),
+        },
     )
     db.commit()
 
@@ -315,14 +341,11 @@ async def revise_content_with_feedback(
 
 def _format_for_platform(content: str, platform: str) -> str:
     """Trim/adjust content to fit platform constraints."""
+
     def trim_to_limit(text: str, limit: int) -> str:
         if len(text) <= limit:
             return text
-        return (
-            text[:limit].rsplit("\n", 1)[0]
-            if "\n" in text[:limit]
-            else text[:limit]
-        )
+        return text[:limit].rsplit("\n", 1)[0] if "\n" in text[:limit] else text[:limit]
 
     if platform == "twitter":
         content = trim_to_limit(content, 220)
@@ -380,12 +403,14 @@ async def review_content_quality(checkin: CheckIn, content: str, api_key: str = 
     platform = context.get("platform", "xiaohongshu")
     discussion_brief = context.get("discussion_brief")
     fact_block = build_fact_block_from_checkin(checkin)
-    has_snapshot_facts = any([
-        checkin.topic_source,
-        checkin.topic_summary,
-        checkin.topic_url,
-        checkin.topic_published_at,
-    ])
+    has_snapshot_facts = any(
+        [
+            checkin.topic_source,
+            checkin.topic_summary,
+            checkin.topic_url,
+            checkin.topic_published_at,
+        ]
+    )
     fact_result = (
         await _check_quick_generate_grounding(content, fact_block, api_key)
         if has_snapshot_facts
@@ -402,7 +427,9 @@ async def review_content_quality(checkin: CheckIn, content: str, api_key: str = 
     discussion_result = await _check_discussion_quality(content, discussion_brief, api_key)
 
     return {
-        "quality_pass": bool(qc_result["pass"] and fact_result["pass"] and discussion_result["pass"]),
+        "quality_pass": bool(
+            qc_result["pass"] and fact_result["pass"] and discussion_result["pass"]
+        ),
         "quality_issues": qc_result.get("issues", []),
         "quality_available": qc_result.get("available", True),
         "fact_pass": fact_result["pass"],
@@ -427,9 +454,18 @@ async def confirm_content(checkin: CheckIn, content: str, db: Session, api_key: 
 
     update_generation_context(
         checkin,
-        confirm_fact_guard={"pass": review_result["fact_pass"], "issues": review_result.get("fact_issues", [])},
-        confirm_quality_guard={"pass": review_result["quality_pass"], "issues": review_result.get("quality_issues", [])},
-        confirm_discussion_guard={"pass": review_result["discussion_pass"], "issues": review_result.get("discussion_issues", [])},
+        confirm_fact_guard={
+            "pass": review_result["fact_pass"],
+            "issues": review_result.get("fact_issues", []),
+        },
+        confirm_quality_guard={
+            "pass": review_result["quality_pass"],
+            "issues": review_result.get("quality_issues", []),
+        },
+        confirm_discussion_guard={
+            "pass": review_result["discussion_pass"],
+            "issues": review_result.get("discussion_issues", []),
+        },
     )
     db.commit()
 

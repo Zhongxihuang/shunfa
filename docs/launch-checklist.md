@@ -11,17 +11,17 @@
 
 | Check | Command / Steps | Result | Notes |
 |---|---|---|---|
-| Backend dependencies | `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements-dev.txt` | NOT RUN | |
-| Backend tests | `pytest -v` | NOT RUN | |
-| Ruff check | `ruff check app tests` | NOT RUN | |
-| Ruff format | `ruff format --check app tests` | NOT RUN | |
-| Mypy | `mypy app --ignore-missing-imports` | NOT RUN | |
-| SQLite migration | `pytest tests/test_migrations.py::test_alembic_upgrade_head_on_fresh_sqlite -v` | NOT RUN | |
-| Alembic downgrade | `pytest tests/test_migrations.py::test_alembic_downgrade_one_revision_and_upgrade_back_on_sqlite -v` | NOT RUN | |
-| PostgreSQL migration | `POSTGRES_TEST_DATABASE_URL=postgresql://shunfa:shunfa@localhost:5432/shunfa_test pytest tests/test_migrations.py::test_alembic_upgrade_head_on_postgresql -v` | NOT RUN | |
-| Web lint | `npm run lint` | NOT RUN | |
-| Web build | `npm run build` in CI or local non-sandbox environment | NOT RUN | If sandbox blocks Turbopack, keep NOT RUN and record reason. |
-| Manual smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | |
+| Backend dependencies | `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements-dev.txt` | PASS | Verified with `/private/tmp/shunfa-backend-venv` and `requirements-dev.txt`. |
+| Backend tests | `pytest -v` | PASS | `184 passed, 1 skipped`; PostgreSQL migration test intentionally skipped. |
+| Ruff check | `ruff check app tests` | PASS | |
+| Ruff format | `ruff format --check app tests` | PASS | |
+| Mypy | `mypy app --ignore-missing-imports` | PASS | Uses `backend/mypy.ini`; SQLAlchemy model typing remains a future hardening area. |
+| SQLite migration | `pytest tests/test_migrations.py::test_alembic_upgrade_head_on_fresh_sqlite -v` | PASS | Also covered by full `tests/test_migrations.py`. |
+| Alembic downgrade | `pytest tests/test_migrations.py::test_alembic_downgrade_one_revision_and_upgrade_back_on_sqlite -v` | PASS | Downgrade one revision and upgrade back passed on SQLite. |
+| PostgreSQL migration | `POSTGRES_TEST_DATABASE_URL=postgresql://shunfa:shunfa@localhost:5432/shunfa_test pytest tests/test_migrations.py::test_alembic_upgrade_head_on_postgresql -v` | SKIPPED | `POSTGRES_TEST_DATABASE_URL` was not set; must run in CI/staging before production. |
+| Web lint | `npm run lint` | PASS | |
+| Web build | `npm run build` in CI or local non-sandbox environment | PASS | Ran successfully in this environment with Next.js/Turbopack. |
+| Manual smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | Requires manual browser/API smoke against a configured runtime and real/sandbox DeepSeek key. |
 
 ## Rate Limits
 

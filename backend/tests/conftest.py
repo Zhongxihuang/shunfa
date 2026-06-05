@@ -1,4 +1,6 @@
 import os
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -9,11 +11,12 @@ os.environ.setdefault("DEEPSEEK_API_KEY", "test-deepseek-key")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret")
 os.environ.setdefault("ADMIN_PASSWORD", "test123")
 os.environ.setdefault("COZE_PLUGIN_TOKEN", "shunfa-coze-token")
+os.environ.setdefault("ENABLE_COZE_PLUGIN", "true")
 
-from app.main import app
+from app.config import settings
 from app.database import Base
 from app.dependencies import get_db
-from app.config import settings
+from app.main import app
 
 # In-memory SQLite for tests
 TEST_DATABASE_URL = "sqlite://"
@@ -22,9 +25,7 @@ TEST_DATABASE_URL = "sqlite://"
 @pytest.fixture(scope="function")
 def db_engine():
     engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool
+        TEST_DATABASE_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     Base.metadata.create_all(bind=engine)
     yield engine
@@ -59,10 +60,12 @@ def client(db):
 def override_test_settings():
     original_admin_password = settings.admin_password
     original_coze_plugin_token = settings.coze_plugin_token
+    original_enable_coze_plugin = settings.enable_coze_plugin
     original_environment = settings.environment
 
     settings.admin_password = "test123"
     settings.coze_plugin_token = "shunfa-coze-token"
+    settings.enable_coze_plugin = True
     settings.environment = "test"
 
     try:
@@ -70,4 +73,15 @@ def override_test_settings():
     finally:
         settings.admin_password = original_admin_password
         settings.coze_plugin_token = original_coze_plugin_token
+        settings.enable_coze_plugin = original_enable_coze_plugin
         settings.environment = original_environment
+
+
+@pytest.fixture(autouse=True)
+def mock_fetch_article_fulltext():
+    """Prevent real HTTP calls to fetch article fulltext during tests."""
+    with patch(
+        "app.services.fact_enrichment_service.fetch_article_fulltext", new_callable=AsyncMock
+    ) as mock:
+        mock.return_value = ""
+        yield mock

@@ -47,6 +47,7 @@ USER_HEADER_PREFIXES = (
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
+
 def _resolve_user_identity(request: Request, explicit_user_id: str | None) -> str:
     if explicit_user_id and explicit_user_id.strip():
         return f"feishu_user:{explicit_user_id.strip()}"
@@ -66,6 +67,8 @@ def get_coze_user(
     db: Session = Depends(get_db),
 ) -> User:
     """Extract Feishu user ID from Coze request headers and look up/create User."""
+    if not settings.enable_coze_plugin:
+        raise HTTPException(status_code=404, detail="Coze plugin is disabled")
     if not settings.coze_plugin_token:
         raise HTTPException(status_code=503, detail="Plugin auth is not configured")
     if x_coze_plugin_token != settings.coze_plugin_token:
@@ -82,6 +85,7 @@ def get_coze_user(
 
 
 # ── Request / Response models ─────────────────────────────────────────────────
+
 
 class GetHotTopicsResponse(BaseModel):
     topics: list[dict]
@@ -150,6 +154,7 @@ class UserStatsResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/get_hot_topics", response_model=GetHotTopicsResponse)
 async def get_hot_topics(
     limit: int = 3,
@@ -210,11 +215,15 @@ async def start_deep_mode(
     today = get_today_cst()
 
     # Reuse existing incomplete checkin for today, or create new one
-    existing = db.query(CheckIn).filter(
-        CheckIn.user_id == current_user.id,
-        CheckIn.date == today,
-        CheckIn.status != CheckInStatus.completed,
-    ).first()
+    existing = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.user_id == current_user.id,
+            CheckIn.date == today,
+            CheckIn.status != CheckInStatus.completed,
+        )
+        .first()
+    )
 
     if existing:
         checkin = existing
@@ -253,10 +262,14 @@ async def deep_mode_message(
     db: Session = Depends(get_db),
 ):
     """Send a message in the deep mode discussion flow."""
-    checkin = db.query(CheckIn).filter(
-        CheckIn.id == request.checkin_id,
-        CheckIn.user_id == current_user.id,
-    ).first()
+    checkin = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.id == request.checkin_id,
+            CheckIn.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if not checkin:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -286,10 +299,14 @@ async def confirm_and_publish(
     db: Session = Depends(get_db),
 ):
     """Confirm content and publish. Updates streak and points."""
-    checkin = db.query(CheckIn).filter(
-        CheckIn.id == request.checkin_id,
-        CheckIn.user_id == current_user.id,
-    ).first()
+    checkin = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.id == request.checkin_id,
+            CheckIn.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if not checkin:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -327,11 +344,15 @@ async def get_user_stats(
 ):
     """Return user streak, points, level, and today's completion status."""
     today = get_today_cst()
-    today_checkin = db.query(CheckIn).filter(
-        CheckIn.user_id == current_user.id,
-        CheckIn.date == today,
-        CheckIn.status == CheckInStatus.completed,
-    ).first()
+    today_checkin = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.user_id == current_user.id,
+            CheckIn.date == today,
+            CheckIn.status == CheckInStatus.completed,
+        )
+        .first()
+    )
 
     achievements = [
         {"type": a.achievement_type, "unlocked_at": str(a.unlocked_at)}

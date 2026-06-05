@@ -114,9 +114,7 @@ def get_topics_for_date(
     session = db or SessionLocal()
 
     try:
-        records = session.query(HotTopic).filter(
-            HotTopic.topic_date == effective_date
-        ).all()
+        records = session.query(HotTopic).filter(HotTopic.topic_date == effective_date).all()
 
         boost_map = {
             "雷锋网": 5,

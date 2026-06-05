@@ -21,8 +21,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)
 ):
     token = credentials.credentials
     try:
@@ -33,6 +32,7 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
 
     from .models import User
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -43,8 +43,7 @@ def get_current_user(
 
 
 def get_admin_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)
 ):
     """Admin-only endpoint — requires valid JWT of the web_admin user."""
     token = credentials.credentials
@@ -56,6 +55,7 @@ def get_admin_user(
         raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
 
     from .models import User
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -86,6 +86,7 @@ async def get_resolved_api_key(
     if current_user.deepseek_api_key:
         try:
             from .utils.crypto import decrypt_api_key
+
             return decrypt_api_key(current_user.deepseek_api_key)
         except Exception:
             pass  # Decryption failure falls through to next tier

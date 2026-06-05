@@ -17,8 +17,8 @@ class VoiceRecord(BaseModel):
     angle: str = ""
     content: str = ""
     platform: Platform = Platform.xiaohongshu
-    mode: str = "quick"       # "quick" or "deep"
-    status: str = "草稿"       # 草稿 / 已采纳 / 已复制
+    mode: str = "quick"  # "quick" or "deep"
+    status: str = "草稿"  # 草稿 / 已采纳 / 已复制
     adopted: bool = False
 
 

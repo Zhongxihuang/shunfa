@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     jwt_expire_hours: int = 720
     database_url: str = "sqlite:///./shunfa.db"  # or postgresql://user:pass@host:5432/dbname
     environment: str = "development"
+    enable_metrics: bool = False
     rate_limit_storage_uri: str = ""
     rate_limit_default: str = "100/minute"
     generation_rate_limit: str = "10/minute"
@@ -28,22 +29,29 @@ class Settings(BaseSettings):
 
     # RSS aggregation settings
     rss_sources: list[str] = [
-        # English
-        "https://news.ycombinator.com/rss",
-        "https://venturebeat.com/category/ai/feed/",
+        # English — AI-focused feeds (verified signal quality)
         "https://techcrunch.com/category/artificial-intelligence/feed/",
+        "https://venturebeat.com/category/ai/feed/",
         "https://www.technologyreview.com/feed/",
-        "https://www.theverge.com/rss/index.xml",
-        "https://feeds.arstechnica.com/arstechnica/index",
+        "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+        "https://www.artificialintelligence-news.com/feed/",
+        "https://openai.com/blog/rss.xml",
+        "https://jack-clark.net/feed/",  # Import AI (Jack Clark)
         # Chinese
-        "https://www.leiphone.com/feed",  # 雷锋网，AI/科技综合
-        "https://36kr.com/feed",            # 36Kr，综合新闻
+        "https://syncedreview.com/feed/",  # 机器之心
+        "https://36kr.com/feed",
     ]
     topic_score_threshold: int = 8
     rss_fetch_timeout: int = 30
     rss_max_articles_per_source: int = 10
 
+    # Fact enrichment (agent capability)
+    # Options: "rss_fulltext" (default, zero cost), "tavily", "deepseek"
+    search_backend: str = "rss_fulltext"
+    tavily_api_key: str = ""
+
     # Coze plugin auth
+    enable_coze_plugin: bool = False
     coze_plugin_token: str = ""
 
     # Feishu / Bitable settings
@@ -77,7 +85,7 @@ class Settings(BaseSettings):
             if self.api_key_encryption_secret == default:
                 raise ValueError(
                     "API_KEY_ENCRYPTION_SECRET must be changed from the default in production. "
-                    "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                    'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
                 )
             if len(self.api_key_encryption_secret) < 32:
                 raise ValueError(

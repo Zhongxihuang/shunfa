@@ -15,7 +15,7 @@ from app.dependencies import get_db
 from app.errors import normalize_http_error
 from app.logging_config import get_logger, setup_logging
 from app.middleware import RequestIDMiddleware, RequestLoggingMiddleware
-from app.routers import content, coze_plugin, hot_topics, reminder, topics, user
+from app.routers import admin, content, coze_plugin, hot_topics, reminder, topics, user
 from app.routers.my import router as my_router
 
 
@@ -76,17 +76,19 @@ app = FastAPI(
     openapi_url=None if _is_prod else "/openapi.json",
 )
 
-# Prometheus /metrics endpoint
-instrumentator = Instrumentator(
-    should_group_status_codes=False,
-    should_ignore_untemplated=True,
-    should_respect_env_var=True,
-    should_instrument_requests_inprogress=True,
-    excluded_handlers=["/health", "/metrics"],
-    inprogress_name="shunfa_inprogress_requests",
-    inprogress_labels=True,
-)
-instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+# Prometheus /metrics endpoint. Keep it off by default and never expose it from
+# production without an internal gateway.
+if settings.enable_metrics and not _is_prod:
+    instrumentator = Instrumentator(
+        should_group_status_codes=False,
+        should_ignore_untemplated=True,
+        should_respect_env_var=False,
+        should_instrument_requests_inprogress=True,
+        excluded_handlers=["/health", "/metrics"],
+        inprogress_name="shunfa_inprogress_requests",
+        inprogress_labels=True,
+    )
+    instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # Add middlewares
 app.add_middleware(
@@ -118,7 +120,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     request_id = request.headers.get("X-Request-ID")
     content = {
         "error_code": "validation_error",
@@ -156,8 +160,10 @@ app.include_router(content.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
 app.include_router(reminder.router, prefix="/api")
 app.include_router(hot_topics.router, prefix="/api")
-app.include_router(coze_plugin.router, prefix="/api")
+if settings.enable_coze_plugin:
+    app.include_router(coze_plugin.router, prefix="/api")
 app.include_router(my_router, prefix="/api")
+app.include_router(admin.router)
 
 
 @app.get("/health")

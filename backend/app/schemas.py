@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -8,23 +8,24 @@ from .models import CheckInStatus
 
 # ── RSS / Hot Topic schemas ──────────────────────────────────────────────────
 
-class TopicCategory(str, Enum):
-    ai_model = "ai_model"       # 大模型发布/更新
-    ai_product = "ai_product"   # AI产品/应用
-    startup = "startup"         # 创业/融资
-    policy = "policy"           # 政策/监管
-    tech = "tech"               # 技术突破
-    industry = "industry"       # 行业动态
+
+class TopicCategory(StrEnum):
+    ai_model = "ai_model"  # 大模型发布/更新
+    ai_product = "ai_product"  # AI产品/应用
+    startup = "startup"  # 创业/融资
+    policy = "policy"  # 政策/监管
+    tech = "tech"  # 技术突破
+    industry = "industry"  # 行业动态
     other = "other"
 
 
-class TopicStatus(str, Enum):
-    pending = "pending"     # 待推送
-    pushed = "pushed"       # 已推送
-    expired = "expired"     # 过期
+class TopicStatus(StrEnum):
+    pending = "pending"  # 待推送
+    pushed = "pushed"  # 已推送
+    expired = "expired"  # 过期
 
 
-class Platform(str, Enum):
+class Platform(StrEnum):
     twitter = "twitter"
     xiaohongshu = "xiaohongshu"
     linkedin = "linkedin"
@@ -84,13 +85,14 @@ class HotTopicAnalysisRequest(BaseModel):
 class HotTopicAnalysisResponse(BaseModel):
     opportunities: list[str] = []
     risks: list[str] = []
-    recommended_stance: str = ""
+    recommended_frame: str = ""
     angles: list[str] = []
 
 
 # ── Content mode schemas ─────────────────────────────────────────────────────
 
-class ContentMode(str, Enum):
+
+class ContentMode(StrEnum):
     quick = "quick"
     deep = "deep"
 
@@ -284,6 +286,7 @@ class AchievementsResponse(BaseModel):
 
 # ── My page schemas ────────────────────────────────────────────────────────────
 
+
 class CheckInHistoryItem(BaseModel):
     id: int
     date: date
@@ -306,6 +309,7 @@ class CheckInHistoryResponse(BaseModel):
 
 # ── Stats schemas ────────────────────────────────────────────────────────────
 
+
 class DailyStatsItem(BaseModel):
     date: date
     total: int
@@ -326,6 +330,7 @@ class StatsResponse(BaseModel):
 
 # ── Compose post assets schemas ──────────────────────────────────────────────
 
+
 class ComposePostAssetsRequest(BaseModel):
     checkin_id: int
     template: Literal["beige", "magazine"]
@@ -333,6 +338,6 @@ class ComposePostAssetsRequest(BaseModel):
 
 
 class ComposePostAssetsResponse(BaseModel):
-    pages: list[str]   # 1-3 segments of body text, each for one image
-    title: str         # Xiaohongshu-style title (with emoji, ≤20 chars)
-    tags: list[str]    # 5-8 hashtags without # prefix
+    pages: list[str]  # 1-3 segments of body text, each for one image
+    title: str  # Xiaohongshu-style title (with emoji, ≤20 chars)
+    tags: list[str]  # 5-8 hashtags without # prefix

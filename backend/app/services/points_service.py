@@ -58,15 +58,11 @@ def calculate_points_earned(checkin: CheckIn, user: User) -> dict:
         "topic_bonus": topic_bonus,
         "discussion_bonus": discussion_bonus,
         "on_time_bonus": on_time_bonus,
-        "total": total
+        "total": total,
     }
 
 
-def apply_points_and_update_user(
-    user: User,
-    checkin: CheckIn,
-    db: Session
-) -> dict:
+def apply_points_and_update_user(user: User, checkin: CheckIn, db: Session) -> dict:
     """
     Apply points to user and update level/diamonds.
     Returns the points breakdown and new user stats.
@@ -92,5 +88,5 @@ def apply_points_and_update_user(
         "total_points": user.points,
         "level": user.level,
         "diamonds": user.diamonds,
-        "breakdown": breakdown
+        "breakdown": breakdown,
     }

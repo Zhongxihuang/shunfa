@@ -1,8 +1,9 @@
 """Tests for BitableClient — all HTTP calls mocked via respx / httpx mock."""
 
 import time
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.clients.bitable_client import BitableClient, BitableError
 
@@ -39,6 +40,7 @@ def _mock_get(return_value: dict):
 
 
 # ── Token management ──────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_get_token_fetches_on_first_call(client):
@@ -103,6 +105,7 @@ async def test_refresh_token_raises_on_error_code(client):
 
 # ── create_record ─────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_create_record_returns_record_id(client):
     client._token = "test_token"
@@ -147,6 +150,7 @@ async def test_create_record_raises_on_api_error(client):
 
 # ── batch_create_records ──────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_batch_create_returns_record_ids(client):
     client._token = "test_token"
@@ -169,9 +173,7 @@ async def test_batch_create_returns_record_ids(client):
         mock_http.post = AsyncMock(return_value=_mock_post(batch_response))
         mock_cls.return_value = mock_http
 
-        ids = await client.batch_create_records(
-            "tbl_001", [{"name": "a"}, {"name": "b"}]
-        )
+        ids = await client.batch_create_records("tbl_001", [{"name": "a"}, {"name": "b"}])
 
     assert ids == ["rec_1", "rec_2"]
 
@@ -183,6 +185,7 @@ async def test_batch_create_empty_returns_empty(client):
 
 
 # ── list_records ──────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_list_records_returns_items(client):
@@ -214,6 +217,7 @@ async def test_list_records_returns_items(client):
 
 
 # ── update_record ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_update_record_succeeds(client):

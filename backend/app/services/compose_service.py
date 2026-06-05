@@ -2,8 +2,8 @@
 Compose service — generates post assets (pages, title, tags) from checkin content.
 
 Single LLM call produces a JSON with:
-  - pages: list[str]  (1-3 segments for image rendering)
-  - title: str        (Xiaohongshu-style title with emoji)
+  - pages: list[str]  (dynamic page count: 80-160 chars each, no hard limit)
+  - title: str        (judgment sentence, ≤22 chars)
   - tags: list[str]   (5-8 hashtags without # prefix)
 """
 
@@ -18,7 +18,7 @@ from ..services.prompt_templates import prompts
 
 logger = logging.getLogger("compose_service")
 
-MAX_PAGES = 3
+MAX_PAGES = 6  # safety cap; content determines actual page count
 
 
 def _parse_compose_response(raw: str) -> dict:
@@ -46,13 +46,13 @@ async def compose_post_assets(
     messages = [{"role": "user", "content": prompt}]
 
     # Attempt 1
-    raw = await chat_completion(messages, temperature=0.7, max_tokens=800, api_key=api_key)
+    raw = await chat_completion(messages, temperature=0.7, max_tokens=1400, api_key=api_key)
     try:
         data = _parse_compose_response(raw)
     except (json.JSONDecodeError, KeyError, ValueError):
         logger.warning("compose_post_assets: first parse failed, retrying")
         # Attempt 2
-        raw = await chat_completion(messages, temperature=0.5, max_tokens=800, api_key=api_key)
+        raw = await chat_completion(messages, temperature=0.5, max_tokens=1400, api_key=api_key)
         try:
             data = _parse_compose_response(raw)
         except Exception as e:

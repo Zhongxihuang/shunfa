@@ -53,9 +53,7 @@ def _prune_angle_suggestion_history(history: list[dict]) -> list[dict]:
 
 
 def count_real_user_rounds(history: list[dict]) -> int:
-    return sum(
-        1 for msg in _prune_angle_suggestion_history(history) if msg.get("role") == "user"
-    )
+    return sum(1 for msg in _prune_angle_suggestion_history(history) if msg.get("role") == "user")
 
 
 def reset_checkin_for_new_topic(checkin: CheckIn, topic: str, status: CheckInStatus) -> None:
@@ -112,11 +110,11 @@ async def process_message(
             max_tokens=300,
             api_key=api_key,
         )
-        history = _prune_angle_suggestion_history(
-            json.loads(checkin.conversation_history or "[]")
-        )
+        history = _prune_angle_suggestion_history(json.loads(checkin.conversation_history or "[]"))
         history.append({"role": "user", "content": user_message, "marker": ANGLE_HISTORY_MARKER})
-        history.append({"role": "assistant", "content": ai_response, "marker": ANGLE_HISTORY_MARKER})
+        history.append(
+            {"role": "assistant", "content": ai_response, "marker": ANGLE_HISTORY_MARKER}
+        )
         checkin.conversation_history = json.dumps(history, ensure_ascii=False)
         checkin.status = CheckInStatus.discussing
         db.commit()
@@ -143,9 +141,7 @@ async def process_message(
     if "<<<DRAFT_START>>>" in ai_response and "<<<DRAFT_END>>>" in ai_response:
         if user_rounds < MIN_DISCUSSION_ROUNDS:
             draft_start = ai_response.find("<<<DRAFT_START>>>")
-            clean_reply = (
-                ai_response[:draft_start].strip() if draft_start > 0 else ai_response
-            )
+            clean_reply = ai_response[:draft_start].strip() if draft_start > 0 else ai_response
             if not clean_reply:
                 clean_reply = "能再多说一些吗？你有什么具体的经历想分享？"
             reply = clean_reply
@@ -155,7 +151,7 @@ async def process_message(
             start = ai_response.index("<<<DRAFT_START>>>") + len("<<<DRAFT_START>>>")
             end = ai_response.index("<<<DRAFT_END>>>")
             draft = remove_identity_framing(ai_response[start:end].strip())
-            reply = ai_response[:ai_response.index("<<<DRAFT_START>>>")].strip()
+            reply = ai_response[: ai_response.index("<<<DRAFT_START>>>")].strip()
             if not reply:
                 reply = "我帮你整理了一份初稿，你看看怎么样～"
             new_status = CheckInStatus.draft_ready

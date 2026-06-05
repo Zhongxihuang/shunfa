@@ -1,20 +1,21 @@
 """Tests for quick_generate and _format_for_platform."""
 
 import os
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.models import User, CheckIn, CheckInStatus, HotTopic
+import pytest
+
+from app.config import settings
+from app.models import CheckIn, CheckInStatus, HotTopic, User
 from app.routers.user import create_jwt_token
-from app.utils.time_utils import get_today_cst
 from app.services.draft_service import (
-    quick_generate,
-    build_quick_generate_context,
     _format_for_platform,
+    build_quick_generate_context,
+    quick_generate,
     remove_identity_framing,
 )
 from app.services.generation_context import parse_generation_context
-from app.config import settings
+from app.utils.time_utils import get_today_cst
 
 SAMPLE_XHS = (
     "DeepSeek V4定价出来了，比GPT-5便宜70%...\n"
@@ -32,10 +33,15 @@ SAMPLE_TWITTER = (
 
 # ── quick_generate ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_quick_generate_xiaohongshu():
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.side_effect = [SAMPLE_XHS, '{"pass": true, "issues": []}']
+        mock_ai.side_effect = [
+            SAMPLE_XHS,
+            '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
+        ]
         result = await quick_generate(
             hot_topic="DeepSeek V4定价发布，比GPT-5便宜70%",
             angle="国产AI性价比之战",
@@ -45,13 +51,17 @@ async def test_quick_generate_xiaohongshu():
     assert result["platform"] == "xiaohongshu"
     assert result["content"] == SAMPLE_XHS
     assert result["char_count"] == len(SAMPLE_XHS)
-    assert mock_ai.await_count == 2
+    assert mock_ai.await_count == 3
 
 
 @pytest.mark.asyncio
 async def test_quick_generate_twitter():
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.side_effect = [SAMPLE_TWITTER, '{"pass": true, "issues": []}']
+        mock_ai.side_effect = [
+            SAMPLE_TWITTER,
+            '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
+        ]
         result = await quick_generate(
             hot_topic="DeepSeek V4定价",
             angle="用户为工作流确定性付钱",
@@ -65,7 +75,11 @@ async def test_quick_generate_twitter():
 @pytest.mark.asyncio
 async def test_quick_generate_default_platform():
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.side_effect = ["生成的内容", '{"pass": true, "issues": []}']
+        mock_ai.side_effect = [
+            "生成的内容",
+            '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
+        ]
         result = await quick_generate(hot_topic="热点", angle="角度")
 
     assert result["platform"] == "xiaohongshu"
@@ -74,7 +88,11 @@ async def test_quick_generate_default_platform():
 @pytest.mark.asyncio
 async def test_quick_generate_prompt_includes_topic_and_angle():
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.side_effect = ["内容", '{"pass": true, "issues": []}']
+        mock_ai.side_effect = [
+            "内容",
+            '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
+        ]
         await quick_generate(
             hot_topic="OpenAI涨价20%",
             angle="用户在为确定性付钱",
@@ -87,7 +105,7 @@ async def test_quick_generate_prompt_includes_topic_and_angle():
     assert "用户在为确定性付钱" in prompt_text
     assert "xiaohongshu" in prompt_text
     assert "有从业者视角" not in prompt_text
-    assert "不得出现\"作为AI从业者\"" in prompt_text
+    assert '不得出现"作为AI从业者"' in prompt_text
 
 
 def test_quick_generate_prompt_forbids_identity_framing():
@@ -101,8 +119,8 @@ def test_quick_generate_prompt_forbids_identity_framing():
         discussion_brief="核心立场：这会引发新的产品讨论",
     )
 
-    assert "不要用\"从业者\"给观点背书" in prompt
-    assert "不得出现\"作为AI从业者\"" in prompt
+    assert "禁止使用身份背书" in prompt
+    assert "作为AI从业者" in prompt
 
 
 def test_remove_identity_framing_strips_forbidden_phrases():
@@ -137,7 +155,11 @@ def test_build_quick_generate_context_contains_structured_facts():
 async def test_quick_generate_linkedin():
     long_content = "字" * 350
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.side_effect = [long_content, '{"pass": true, "issues": []}']
+        mock_ai.side_effect = [
+            long_content,
+            '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
+        ]
         result = await quick_generate(
             hot_topic="热点",
             angle="角度",
@@ -152,6 +174,7 @@ async def test_quick_generate_api_accepts_web_platforms(client):
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
         mock_ai.side_effect = [
             "微博风格的热点短评",
+            '{"pass": true, "issues": []}',
             '{"pass": true, "issues": []}',
         ]
         token = _get_test_token(client)
@@ -170,6 +193,7 @@ async def test_quick_generate_api_accepts_web_platforms(client):
 
 
 # ── _format_for_platform ──────────────────────────────────────────────────────
+
 
 def test_format_twitter_truncates_at_280():
     long_content = "A" * 400
@@ -242,6 +266,7 @@ def test_format_unknown_platform_unchanged():
 
 # ── API endpoint ──────────────────────────────────────────────────────────────
 
+
 def _get_test_token(client) -> str:
     os.environ.setdefault("ADMIN_PASSWORD", settings.admin_password)
     resp = client.post("/api/web_login", json={"password": settings.admin_password})
@@ -259,13 +284,15 @@ def test_quick_generate_api_requires_auth(client):
             "platform": "xiaohongshu",
         },
     )
-    assert response.status_code == 403
+    assert response.status_code == 401
+    assert response.json()["error_code"] == "invalid_token"
 
 
 def test_quick_generate_api_endpoint(client):
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
         mock_ai.side_effect = [
             "生成的AI洞察内容\n有观点有角度\n值得发出去",
+            '{"pass": true, "issues": []}',
             '{"pass": true, "issues": []}',
         ]
         token = _get_test_token(client)
@@ -315,6 +342,7 @@ def test_quick_generate_api_uses_hot_topic_context_when_topic_id_provided(client
         mock_ai.side_effect = [
             "这是一条严格基于热点事实的初稿",
             '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
         ]
         response = client.post(
             "/api/quick_generate",
@@ -332,7 +360,7 @@ def test_quick_generate_api_uses_hot_topic_context_when_topic_id_provided(client
     assert "来源：TechCrunch AI" in prompt_text
     assert "摘要：从 20 美元到 100 美元之间新增中间订阅档。" in prompt_text
     assert "原文链接：https://example.com/openai-pricing" in prompt_text
-    assert "不得补充你记忆里的旧新闻" in prompt_text
+    assert "不得补充记忆里的旧新闻" in prompt_text
 
 
 def test_quick_generate_updates_checkin_snapshot_when_topic_id_changes(client, db):
@@ -385,7 +413,11 @@ def test_quick_generate_updates_checkin_snapshot_when_topic_id_changes(client, d
     token = create_jwt_token(user.id)
 
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.side_effect = ["基于新热点的内容", '{"pass": true, "issues": []}']
+        mock_ai.side_effect = [
+            "基于新热点的内容",
+            '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
+        ]
         response = client.post(
             "/api/quick_generate",
             json={
@@ -444,12 +476,58 @@ def test_quick_generate_rejects_non_today_hot_topic(client, db):
     assert response.status_code == 404
 
 
+def test_quick_generate_rejects_completed_checkin_before_ai_call(client, db):
+    user = User(openid="quick_generate_completed_guard_user")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    hot_topic = HotTopic(
+        topic_date=get_today_cst(),
+        rank=1,
+        title="今日热点",
+        summary="今日摘要",
+        source="TechCrunch AI",
+        url="https://example.com/today",
+        category="ai_model",
+        score=9,
+    )
+    checkin = CheckIn(
+        user_id=user.id,
+        date=get_today_cst(),
+        topic=hot_topic.title,
+        status=CheckInStatus.completed,
+    )
+    db.add_all([hot_topic, checkin])
+    db.commit()
+    db.refresh(hot_topic)
+    db.refresh(checkin)
+
+    token = create_jwt_token(user.id)
+    with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+        response = client.post(
+            "/api/quick_generate",
+            json={
+                "topic_id": hot_topic.id,
+                "checkin_id": checkin.id,
+                "hot_topic": hot_topic.title,
+                "angle": "测试角度",
+                "platform": "xiaohongshu",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 400
+    mock_ai.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_quick_generate_retries_when_grounding_check_fails():
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
         mock_ai.side_effect = [
             "第一版文案里写了素材没有的旧价格",
             '{"pass": false, "issues": ["提到了素材中没有的旧价格信息"]}',
+            '{"pass": true, "issues": []}',
             "修正后的文案只保留素材里的信息",
             '{"pass": true, "issues": []}',
         ]
@@ -467,9 +545,9 @@ async def test_quick_generate_retries_when_grounding_check_fails():
         )
 
     assert result["content"] == "修正后的文案只保留素材里的信息"
-    assert mock_ai.await_count == 4
-    retry_prompt = mock_ai.await_args_list[2].args[0][0]["content"]
-    assert "上一版存在超出素材的事实" in retry_prompt
+    assert mock_ai.await_count == 5
+    retry_prompt = mock_ai.await_args_list[3].args[0][0]["content"]
+    assert "上一版存在以下问题，请逐一修正：" in retry_prompt
 
 
 def test_quick_generate_persists_draft_when_checkin_id_provided(client, db):
@@ -543,7 +621,11 @@ def test_quick_generate_persists_generation_context(client, db):
 
     token = create_jwt_token(user.id)
     with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.side_effect = ["这次真正值得聊的是平台能力，而不是功能更新本身。", '{"pass": true, "issues": []}']
+        mock_ai.side_effect = [
+            "这次真正值得聊的是平台能力，而不是功能更新本身。",
+            '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
+        ]
         response = client.post(
             "/api/quick_generate",
             json={

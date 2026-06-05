@@ -44,6 +44,7 @@ def _create_hot_topic(db, *, title: str = "DeepSeek V4发布", days_ago: int = 0
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
+
 def test_coze_endpoint_requires_plugin_token(client):
     response = client.get(
         "/api/coze/user_stats",
@@ -95,6 +96,7 @@ def test_coze_endpoint_allows_missing_user_id_header(client, db):
 
 
 # ── get_hot_topics ────────────────────────────────────────────────────────────
+
 
 def test_get_hot_topics_returns_list(client, db):
     _create_feishu_user(db)
@@ -151,6 +153,7 @@ def test_get_hot_topics_returns_local_record_id(client, db):
 
 # ── quick_generate ────────────────────────────────────────────────────────────
 
+
 def test_coze_quick_generate(client, db):
     _create_feishu_user(db)
 
@@ -177,6 +180,7 @@ def test_coze_quick_generate(client, db):
 
 
 # ── start_deep_mode ───────────────────────────────────────────────────────────
+
 
 def test_start_deep_mode_creates_checkin(client, db):
     _create_feishu_user(db)
@@ -222,7 +226,11 @@ def test_start_deep_mode_reuses_existing_checkin(client, db):
     db.commit()
 
     with patch("app.routers.coze_plugin.process_message", new_callable=AsyncMock) as mock_pm:
-        mock_pm.return_value = {"reply": "角度建议...", "status": CheckInStatus.discussing, "draft": None}
+        mock_pm.return_value = {
+            "reply": "角度建议...",
+            "status": CheckInStatus.discussing,
+            "draft": None,
+        }
         response = client.post(
             "/api/coze/start_deep_mode",
             json={"hot_topic": "New hot topic", "angle": "角度"},
@@ -239,6 +247,7 @@ def test_start_deep_mode_reuses_existing_checkin(client, db):
 
 
 # ── deep_mode_message ─────────────────────────────────────────────────────────
+
 
 def test_deep_mode_message_returns_reply(client, db):
     user = _create_feishu_user(db)
@@ -298,6 +307,7 @@ def test_deep_mode_message_404_for_wrong_user(client, db):
 
 # ── confirm_and_publish ───────────────────────────────────────────────────────
 
+
 def test_confirm_and_publish_returns_streak(client, db):
     user = _create_feishu_user(db)
     checkin = CheckIn(
@@ -337,6 +347,7 @@ def test_confirm_and_publish_returns_streak(client, db):
 
 
 # ── user_stats ────────────────────────────────────────────────────────────────
+
 
 def test_get_user_stats(client, db):
     _create_feishu_user(db)
@@ -384,7 +395,11 @@ def test_start_deep_mode_resets_stale_checkin_state(client, db):
     db.commit()
 
     with patch("app.routers.coze_plugin.process_message", new_callable=AsyncMock) as mock_pm:
-        mock_pm.return_value = {"reply": "角度建议...", "status": CheckInStatus.discussing, "draft": None}
+        mock_pm.return_value = {
+            "reply": "角度建议...",
+            "status": CheckInStatus.discussing,
+            "draft": None,
+        }
         response = client.post(
             "/api/coze/start_deep_mode",
             json={"hot_topic": "New hot topic", "angle": "角度"},

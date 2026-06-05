@@ -18,6 +18,7 @@ def user(db):
     db.refresh(u)
     return u
 
+
 @pytest.fixture
 def checkin(user, db):
     today = get_today_cst()
@@ -26,24 +27,29 @@ def checkin(user, db):
         date=today,
         topic="测试话题：工作中的一次小突破",
         status=CheckInStatus.topic_selected,
-        refresh_count=0
+        refresh_count=0,
     )
     db.add(c)
     db.commit()
     db.refresh(c)
     return c
 
+
 def test_generate_content_starts_discussion(user, checkin, client, db):
     """Test that sending first message starts discussion."""
     token = create_jwt_token(user.id)
 
-    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
-        mock_ai.return_value = "你在工作中有什么具体的突破想分享？是一次技术攻关，还是与人合作的突破？"
+    with patch(
+        "app.services.discussion_service.chat_completion", new_callable=AsyncMock
+    ) as mock_ai:
+        mock_ai.return_value = (
+            "你在工作中有什么具体的突破想分享？是一次技术攻关，还是与人合作的突破？"
+        )
 
         response = client.post(
             "/api/generate_content",
             json={"checkin_id": checkin.id, "message": "我最近在工作上有个小进步"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     assert response.status_code == 200
@@ -68,7 +74,9 @@ def test_reset_checkin_clears_generation_context(checkin):
 def test_generate_content_uses_angle_and_platform(user, checkin, client, db):
     token = create_jwt_token(user.id)
 
-    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch(
+        "app.services.discussion_service.chat_completion", new_callable=AsyncMock
+    ) as mock_ai:
         mock_ai.return_value = "这个角度可以继续展开。"
 
         response = client.post(
@@ -79,27 +87,31 @@ def test_generate_content_uses_angle_and_platform(user, checkin, client, db):
                 "angle": "真正值得聊的是分发权",
                 "platform": "weibo",
             },
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     assert response.status_code == 200
     prompt_text = mock_ai.await_args.args[0][0]["content"]
-    assert "推荐角度：真正值得聊的是分发权" in prompt_text
+    assert "推荐分析框架：真正值得聊的是分发权" in prompt_text
     assert "目标平台：weibo" in prompt_text
     db.refresh(checkin)
     context = parse_generation_context(checkin)
     assert context["selected_angle"] == "真正值得聊的是分发权"
     assert context["platform"] == "weibo"
 
+
 def test_generate_content_produces_draft(user, checkin, client, db):
     """Test that AI can produce a draft with the special markers after MIN_DISCUSSION_ROUNDS."""
     token = create_jwt_token(user.id)
 
     # Pre-seed one prior user message so MIN_DISCUSSION_ROUNDS (1) is satisfied
-    prior_history = json.dumps([
-        {"role": "user", "content": "我最近在工作上有个小进步"},
-        {"role": "assistant", "content": "能说说具体是什么突破吗？"}
-    ], ensure_ascii=False)
+    prior_history = json.dumps(
+        [
+            {"role": "user", "content": "我最近在工作上有个小进步"},
+            {"role": "assistant", "content": "能说说具体是什么突破吗？"},
+        ],
+        ensure_ascii=False,
+    )
     checkin.conversation_history = prior_history
     checkin.status = CheckInStatus.discussing
     db.commit()
@@ -107,13 +119,15 @@ def test_generate_content_produces_draft(user, checkin, client, db):
     draft_content = "上周我终于解决了困扰团队三个月的bug。那一刻，我感受到了久违的成就感。"
     ai_response = f"好的！<<<DRAFT_START>>>{draft_content}<<<DRAFT_END>>>"
 
-    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch(
+        "app.services.discussion_service.chat_completion", new_callable=AsyncMock
+    ) as mock_ai:
         mock_ai.return_value = ai_response
 
         response = client.post(
             "/api/generate_content",
             json={"checkin_id": checkin.id, "message": "上周解决了一个难题，感觉很有成就感"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     assert response.status_code == 200
@@ -124,10 +138,13 @@ def test_generate_content_produces_draft(user, checkin, client, db):
 
 def test_generate_content_strips_identity_framing_from_draft(user, checkin, client, db):
     token = create_jwt_token(user.id)
-    prior_history = json.dumps([
-        {"role": "user", "content": "我想写这个热点"},
-        {"role": "assistant", "content": "你想强调哪个判断？"}
-    ], ensure_ascii=False)
+    prior_history = json.dumps(
+        [
+            {"role": "user", "content": "我想写这个热点"},
+            {"role": "assistant", "content": "你想强调哪个判断？"},
+        ],
+        ensure_ascii=False,
+    )
     checkin.conversation_history = prior_history
     checkin.status = CheckInStatus.discussing
     db.commit()
@@ -135,13 +152,15 @@ def test_generate_content_strips_identity_framing_from_draft(user, checkin, clie
     draft_content = "作为AI从业者，我觉得这次真正该讨论的是分发权。"
     ai_response = f"<<<DRAFT_START>>>{draft_content}<<<DRAFT_END>>>"
 
-    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch(
+        "app.services.discussion_service.chat_completion", new_callable=AsyncMock
+    ) as mock_ai:
         mock_ai.return_value = ai_response
 
         response = client.post(
             "/api/generate_content",
             json={"checkin_id": checkin.id, "message": "就写分发权"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     assert response.status_code == 200
@@ -149,17 +168,20 @@ def test_generate_content_strips_identity_framing_from_draft(user, checkin, clie
     assert "从业者" not in data["draft"]
     assert data["draft"] == "我觉得这次真正该讨论的是分发权。"
 
+
 def test_conversation_history_persisted(user, checkin, client, db):
     """Test that conversation history is saved to CheckIn."""
     token = create_jwt_token(user.id)
 
-    with patch("app.services.discussion_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+    with patch(
+        "app.services.discussion_service.chat_completion", new_callable=AsyncMock
+    ) as mock_ai:
         mock_ai.return_value = "能说说具体是什么突破吗？"
 
         client.post(
             "/api/generate_content",
             json={"checkin_id": checkin.id, "message": "工作有个小进步"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     db.expire_all()
@@ -170,6 +192,7 @@ def test_conversation_history_persisted(user, checkin, client, db):
     assert history[0]["role"] == "user"
     assert history[0]["content"] == "工作有个小进步"
     assert history[1]["role"] == "assistant"
+
 
 def test_confirm_content(user, checkin, client, db):
     """Test confirming content changes status to pending."""
@@ -185,7 +208,7 @@ def test_confirm_content(user, checkin, client, db):
         response = client.post(
             "/api/confirm_content",
             json={"checkin_id": checkin.id, "content": "用户修改后的内容"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     assert response.status_code == 200
@@ -212,7 +235,7 @@ def test_confirm_content_checks_user_edits_against_fact_block(user, checkin, cli
         response = client.post(
             "/api/confirm_content",
             json={"checkin_id": checkin.id, "content": "OpenAI 发布新产品，价格是 100 美元。"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     assert response.status_code == 200
@@ -291,8 +314,7 @@ def test_get_checkin_returns_topic_snapshot(user, checkin, client, db):
     db.commit()
 
     response = client.get(
-        f"/api/checkin/{checkin.id}",
-        headers={"Authorization": f"Bearer {token}"}
+        f"/api/checkin/{checkin.id}", headers={"Authorization": f"Bearer {token}"}
     )
 
     assert response.status_code == 200
@@ -312,7 +334,7 @@ def test_confirm_content_soft_signal_when_quality_fails(user, checkin, client, d
         response = client.post(
             "/api/confirm_content",
             json={"checkin_id": checkin.id, "content": "用户修改后的内容"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     assert response.status_code == 200
@@ -335,7 +357,7 @@ def test_confirm_publish_allowed_after_quality_fail(user, checkin, client, db):
     response = client.post(
         "/api/confirm_publish",
         json={"checkin_id": checkin.id},
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 200
@@ -349,7 +371,7 @@ def test_content_feedback_persisted(user, checkin, client, db):
     response = client.post(
         "/api/content_feedback",
         json={"checkin_id": checkin.id, "feedback": "down"},
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 200
@@ -359,6 +381,7 @@ def test_content_feedback_persisted(user, checkin, client, db):
     updated = db.query(CheckIn).filter(CheckIn.id == checkin.id).first()
     assert updated.content_feedback == "down"
     assert updated.content_feedback_at is not None
+
 
 def test_confirm_publish(user, checkin, client, db):
     """Test that confirm_publish completes the checkin."""
@@ -372,7 +395,7 @@ def test_confirm_publish(user, checkin, client, db):
     response = client.post(
         "/api/confirm_publish",
         json={"checkin_id": checkin.id},
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 200
@@ -383,6 +406,7 @@ def test_confirm_publish(user, checkin, client, db):
     db.expire_all()
     updated = db.query(CheckIn).filter(CheckIn.id == checkin.id).first()
     assert updated.status == CheckInStatus.completed
+
 
 def test_prevent_duplicate_publish(user, checkin, client, db):
     """Test that completed checkin cannot be published again."""
@@ -395,7 +419,7 @@ def test_prevent_duplicate_publish(user, checkin, client, db):
     response = client.post(
         "/api/confirm_publish",
         json={"checkin_id": checkin.id},
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
 
     assert response.status_code == 409
@@ -440,6 +464,7 @@ def test_checkin_date_uses_persisted_cst_date(user, db):
 
     assert checkin.date == today
 
+
 def test_cannot_access_other_users_checkin(user, checkin, client, db):
     """Test that users cannot access other users' checkins."""
     other_user = User(openid="other_user_for_content_test")
@@ -452,10 +477,11 @@ def test_cannot_access_other_users_checkin(user, checkin, client, db):
     response = client.post(
         "/api/generate_content",
         json={"checkin_id": checkin.id, "message": "test"},
-        headers={"Authorization": f"Bearer {other_token}"}
+        headers={"Authorization": f"Bearer {other_token}"},
     )
 
     assert response.status_code == 404
+
 
 def test_status_transition_completed_blocks_message(user, checkin, client, db):
     """Test that completed checkin blocks new messages."""
@@ -467,7 +493,7 @@ def test_status_transition_completed_blocks_message(user, checkin, client, db):
         response = client.post(
             "/api/generate_content",
             json={"checkin_id": checkin.id, "message": "再说点什么"},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={"Authorization": f"Bearer {token}"},
         )
 
     assert response.status_code == 400

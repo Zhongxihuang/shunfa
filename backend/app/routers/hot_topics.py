@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..dependencies import get_current_user, get_db, get_resolved_api_key
+from ..dependencies import get_admin_user, get_current_user, get_db, get_resolved_api_key
 from ..models import HotTopic, User
 from ..rate_limit import limiter
 from ..schemas import (
@@ -20,10 +20,14 @@ router = APIRouter()
 
 
 def get_today_hot_topic_or_404(topic_id: int, db: Session) -> HotTopic:
-    topic = db.query(HotTopic).filter(
-        HotTopic.id == topic_id,
-        HotTopic.topic_date == get_today_cst(),
-    ).first()
+    topic = (
+        db.query(HotTopic)
+        .filter(
+            HotTopic.id == topic_id,
+            HotTopic.topic_date == get_today_cst(),
+        )
+        .first()
+    )
     if not topic:
         raise HTTPException(status_code=404, detail="今日热点不存在")
     return topic
@@ -50,10 +54,7 @@ async def get_hot_topics_health(
     today = get_today_cst()
     today_count = db.query(HotTopic).filter(HotTopic.topic_date == today).count()
     latest_date = (
-        db.query(HotTopic.topic_date)
-        .order_by(HotTopic.topic_date.desc())
-        .limit(1)
-        .scalar()
+        db.query(HotTopic.topic_date).order_by(HotTopic.topic_date.desc()).limit(1).scalar()
     )
     latest_count = 0
     if latest_date is not None:
@@ -103,8 +104,10 @@ async def analyze_hot_topic_endpoint(
 
 
 @router.post("/hot_topics/refresh")
+@limiter.limit("2/hour")
 async def refresh_hot_topics(
-    current_user: User = Depends(get_current_user),
+    request: Request,
+    current_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Trigger a synchronous refresh and ensure Web has usable hot topics."""
