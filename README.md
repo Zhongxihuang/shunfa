@@ -59,6 +59,7 @@ pip install -r requirements.txt
 cp ../.env.example .env
 # 必填：JWT_SECRET_KEY（随机字符串）、API_KEY_ENCRYPTION_SECRET（随机字符串）
 # 可选：DEEPSEEK_API_KEY（系统级 fallback，默认不需要）
+# 可选：DEEPSEEK_BASE_URL（默认 https://api.deepseek.com）
 
 # 运行数据库迁移
 alembic upgrade head
@@ -98,7 +99,17 @@ ruff format --check app tests
 mypy app --ignore-missing-imports
 ```
 
-所有测试均 mock AI 调用，无需真实 API Key，全套 152 个测试用例。
+所有自动化测试均 mock AI 调用或使用本地替身服务，无需真实 API Key。
+
+本地跑完整 AI HTTP 形状 smoke 时，可以启动 DeepSeek 兼容 mock：
+
+```bash
+cd backend
+python -m scripts.mock_deepseek_server --port 1081
+
+# 另一个终端启动后端时设置：
+DEEPSEEK_BASE_URL=http://127.0.0.1:1081/v1
+```
 
 ---
 
@@ -131,7 +142,7 @@ shunfa/
 │   │   ├── dependencies.py # JWT 鉴权 + get_resolved_api_key（BYOK 三级解析）
 │   │   └── database.py     # engine + WAL 模式
 │   ├── alembic/versions/   # 数据库迁移历史
-│   └── tests/              # 152 个测试（全 mock AI）
+│   └── tests/              # 后端自动化测试（mock AI / 本地 AI 替身）
 └── web/
     ├── src/app/            # Next.js App Router 页面（login, topics, discuss, preview, profile, settings）
     ├── src/components/     # 共用组件（Navbar, StreakBadge, LevelProgress, DiamondDisplay）

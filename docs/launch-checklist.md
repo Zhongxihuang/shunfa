@@ -5,6 +5,7 @@
 - Backend production flag: `ENVIRONMENT=production`
 - Backend required secrets: `JWT_SECRET_KEY`, `API_KEY_ENCRYPTION_SECRET`
 - Backend API key posture: `REQUIRE_USER_API_KEY=true`
+- Backend DeepSeek URL: `DEEPSEEK_BASE_URL=https://api.deepseek.com` in production; local smoke may use `http://127.0.0.1:1081/v1`
 - Web API base URL example: `NEXT_PUBLIC_API_URL=https://api.shunfa.example`
 
 ## Verification Commands
@@ -12,7 +13,7 @@
 | Check | Command / Steps | Result | Notes |
 |---|---|---|---|
 | Backend dependencies | `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements-dev.txt` | PASS | Verified with `/private/tmp/shunfa-backend-venv` and `requirements-dev.txt`. |
-| Backend tests | `pytest -v` | PASS | `185 passed, 1 skipped`; PostgreSQL migration test intentionally skipped in local full test run. |
+| Backend tests | `pytest -v` | PASS | `186 passed, 1 skipped`; PostgreSQL migration test intentionally skipped in local full test run. |
 | Ruff check | `ruff check app tests` | PASS | |
 | Ruff format | `ruff format --check app tests` | PASS | |
 | Mypy | `mypy app --ignore-missing-imports` | PASS | Uses `backend/mypy.ini`; SQLAlchemy model typing remains a future hardening area. |
@@ -22,6 +23,7 @@
 | Web lint | `npm run lint` | PASS | Also configured in `.github/workflows/web-test.yml`. |
 | Web build | `npm run build` in CI or local non-sandbox environment | PASS | Ran successfully in this environment with Next.js/Turbopack; also configured in `.github/workflows/web-test.yml`. |
 | Scripted launch smoke | `pytest tests/test_launch_smoke.py -v` | PASS | Covers register -> save key -> select topic -> generate -> preview -> compose assets -> publish -> profile with mocked AI providers; duplicate publish leaves points/streak unchanged. |
+| Mock DeepSeek service | `python -m scripts.mock_deepseek_server --port 1081`, then POST `/v1/chat/completions` | PASS | Verified locally with HTTP 200 and OpenAI-compatible `choices[0].message.content`; sandbox required elevated local loopback access. Use `DEEPSEEK_BASE_URL=http://127.0.0.1:1081/v1` for local smoke. |
 | Manual browser smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | Requires browser/API smoke against a configured runtime and real/sandbox DeepSeek key. |
 
 ## Rate Limits
@@ -56,6 +58,7 @@
 - `NEXT_PUBLIC_API_TIMEOUT_MS=30000`
 - `NEXT_PUBLIC_GENERATION_TIMEOUT_MS=90000`
 - `DEEPSEEK_REQUEST_TIMEOUT_SECONDS=60`
+- `DEEPSEEK_BASE_URL=https://api.deepseek.com` by default; only point it at the mock server for local/CI smoke.
 - Client timeout does not prove backend work stopped. Generation retries must reuse the existing non-completed `CheckIn`.
 - Publish is not automatically retried after timeout.
 

@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     deepseek_api_key: str | None = None
+    deepseek_base_url: str = "https://api.deepseek.com"
     require_user_api_key: bool = False
     api_key_encryption_secret: str = "change-me-to-a-random-32-char-secret"
     jwt_secret_key: str
