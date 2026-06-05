@@ -49,11 +49,6 @@ function SettingsContent() {
     api.get<ApiKeyStatus>('/api/user/api_key/status').then((d) => {
       setApiKeyStatus(d);
     });
-    // Also check localStorage
-    const localKey = localStorage.getItem('shunfa_api_key');
-    if (localKey) {
-      setApiKeyStatus({ configured: true, preview: `...${localKey.slice(-4)}` });
-    }
   }, [token, user]);
 
   async function handleSave() {
@@ -76,9 +71,6 @@ function SettingsContent() {
     setApiKeySaving(true);
     setApiKeySaved(false);
     try {
-      // Save to localStorage for immediate use
-      localStorage.setItem('shunfa_api_key', key);
-      // Save encrypted to backend
       if (!isDevPreviewToken(token)) {
         await api.post<ApiKeyStatus>('/api/user/api_key', { api_key: key });
       }

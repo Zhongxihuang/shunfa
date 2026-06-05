@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -50,7 +50,7 @@ function TopicsContent() {
     setError(getErrorMessage(e, is401 ? '登录已失效，请重新登录' : fallback));
   }
 
-  async function loadHotTopics() {
+  const loadHotTopics = useCallback(async () => {
     setHotLoading(true);
     setError('');
     setAuthError(false);
@@ -62,11 +62,11 @@ function TopicsContent() {
     } finally {
       setHotLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadHotTopics();
-  }, []);
+  }, [loadHotTopics]);
 
   async function handleBack() {
     router.push('/');
@@ -78,12 +78,11 @@ function TopicsContent() {
     setError('');
     setAuthError(false);
     try {
-      await api.post('/api/hot_topics/refresh');
       const data = await api.get<{ date: string; topics: HotTopicItem[] }>('/api/hot_topics/today');
       setHotTopics(data.topics);
       setSelectedHotTopicId(null);
       if (data.topics.length === 0) {
-        setError('刷新完成，但暂时没有抓到今日热点。可以稍后再试，或先使用 AI 选题。');
+        setError('暂时没有今日热点。可以稍后再试，或先使用 AI 选题。');
       }
     } catch (e: unknown) {
       reportError(e, '刷新今日热点失败');
@@ -201,7 +200,7 @@ function TopicsContent() {
               disabled={hotLoading || hotRefreshing}
               className="text-xs font-medium text-primary-dark disabled:opacity-40"
             >
-              {hotRefreshing ? '刷新中...' : hotLoading ? '加载中...' : '刷新'}
+              {hotRefreshing ? '加载中...' : hotLoading ? '加载中...' : '重新加载'}
             </button>
           </div>
 

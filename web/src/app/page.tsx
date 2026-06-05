@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
@@ -14,14 +14,16 @@ function Dashboard() {
   const [drafts, setDrafts] = useState<CheckinItem[]>([]);
   const [draftCount, setDraftCount] = useState(0);
   const [loadingLists, setLoadingLists] = useState(true);
+  const [listError, setListError] = useState(false);
 
   useEffect(() => {
     refreshUser();
   }, [refreshUser]);
 
-  useEffect(() => {
+  const loadDashboardLists = useCallback(() => {
     let cancelled = false;
     setLoadingLists(true);
+    setListError(false);
     Promise.all([
       api.get<CheckinsResponse>('/api/my/checkins?limit=3&offset=0'),
       api.get<CheckinsResponse>('/api/my/checkins?status_filter=draft&limit=3&offset=0'),
@@ -34,9 +36,7 @@ function Dashboard() {
       })
       .catch(() => {
         if (cancelled) return;
-        setRecent([]);
-        setDrafts([]);
-        setDraftCount(0);
+        setListError(true);
       })
       .finally(() => {
         if (!cancelled) setLoadingLists(false);
@@ -45,6 +45,8 @@ function Dashboard() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => loadDashboardLists(), [loadDashboardLists]);
 
   if (!user) return null;
 
@@ -98,6 +100,14 @@ function Dashboard() {
                   <div key={i} className="h-32 animate-pulse rounded-2xl bg-white/60" />
                 ))}
               </div>
+            ) : listError ? (
+              <div className="sf-note-card px-5 py-6">
+                <p className="text-sm font-semibold text-[var(--ink)]">创作记录加载失败</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">网络或登录状态可能临时异常，请重试。</p>
+                <button onClick={loadDashboardLists} className="sf-btn-secondary mt-4 min-h-10 px-4">
+                  重新加载
+                </button>
+              </div>
             ) : recent.length > 0 ? (
               <div className="grid gap-3 md:grid-cols-3">
                 {recent.map((item) => (
@@ -128,7 +138,12 @@ function Dashboard() {
               <h2 className="sf-display text-2xl font-semibold text-[var(--ink)]">草稿箱</h2>
               <span className="sf-pill">{draftCount > 0 ? `${draftCount} 篇` : '空'}</span>
             </div>
-            {drafts.length > 0 ? (
+            {listError ? (
+              <div>
+                <p className="mb-4 text-sm leading-6 text-[var(--ink-soft)]">草稿箱加载失败，当前不展示空状态。</p>
+                <button onClick={loadDashboardLists} className="sf-btn-secondary w-full">重新加载</button>
+              </div>
+            ) : drafts.length > 0 ? (
               <div className="space-y-3">
                 {drafts.map((item) => (
                   <Link key={item.id} href={continueHref(item)} className="block rounded-2xl border border-[var(--border)] bg-white/50 p-3 transition hover:bg-white/70">

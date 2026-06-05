@@ -58,11 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const checkApiKeyStatus = useCallback(async () => {
-    const localKey = localStorage.getItem('shunfa_api_key');
-    if (localKey) {
-      setApiKeyConfigured(true);
-      return;
-    }
+    localStorage.removeItem('shunfa_api_key');
     try {
       const status = await api.get<{ configured: boolean }>('/api/user/api_key/status');
       setApiKeyConfigured(status.configured);

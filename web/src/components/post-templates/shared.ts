@@ -9,9 +9,10 @@ export interface PostTemplateProps {
 
 export function getAdaptiveTextStyle(text: string, baseSize = 28) {
   const length = text.replace(/\s/g, '').length;
-  if (length > 145) return { fontSize: baseSize - 8, lineHeight: 1.56 };
-  if (length > 105) return { fontSize: baseSize - 5, lineHeight: 1.62 };
-  if (length > 72) return { fontSize: baseSize - 2, lineHeight: 1.7 };
+  // Thresholds tuned for 3-layer analysis cards (per-page budget: 80-160 chars).
+  if (length > 155) return { fontSize: baseSize - 8, lineHeight: 1.56 };
+  if (length > 120) return { fontSize: baseSize - 5, lineHeight: 1.62 };
+  if (length > 80) return { fontSize: baseSize - 2, lineHeight: 1.7 };
   return { fontSize: baseSize, lineHeight: 1.78 };
 }
 

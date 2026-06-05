@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -45,6 +45,8 @@ function PreviewContent() {
   const [qualityIssues, setQualityIssues] = useState<string[]>([]);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [checkinStatus, setCheckinStatus] = useState('');
+  const [checkinLoading, setCheckinLoading] = useState(true);
+  const [checkinLoadError, setCheckinLoadError] = useState('');
 
   const [template, setTemplate] = useState<'beige' | 'magazine'>('beige');
   const [composeAssets, setComposeAssets] = useState<ComposeAssets | null>(null);
@@ -54,20 +56,32 @@ function PreviewContent() {
   const [copiedTags, setCopiedTags] = useState(false);
   const templateRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  useEffect(() => {
+  const loadCheckin = useCallback(() => {
     const draft = sessionStorage.getItem('current_draft') ?? '';
     setContent(draft);
-    if (!checkinId) return;
+    setCheckinLoadError('');
+    if (!checkinId) {
+      setCheckinLoading(false);
+      setCheckinLoadError('缺少稿件 ID，请从草稿箱或历史记录重新进入。');
+      return;
+    }
 
+    setCheckinLoading(true);
     api.get<CheckinPayload>(`/api/checkin/${checkinId}`)
       .then((data) => {
         setTopic(data.topic);
         setCheckinStatus(data.status);
         if (data.content) setContent(data.content);
         setFeedbackSent(data.content_feedback === 'down');
+        setCheckinLoadError('');
       })
-      .catch(() => {});
+      .catch((e: unknown) => {
+        setCheckinLoadError(getErrorMessage(e, '稿件加载失败，请重试。'));
+      })
+      .finally(() => setCheckinLoading(false));
   }, [checkinId]);
+
+  useEffect(() => loadCheckin(), [loadCheckin]);
 
   // Re-render PNGs whenever assets or template changes
   useEffect(() => {
@@ -105,6 +119,10 @@ function PreviewContent() {
   async function handleCheckQuality() {
     const text = content.trim();
     if (!text) { setError('内容不能为空'); return; }
+    if (checkinLoadError || checkinLoading) {
+      setError('稿件信息尚未成功加载，不能继续发布。');
+      return;
+    }
     setSubmitting(true);
     setError('');
     setStep('quality_check');
@@ -272,6 +290,17 @@ function PreviewContent() {
       </div>
 
       {/* Text preview + quality check */}
+      {checkinLoadError && (
+        <div className="sf-note-card mb-4 px-4 py-4">
+          <p className="text-sm font-semibold text-[var(--ink)]">稿件加载失败</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">{checkinLoadError}</p>
+          <div className="mt-4 flex gap-3">
+            <button onClick={loadCheckin} className="sf-btn-secondary min-h-10 flex-1 px-4">重新加载</button>
+            <Link href="/drafts" className="sf-btn-primary min-h-10 flex-1 px-4">返回草稿箱</Link>
+          </div>
+        </div>
+      )}
+
       {(step === 'preview' || step === 'quality_check') && (
         <>
           <div className="mb-4">
@@ -424,6 +453,7 @@ function PreviewContent() {
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {pngs.map((png, i) => (
                   <div key={i} className="flex-shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- PNGs are client-rendered data URLs from html2canvas. */}
                     <img
                       src={png}
                       alt={`第 ${i + 1} 张`}
@@ -504,12 +534,12 @@ function PreviewContent() {
           >
             返回修改
           </button>
-          <button
-            onClick={handleCheckQuality}
-            disabled={submitting || !content.trim()}
-            className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
-          >
-            {submitting ? '评估中...' : checkinStatus === 'completed' ? '查看内容提示' : '查看发布提示'}
+            <button
+              onClick={handleCheckQuality}
+              disabled={submitting || checkinLoading || !!checkinLoadError || !content.trim()}
+              className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
+            >
+            {submitting ? '评估中...' : checkinLoading ? '加载中...' : checkinStatus === 'completed' ? '查看内容提示' : '查看发布提示'}
           </button>
         </div>
       )}

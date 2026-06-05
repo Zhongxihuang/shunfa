@@ -67,14 +67,8 @@ function getToken(): string | null {
   return localStorage.getItem('token');
 }
 
-function getUserApiKey(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('shunfa_api_key');
-}
-
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = getToken();
-  const userApiKey = getUserApiKey();
   const { timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options;
 
   const headers: Record<string, string> = {
@@ -83,9 +77,6 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
-  }
-  if (userApiKey) {
-    headers['X-User-Api-Key'] = userApiKey;
   }
 
   const controller = new AbortController();

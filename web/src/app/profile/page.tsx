@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
@@ -13,8 +13,11 @@ function ProfileContent() {
   const [recent, setRecent] = useState<CheckinItem[]>([]);
   const [draftCount, setDraftCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
+  const loadProfileLists = useCallback(() => {
+    setLoading(true);
+    setLoadError(false);
     Promise.all([
       api.get<CheckinsResponse>('/api/my/checkins?limit=5&offset=0'),
       api.get<CheckinsResponse>('/api/my/checkins?status_filter=draft&limit=1&offset=0'),
@@ -24,11 +27,12 @@ function ProfileContent() {
         setDraftCount(draftData.draft_count);
       })
       .catch(() => {
-        setRecent([]);
-        setDraftCount(0);
+        setLoadError(true);
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => loadProfileLists(), [loadProfileLists]);
 
   if (!user) return null;
 
@@ -58,7 +62,7 @@ function ProfileContent() {
         <Link href="/drafts" className="sf-card block p-5 transition hover:border-[var(--border-strong)]">
           <div className="flex items-center justify-between gap-2">
             <p className="sf-eyebrow">草稿</p>
-            <span className="sf-pill">{draftCount > 0 ? `${draftCount} 篇` : '空'}</span>
+            <span className="sf-pill">{loadError ? '加载失败' : draftCount > 0 ? `${draftCount} 篇` : '空'}</span>
           </div>
           <h2 className="sf-display mt-2 text-2xl font-semibold text-[var(--ink)]">草稿箱</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">继续中断的创作。</p>
@@ -84,6 +88,14 @@ function ProfileContent() {
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/60" />
             ))}
+          </div>
+        ) : loadError ? (
+          <div className="sf-note-card px-5 py-6">
+            <p className="text-sm font-semibold text-[var(--ink)]">最近创作加载失败</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">没有把错误当作空记录。请稍后重试。</p>
+            <button onClick={loadProfileLists} className="sf-btn-secondary mt-4 min-h-10 px-4">
+              重新加载
+            </button>
           </div>
         ) : recent.length > 0 ? (
           <div className="space-y-3">

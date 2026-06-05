@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - ENVIRONMENT=development
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-test_key}
@@ -32,7 +32,7 @@ services:
   postgres:
     image: postgres:15-alpine
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-shunfa}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-shunfa}
@@ -48,7 +48,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -96,7 +96,7 @@ services:
   mock-wechat:
     image: mockserver/mockserver:5.15.0
     ports:
-      - "1080:1080"
+      - "127.0.0.1:1080:1080"
     environment:
       - MOCKSERVER_INITIALIZATION_JSON_PATH=/config/init.json
     volumes:
@@ -106,7 +106,7 @@ services:
   mock-deepseek:
     image: mockserver/mockserver:5.15.0
     ports:
-      - "1081:1080"
+      - "127.0.0.1:1081:1080"
     environment:
       - MOCKSERVER_INITIALIZATION_JSON_PATH=/config/init.json
     volumes:

@@ -24,7 +24,7 @@ interface HotTopicDetail {
 interface HotTopicAnalysis {
   opportunities: string[];
   risks: string[];
-  recommended_stance: string;
+  recommended_frame: string;
   angles: string[];
 }
 
@@ -94,7 +94,7 @@ function ComposeContent() {
     const values = [
       topic.ai_angle,
       topic.ai_counter_angle,
-      analysis?.recommended_stance,
+      analysis?.recommended_frame,
       ...(analysis?.angles ?? []),
     ].filter(Boolean) as string[];
     return Array.from(new Set(values));
@@ -119,8 +119,8 @@ function ComposeContent() {
         angle: selectedAngle,
       });
       setAnalysis(data);
-      if (data.recommended_stance) {
-        setSelectedAngle(data.recommended_stance);
+      if (data.recommended_frame) {
+        setSelectedAngle(data.recommended_frame);
       }
     } catch (e: unknown) {
       setError(getErrorMessage(e, '深挖失败，当前轻分析仍可继续生成'));
