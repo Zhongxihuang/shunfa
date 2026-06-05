@@ -57,3 +57,9 @@
 - `DEEPSEEK_REQUEST_TIMEOUT_SECONDS=60`
 - Client timeout does not prove backend work stopped. Generation retries must reuse the existing non-completed `CheckIn`.
 - Publish is not automatically retried after timeout.
+
+## Rendering Safety
+
+- Generated content renders as escaped React text.
+- Launch-critical pages do not use `dangerouslySetInnerHTML` for generated content.
+- Browser console logging must not include JWTs, API keys, Authorization headers, or raw sensitive error objects.

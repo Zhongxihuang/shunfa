@@ -153,6 +153,8 @@ shunfa/
 
 ## 部署
 
+Before production deployment, complete [docs/launch-checklist.md](docs/launch-checklist.md). The checklist includes migration rollback, PostgreSQL verification, BYOK redaction, timeout policy, rate limits, Web build, and manual smoke validation.
+
 ### Vercel（前端）
 
 ```bash
