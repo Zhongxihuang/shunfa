@@ -23,7 +23,7 @@ from ..schemas import (
     ReviseContentResponse,
 )
 from ..services.compose_service import compose_post_assets
-from ..services.content_service import confirm_publish
+from ..services.content_service import AlreadyPublishedError, confirm_publish
 from ..services.discussion_service import process_message
 from ..services.draft_service import (
     build_quick_generate_context,
@@ -345,6 +345,8 @@ async def confirm_publish_endpoint(
     try:
         result = await confirm_publish(checkin, db, current_user)
         return PublishResponse(**result)
+    except AlreadyPublishedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

@@ -398,7 +398,47 @@ def test_prevent_duplicate_publish(user, checkin, client, db):
         headers={"Authorization": f"Bearer {token}"}
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
+
+
+def test_duplicate_publish_does_not_double_count_rewards(user, checkin, client, db):
+    token = create_jwt_token(user.id)
+    checkin.status = CheckInStatus.pending
+    checkin.content = "准备发布的内容"
+    db.commit()
+
+    first = client.post(
+        "/api/confirm_publish",
+        json={"checkin_id": checkin.id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    second = client.post(
+        "/api/confirm_publish",
+        json={"checkin_id": checkin.id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    db.refresh(user)
+    db.refresh(checkin)
+    assert user.points == first.json()["total_points"]
+    assert checkin.points_earned == first.json()["points_earned"]
+
+
+def test_checkin_date_uses_persisted_cst_date(user, db):
+    today = get_today_cst()
+    checkin = CheckIn(
+        user_id=user.id,
+        date=today,
+        topic="CST boundary topic",
+        status=CheckInStatus.topic_selected,
+        refresh_count=0,
+    )
+    db.add(checkin)
+    db.commit()
+
+    assert checkin.date == today
 
 def test_cannot_access_other_users_checkin(user, checkin, client, db):
     """Test that users cannot access other users' checkins."""

@@ -36,3 +36,9 @@
 - API key preview is either `...last4` for sufficiently long keys or omitted.
 - `Authorization` and `X-User-Api-Key` must not appear in backend logs, Sentry events, metrics labels, or browser console output.
 - Rotating `API_KEY_ENCRYPTION_SECRET` invalidates stored user keys unless key versioning is implemented.
+
+## CST Date Boundary
+
+- `CheckIn.date` is a persisted CST date from `get_today_cst()`.
+- Reward uniqueness uses `(user_id, date)`, where `date` is the CST date.
+- Do not derive reward uniqueness from UTC timestamp truncation or database server-local time.
