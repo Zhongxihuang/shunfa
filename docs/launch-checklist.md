@@ -21,7 +21,8 @@
 | PostgreSQL migration | `POSTGRES_TEST_DATABASE_URL=postgresql://shunfa:shunfa@localhost:5432/shunfa_test pytest tests/test_migrations.py::test_alembic_upgrade_head_on_postgresql -v` | SKIPPED | `POSTGRES_TEST_DATABASE_URL` was not set; must run in CI/staging before production. |
 | Web lint | `npm run lint` | PASS | |
 | Web build | `npm run build` in CI or local non-sandbox environment | PASS | Ran successfully in this environment with Next.js/Turbopack. |
-| Manual smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | Requires manual browser/API smoke against a configured runtime and real/sandbox DeepSeek key. |
+| Scripted launch smoke | `pytest tests/test_launch_smoke.py -v` | PASS | Covers register -> save key -> select topic -> generate -> preview -> compose assets -> publish -> profile with mocked AI providers; duplicate publish leaves points/streak unchanged. |
+| Manual browser smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | Requires browser/API smoke against a configured runtime and real/sandbox DeepSeek key. |
 
 ## Rate Limits
 
