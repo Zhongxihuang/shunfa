@@ -42,3 +42,10 @@
 - `CheckIn.date` is a persisted CST date from `get_today_cst()`.
 - Reward uniqueness uses `(user_id, date)`, where `date` is the CST date.
 - Do not derive reward uniqueness from UTC timestamp truncation or database server-local time.
+
+## Migration Rollback
+
+- Existing historical migrations should not be rewritten unless a fresh deployment cannot reach `head`.
+- New or launch-touched migrations must include tested downgrade behavior.
+- Production rollback prefers backup restore, traffic rollback, and forward-compatible migrations over data-destructive downgrade.
+- PostgreSQL migration verification must run in CI with a PostgreSQL service container or in staging before production deployment.
