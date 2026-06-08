@@ -110,3 +110,37 @@ def test_get_funnel_without_src_counts_everyone(db):
     report = get_funnel(db)
     by_event = {s.event: s.users for s in report.steps}
     assert by_event["register"] == 2  # both, src ignored
+
+
+# ── B3: admin funnel endpoint exposes src ──────────────────────────────────────
+
+
+def test_admin_funnel_src_param(client, db):
+    admin = _ensure_admin(db)
+    jike1 = _seed_user_with_src(db, "asrc_jike1", "jike_0608")
+    _seed_user_with_src(db, "asrc_xhs1", "xhs_0608")
+    track("publish", user_id=jike1.id)
+
+    resp = client.get(
+        "/api/admin/metrics/funnel?src=jike_0608",
+        headers=_admin_auth(admin),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["src"] == "jike_0608"
+    by_event = {s["event"]: s["users"] for s in body["funnel"]}
+    assert by_event["register"] == 1  # only the jike user
+    assert by_event["publish"] == 1
+
+
+def test_admin_funnel_src_omitted_counts_all(client, db):
+    admin = _ensure_admin(db)
+    _seed_user_with_src(db, "asrc_all1", "jike_0608")
+    _seed_user_with_src(db, "asrc_all2", None)
+
+    resp = client.get("/api/admin/metrics/funnel", headers=_admin_auth(admin))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["src"] is None
+    by_event = {s["event"]: s["users"] for s in body["funnel"]}
+    assert by_event["register"] == 2

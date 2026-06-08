@@ -135,6 +135,11 @@ def metrics_funnel(
             "on) or 'subtraction' (gamification off). Omit to combine both arms."
         ),
     ),
+    src: str | None = Query(
+        None,
+        max_length=64,
+        description="Restrict the funnel to users who registered with this flywheel source token (Appendix B). Omit for all sources.",
+    ),
     _current_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -151,13 +156,14 @@ def metrics_funnel(
         # Use CST-now so the "last N days" window aligns with our other date logic.
         since = get_now_cst() - timedelta(days=window_days)
 
-    funnel = get_funnel(db, since=since, window_days=window_days, cohort=cohort)
+    funnel = get_funnel(db, since=since, window_days=window_days, cohort=cohort, src=src)
     north_star = get_north_star(db, cohort=cohort)
     distribution = get_distribution_metrics(db, since=since)
 
     return {
         "window_days": window_days,
         "cohort": cohort,
+        "src": src,
         "since": since.isoformat() if since else None,
         "distribution": {
             "total_publishers": distribution.total_publishers,
