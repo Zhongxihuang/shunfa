@@ -39,3 +39,28 @@ def test_gamification_override_column_round_trips(db):
     db.commit()
     db.refresh(user)
     assert user.gamification_override is None
+
+
+# ── A2: resolve_gamification_enabled ───────────────────────────────────────────
+
+
+def test_resolve_override_on_forces_enabled():
+    from app.services.feature_flags import resolve_gamification_enabled
+
+    user = User(openid="ovr_on", gamification_override="on")
+    assert resolve_gamification_enabled(user) is True
+
+
+def test_resolve_override_off_forces_disabled():
+    from app.services.feature_flags import resolve_gamification_enabled
+
+    user = User(openid="ovr_off", gamification_override="off")
+    assert resolve_gamification_enabled(user) is False
+
+
+def test_resolve_null_falls_back_to_stable_bucket():
+    from app.services.feature_flags import gamification_enabled, resolve_gamification_enabled
+
+    user = User(openid="ovr_null", gamification_override=None)
+    user.id = 4242  # bucketing is a pure function of id
+    assert resolve_gamification_enabled(user) == gamification_enabled(4242)
