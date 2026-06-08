@@ -195,7 +195,10 @@ async def register(request: Request, body: RegisterRequest, db: Session = Depend
         db.rollback()
         raise HTTPException(status_code=400, detail="用户名已存在") from exc
 
-    track("register", user_id=user.id, props={"method": "web_password"})
+    register_props: dict[str, str] = {"method": "web_password"}
+    if body.src:
+        register_props["src"] = body.src
+    track("register", user_id=user.id, props=register_props)
     return _build_login_response(user, get_today_cst(), db)
 
 

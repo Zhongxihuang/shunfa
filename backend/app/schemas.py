@@ -152,6 +152,9 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
     password: str = Field(..., min_length=8)
+    # Appendix B (flywheel attribution): which external post/channel sent this
+    # user, e.g. "jike_0608". Optional; written into the register event metadata.
+    src: str | None = Field(default=None, max_length=64)
 
 
 class GamificationOverrideRequest(BaseModel):
