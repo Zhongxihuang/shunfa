@@ -19,7 +19,8 @@
         <view class="hero__meta">
           <text class="profile-kicker">个人写作档案</text>
           <text class="hero__greeting">{{userInfo.streak > 0 ? '保持这个节奏，写作会越来越轻' : '从今天开始，把发声变成习惯'}}</text>
-          <text class="hero__subtitle">当前连更 {{userInfo.streak}} 天 · 最长连更 {{userInfo.longest_streak}} 天</text>
+          <text wx:if="{{userInfo.gamification_enabled}}" class="hero__subtitle">当前连更 {{userInfo.streak}} 天 · 最长连更 {{userInfo.longest_streak}} 天</text>
+          <text wx:else class="hero__subtitle">把发声变成稳定的日常表达。</text>
         </view>
       </view>
       <view class="hero__memo note-card">
@@ -28,7 +29,7 @@
       </view>
     </view>
 
-    <view class="stats-grid">
+    <view wx:if="{{userInfo.gamification_enabled}}" class="stats-grid">
       <view class="stat-card paper-card">
         <text class="stat-kicker">当前</text>
         <text class="stat-value">{{userInfo.streak}}</text>
@@ -49,6 +50,28 @@
         <text class="stat-value">Lv.{{userInfo.level}}</text>
         <text class="stat-label">当前等级</text>
       </view>
+    </view>
+
+    <view wx:if="{{userInfo.gamification_enabled}}" class="reward-card paper-card">
+      <view class="reward-card__head">
+        <view class="reward-card__meta">
+          <text class="section-label">奖励</text>
+          <text class="reward-card__title">连胜保护卡</text>
+          <text class="reward-card__desc">断签当天自动消耗一张，连胜不归零。</text>
+        </view>
+        <view class="reward-card__counts">
+          <text class="reward-card__count">💎 {{userInfo.diamonds}}</text>
+          <text class="reward-card__count reward-card__count--freeze">🧊 {{userInfo.streak_freezes}} 张</text>
+        </view>
+      </view>
+      <button
+        class="reward-card__btn"
+        bindtap="onRedeemFreeze"
+        disabled="{{redeeming || userInfo.diamonds < freezeCost}}"
+      >
+        {{redeeming ? '兑换中…' : '用 ' + freezeCost + ' 💎 兑换一张'}}
+      </button>
+      <text wx:if="{{userInfo.diamonds < freezeCost}}" class="reward-card__hint">钻石不足，多发几天就够了</text>
     </view>
 
     <view class="quick-actions">
@@ -108,7 +131,7 @@
       </view>
     </view>
 
-    <view wx:if="{{achievements.length > 0}}" class="achievements-section">
+    <view wx:if="{{userInfo.gamification_enabled && achievements.length > 0}}" class="achievements-section">
       <text class="section-label">已解锁习惯</text>
       <view class="achievements-grid">
         <view wx:for="{{achievements}}" wx:key="type" class="achievement-badge">
@@ -121,7 +144,7 @@
       </view>
     </view>
 
-    <view wx:if="{{achievements.length === 0}}" class="achievements-section">
+    <view wx:if="{{userInfo.gamification_enabled && achievements.length === 0}}" class="achievements-section">
       <view class="achievements-empty note-card">
         <text>完成首次发布后，这里会出现你的第一枚记录。</text>
       </view>

@@ -7,7 +7,9 @@ Page({
     achievements: [],
     recentCheckins: [],
     draftCount: 0,
-    loading: true
+    loading: true,
+    freezeCost: 5,
+    redeeming: false
   },
 
   onShow() {
@@ -55,5 +57,25 @@ Page({
   onViewCheckin(e) {
     const { id } = e.currentTarget.dataset;
     wx.navigateTo({ url: `/pages/preview/preview?checkin_id=${id}` });
+  },
+
+  onRedeemFreeze() {
+    if (this.data.redeeming) return;
+    this.setData({ redeeming: true });
+    api.post('/api/redeem', { item: 'streak_freeze' })
+      .then((res) => {
+        // Reflect the new balance immediately, then re-sync from the server.
+        this.setData({
+          'userInfo.diamonds': res.diamonds,
+          'userInfo.streak_freezes': res.streak_freezes,
+          redeeming: false
+        });
+        wx.showToast({ title: `已兑换，共 ${res.streak_freezes} 张`, icon: 'success' });
+      })
+      .catch((err) => {
+        this.setData({ redeeming: false });
+        const msg = (err && err.data && (err.data.message || err.data.detail)) || '兑换失败，请稍后重试';
+        wx.showToast({ title: msg, icon: 'none' });
+      });
   }
 });

@@ -64,6 +64,19 @@ def test_coze_endpoint_rejects_wrong_token(client):
     assert response.status_code == 401
 
 
+def test_coze_endpoint_rejects_prefix_of_token(client):
+    """A token that is a prefix of the real one must be rejected, and the
+    constant-time compare must not raise on the length mismatch."""
+    response = client.get(
+        "/api/coze/user_stats",
+        headers={
+            "X-Coze-Plugin-Token": PLUGIN_TOKEN[:-1],
+            "X-Feishu-User-Id": FEISHU_USER_ID,
+        },
+    )
+    assert response.status_code == 401
+
+
 def test_coze_creates_user_on_first_call(client, db):
     response = client.get("/api/coze/user_stats", headers=COZE_HEADERS)
     assert response.status_code == 200

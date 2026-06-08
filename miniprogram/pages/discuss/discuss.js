@@ -18,7 +18,20 @@ Page({
       topic: decodeURIComponent(options.topic || '')
     });
 
-    // Add welcome message
+    if (!this.data.topic && this.data.checkinId) {
+      api.get(`/api/checkin/${this.data.checkinId}`)
+        .then(data => {
+          const topic = data.topic || '';
+          this.setData({ topic });
+          this.addMessage('assistant', `我们来聊聊「${topic}」吧。你对这个话题有什么想说的？`);
+        })
+        .catch(() => {
+          this.addMessage('assistant', '话题加载失败，请返回草稿箱重试。');
+          this.setData({ inputDisabled: true });
+        });
+      return;
+    }
+
     this.addMessage('assistant', `我们来聊聊「${this.data.topic}」吧。你对这个话题有什么想说的？`);
   },
 
@@ -78,7 +91,19 @@ Page({
       this.setData({ loading: false });
       const messages = this.data.messages.slice(0, -1);
       this.setData({ messages });
-      wx.showToast({ title: '消息发送失败，请重试', icon: 'none' });
+      const detail = err.data?.detail || '消息发送失败，请重试';
+      if (detail.includes('API Key')) {
+        wx.showModal({
+          title: '需要配置 API Key',
+          content: detail,
+          confirmText: '去设置',
+          success: (res) => {
+            if (res.confirm) wx.navigateTo({ url: '/pages/settings/settings' });
+          }
+        });
+      } else {
+        wx.showToast({ title: detail, icon: 'none' });
+      }
     });
   }
 });

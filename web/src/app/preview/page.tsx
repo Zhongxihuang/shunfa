@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { api, getErrorMessage } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import TemplateBeige from '@/components/post-templates/TemplateBeige';
 import TemplateMagazine from '@/components/post-templates/TemplateMagazine';
 import { renderPageToPng, downloadAsZip, downloadSinglePng } from '@/lib/composeImage';
@@ -28,12 +29,49 @@ interface ComposeAssets {
   tags: string[];
 }
 
+interface FormattedPost {
+  checkin_id: number;
+  platform: string;
+  requested_platform: string;
+  title: string;
+  body: string;
+  tags: string[];
+  char_count: number;
+  truncated: boolean;
+  truncated_marker: string;
+  text: string;
+}
+
+type PlatformId =
+  | 'xiaohongshu'
+  | 'moments'
+  | 'wechat_official'
+  | 'twitter'
+  | 'weibo'
+  | 'generic';
+
+interface PlatformOption {
+  id: PlatformId;
+  label: string;
+  hint: string;
+}
+
+const PLATFORMS: PlatformOption[] = [
+  { id: 'xiaohongshu', label: '小红书', hint: '≤1000 字 · 末尾加 #tag' },
+  { id: 'moments', label: '朋友圈', hint: '≤150 字 · 1 个 #tag' },
+  { id: 'wechat_official', label: '公众号', hint: '长文 · 无 #tag' },
+  { id: 'weibo', label: '微博', hint: '≤140 字 · #tag# 包围' },
+  { id: 'twitter', label: 'Twitter', hint: '≤280 字' },
+  { id: 'generic', label: '通用', hint: '未指定平台' },
+];
+
 type Step = 'preview' | 'quality_check' | 'quality_result' | 'composing' | 'compose_ready' | 'publishing';
 
 function PreviewContent() {
   const router = useRouter();
   const params = useSearchParams();
   const checkinId = parseInt(params.get('checkin_id') ?? '0');
+  const { user, refreshUser } = useAuth();
 
   const [topic, setTopic] = useState('');
   const [content, setContent] = useState('');
@@ -55,6 +93,14 @@ function PreviewContent() {
   const [copiedTitle, setCopiedTitle] = useState(false);
   const [copiedTags, setCopiedTags] = useState(false);
   const templateRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // W1.4: 多平台格式 + 导出
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformId>('xiaohongshu');
+  const [formatted, setFormatted] = useState<FormattedPost | null>(null);
+  const [formatting, setFormatting] = useState(false);
+  const [formatError, setFormatError] = useState('');
+  const [copiedFormatted, setCopiedFormatted] = useState(false);
+  const [downloadingFormat, setDownloadingFormat] = useState<'md' | 'txt' | null>(null);
 
   const loadCheckin = useCallback(() => {
     const draft = sessionStorage.getItem('current_draft') ?? '';
@@ -182,6 +228,7 @@ function PreviewContent() {
     setStep('publishing');
     try {
       const data = await api.post<PublishResult>('/api/confirm_publish', { checkin_id: checkinId });
+      await refreshUser();
       setResult(data);
     } catch (e: unknown) {
       setError(getErrorMessage(e, '发布失败，请重试'));
@@ -256,12 +303,87 @@ function PreviewContent() {
     } catch { /* best-effort */ }
   }
 
+  // W1.4: 拉取目标平台格式化的文本. 触发后,用户点"复制"就是第 2 步.
+  async function handleFormatForPlatform(platform: PlatformId) {
+    if (!checkinId || formatting) return;
+    setSelectedPlatform(platform);
+    setFormatting(true);
+    setFormatError('');
+    setCopiedFormatted(false);
+    try {
+      const resp = await api.post<FormattedPost>('/api/preview/format', {
+        checkin_id: checkinId,
+        platform,
+      });
+      setFormatted(resp);
+    } catch (e: unknown) {
+      setFormatError(getErrorMessage(e, '格式化失败,请重试'));
+      setFormatted(null);
+    } finally {
+      setFormatting(false);
+    }
+  }
+
+  async function handleCopyFormatted() {
+    if (!formatted) return;
+    try {
+      await navigator.clipboard.writeText(formatted.text);
+      setCopiedFormatted(true);
+      setTimeout(() => setCopiedFormatted(false), 2000);
+      // 埋点: 真实"复制"动作
+      api.post('/api/event/track', {
+        event: `copy_to_${formatted.platform}`,
+        props: { checkin_id: checkinId, char_count: formatted.char_count },
+      }).catch(() => { /* best-effort */ });
+    } catch { /* user can select manually */ }
+  }
+
+  async function handleDownload(format: 'md' | 'txt') {
+    if (!checkinId || downloadingFormat) return;
+    setDownloadingFormat(format);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const url = `/api/preview/export?checkin_id=${checkinId}&format=${format}`;
+      const resp = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `shunfa-checkin-${checkinId}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      api.post('/api/event/track', {
+        event: `export_${format}`,
+        props: { checkin_id: checkinId },
+      }).catch(() => { /* best-effort */ });
+    } catch (e: unknown) {
+      setFormatError(getErrorMessage(e, '下载失败,请重试'));
+    } finally {
+      setDownloadingFormat(null);
+    }
+  }
+
   if (result) {
     return (
       <div className="sf-shell md:max-w-4xl">
         <div className="sf-card mx-auto max-w-2xl p-8 text-center">
           <p className="sf-eyebrow">发布完成</p>
           <h1 className="sf-display mt-4 text-[40px] font-bold leading-tight text-[var(--ink)]">这篇已经发出去了</h1>
+          {user && (
+            <div className="mt-5 flex flex-wrap justify-center gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-4 py-2 text-base font-semibold text-orange-700">
+                🔥 已连更 {user.streak} 天！
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-4 py-2 text-base font-semibold text-yellow-700">
+                ⭐ {user.points} 积分
+              </span>
+            </div>
+          )}
           <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-[var(--ink-soft)]">
             内容已经进入历史稿件。之后可以回看，也可以从新的热点继续写下一篇。
           </p>
@@ -322,6 +444,7 @@ function PreviewContent() {
             <div className="mb-4 rounded-2xl bg-white px-4 py-5 text-center shadow-sm">
               <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
               <p className="text-sm text-gray-600">AI 正在生成质量提示...</p>
+              <p className="text-sm text-gray-400 mt-2">AI 正在审稿，通常需要 20-40 秒...</p>
             </div>
           )}
         </>
@@ -544,6 +667,105 @@ function PreviewContent() {
         </div>
       )}
 
+      {/* W1.4 多平台格式 + 导出 (fast path, visible whenever a draft exists) */}
+      {content.trim() && (
+        <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">直接发到目标平台</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                选平台 → 复制 → 粘贴。W1.4 目标：从这里到「内容出现在目标平台」≤ 2 步。
+              </p>
+            </div>
+          </div>
+
+          {/* Platform pills */}
+          <div className="mb-3 flex flex-wrap gap-2">
+            {PLATFORMS.map((p) => {
+              const active = selectedPlatform === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handleFormatForPlatform(p.id)}
+                  disabled={formatting}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                    active
+                      ? 'bg-primary text-white'
+                      : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                  title={p.hint}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Formatted preview */}
+          {formatting && (
+            <div className="rounded-xl bg-white px-3 py-3 text-center text-xs text-gray-500 shadow-sm">
+              正在格式化...
+            </div>
+          )}
+          {formatError && !formatting && (
+            <div className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">
+              {formatError}
+            </div>
+          )}
+          {formatted && !formatting && (
+            <>
+              <div className="relative rounded-xl bg-white px-3 py-3 shadow-sm">
+                <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-800">
+                  {formatted.text}
+                </pre>
+                {formatted.truncated && (
+                  <span className="absolute right-2 top-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">
+                    已截断
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
+                <span>
+                  平台: {PLATFORMS.find((p) => p.id === formatted.platform)?.label ?? formatted.platform}
+                  {formatted.platform !== formatted.requested_platform && (
+                    <span className="ml-1 text-amber-600">
+                      (未知平台「{formatted.requested_platform}」,已用通用格式)
+                    </span>
+                  )}
+                  · {formatted.char_count} 字
+                </span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyFormatted}
+                  className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-white hover:bg-primary-dark transition-colors"
+                >
+                  {copiedFormatted ? '✓ 已复制' : '📋 复制到剪贴板'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('md')}
+                  disabled={downloadingFormat !== null}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {downloadingFormat === 'md' ? '下载中...' : '⬇ .md'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('txt')}
+                  disabled={downloadingFormat !== null}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {downloadingFormat === 'txt' ? '下载中...' : '⬇ .txt'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {step === 'quality_result' && (
         <div className="flex gap-3">
           {(qualityPass || checkinStatus === 'completed') && (
@@ -586,7 +808,7 @@ function PreviewContent() {
             disabled={submitting || renderingImages}
             className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
           >
-            {submitting ? '记录中...' : '我已发到小红书，确认打卡'}
+            {submitting ? '记录中...' : '我已发到目标平台，确认打卡'}
           </button>
         </div>
       )}

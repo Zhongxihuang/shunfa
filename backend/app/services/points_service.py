@@ -78,7 +78,9 @@ def apply_points_and_update_user(user: User, checkin: CheckIn, db: Session) -> d
     # Update user
     user.points += points_earned
     user.level = calculate_level(user.points)
-    user.diamonds = calculate_diamonds(user.points)
+    # Effective balance = earned − already-spent, so redemptions (W3.9) persist
+    # instead of being overwritten by the freshly re-derived earned total.
+    user.diamonds = calculate_diamonds(user.points) - (user.diamonds_spent or 0)
 
     # Flush to trigger constraint checks, but do NOT commit
     db.flush()

@@ -5,6 +5,7 @@ from ..dependencies import get_current_user, get_db, get_resolved_api_key
 from ..models import CheckIn, CheckInStatus, HotTopic, User
 from ..rate_limit import limiter
 from ..schemas import SelectTopicRequest, SelectTopicResponse, TopicCard, TopicsResponse
+from ..services.analytics import track
 from ..services.discussion_service import reset_checkin_for_new_topic
 from ..services.generation_context import update_generation_context
 from ..services.topic_service import generate_topics
@@ -138,4 +139,13 @@ async def select_topic(
     db.commit()
     db.refresh(checkin)
 
+    track(
+        "topic_selected",
+        user_id=current_user.id,
+        props={
+            "checkin_id": checkin.id,
+            "source": "hot_topic" if selected_topic else "custom",
+            "platform": request.platform.value if request.platform else None,
+        },
+    )
     return SelectTopicResponse(checkin_id=checkin.id, status=checkin.status)

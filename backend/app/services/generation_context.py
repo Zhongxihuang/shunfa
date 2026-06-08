@@ -1,6 +1,8 @@
 import json
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from ..models import CheckIn
 
 
@@ -25,6 +27,83 @@ def update_generation_context(checkin: CheckIn, **updates: Any) -> dict[str, Any
         if value is not None:
             context[key] = value
     return set_generation_context(checkin, context)
+
+
+class GenerationContext(BaseModel):
+    """Typed view over the generation_context JSON grab-bag.
+
+    Every field is optional because the column accreted keys across features and
+    older rows only carry a subset. `extra="allow"` keeps any legacy/unknown key
+    intact so this model can be dropped in at read sites without risking data
+    loss on write-back. Pair `load_generation_context` (read) with
+    `dump_generation_context` / `store_generation_context` (write) — the latter
+    use `exclude_unset` so we never inject default `[]`/`None` keys that the
+    stored JSON never had.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    # Mode + platform
+    generation_mode: str | None = None
+    platform: str | None = None
+
+    # Angles
+    selected_angle: str | None = None
+    source_angle: str | None = None
+    counter_angle: str | None = None
+
+    # Structured strategy + facts
+    discussion_brief: dict[str, Any] | None = None
+    enriched_facts: str | None = None
+    char_count: int | None = None
+    prompt_version: str | None = None
+    compose_tags: list[str] = Field(default_factory=list)
+
+    # Hot-topic provenance
+    hot_topic_id: int | None = None
+    hot_topic_score: int | None = None
+    hot_topic_category: str | None = None
+
+    # 👎 feedback signals (consumed by style_memory)
+    feedback_reason_tags: list[str] = Field(default_factory=list)
+    feedback_free_text: str | None = None
+
+    # Quick-mode guard results
+    fact_guard_result: dict[str, Any] | None = None
+    discussion_guard_result: dict[str, Any] | None = None
+
+    # Revision / confirm guard results
+    revision_source_issues: list[Any] = Field(default_factory=list)
+    revision_instruction: str | None = None
+    revision_fact_guard: dict[str, Any] | None = None
+    revision_discussion_guard: dict[str, Any] | None = None
+    confirm_fact_guard: dict[str, Any] | None = None
+    confirm_quality_guard: dict[str, Any] | None = None
+    confirm_discussion_guard: dict[str, Any] | None = None
+
+
+def load_generation_context(checkin: CheckIn) -> GenerationContext:
+    """Parse a check-in's generation_context into the typed model.
+
+    Tolerates missing/malformed JSON by returning an empty model.
+    """
+    return GenerationContext.model_validate(parse_generation_context(checkin))
+
+
+def dump_generation_context(context: GenerationContext) -> dict[str, Any]:
+    """Serialize back to a plain dict, preserving exactly the keys that were set.
+
+    `exclude_unset=True` means default `[]`/`None` fields that were never present
+    in the source JSON are not written back, so round-trips stay byte-stable.
+    """
+    return context.model_dump(exclude_unset=True)
+
+
+def store_generation_context(
+    checkin: CheckIn, context: GenerationContext
+) -> dict[str, Any]:
+    """Write a typed context back onto the check-in as JSON."""
+    return set_generation_context(checkin, dump_generation_context(context))
 
 
 def build_fact_block_from_checkin(checkin: CheckIn) -> str:

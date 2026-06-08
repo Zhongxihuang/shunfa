@@ -3,14 +3,27 @@ const app = getApp();
 // Track whether we're already retrying a request to prevent infinite loops
 const _pendingRetry = new Set();
 
+const buildUrl = (url, method, data) => {
+  if ((method || 'GET') !== 'GET' || !data || Object.keys(data).length === 0) {
+    return `${app.globalData.baseUrl}${url}`;
+  }
+  const query = Object.keys(data)
+    .filter(key => data[key] !== null && data[key] !== undefined && data[key] !== '')
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(data[key])}`)
+    .join('&');
+  if (!query) return `${app.globalData.baseUrl}${url}`;
+  return `${app.globalData.baseUrl}${url}${url.includes('?') ? '&' : '?'}${query}`;
+};
+
 const request = (url, method, data) => {
   return new Promise((resolve, reject) => {
     const token = app.globalData.token;
+    const requestUrl = buildUrl(url, method, data);
     const doRequest = () => {
       wx.request({
-        url: `${app.globalData.baseUrl}${url}`,
+        url: requestUrl,
         method: method || 'GET',
-        data: data || {},
+        data: (method || 'GET') === 'GET' ? {} : (data || {}),
         header: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -27,9 +40,9 @@ const request = (url, method, data) => {
               // Retry with fresh token
               const newToken = app.globalData.token;
               wx.request({
-                url: `${app.globalData.baseUrl}${url}`,
+                url: requestUrl,
                 method: method || 'GET',
-                data: data || {},
+                data: (method || 'GET') === 'GET' ? {} : (data || {}),
                 header: {
                   'Content-Type': 'application/json',
                   ...(newToken ? { Authorization: `Bearer ${newToken}` } : {})
@@ -72,7 +85,7 @@ const request = (url, method, data) => {
 };
 
 module.exports = {
-  get: (url) => request(url, 'GET'),
+  get: (url, params) => request(url, 'GET', params),
   post: (url, data) => request(url, 'POST', data),
   put: (url, data) => request(url, 'PUT', data),
   delete: (url) => request(url, 'DELETE')

@@ -146,6 +146,79 @@
 .stat-card:nth-child(3) { animation-delay: 0.16s; }
 .stat-card:nth-child(4) { animation-delay: 0.20s; }
 
+.reward-card {
+  margin: 0 24rpx 24rpx;
+  padding: 28rpx 24rpx;
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+.reward-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 22rpx;
+}
+
+.reward-card__title {
+  display: block;
+  margin: 10rpx 0 8rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  color: var(--color-ink);
+  font-family: var(--font-family-display);
+}
+
+.reward-card__desc {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--color-ink-soft);
+}
+
+.reward-card__counts {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.reward-card__count {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.reward-card__count--freeze {
+  margin-top: 8rpx;
+  color: var(--color-accent-strong);
+}
+
+.reward-card__btn {
+  width: 100%;
+  margin: 0;
+  padding: 22rpx 0;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-accent-strong);
+  border-radius: var(--radius-sm);
+  line-height: 1.2;
+}
+
+.reward-card__btn[disabled] {
+  opacity: 0.5;
+  color: #fff;
+  background: var(--color-accent-strong);
+}
+
+.reward-card__hint {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: var(--color-ink-muted);
+  text-align: center;
+}
+
 .stat-kicker {
   display: inline-block;
   font-size: 20rpx;

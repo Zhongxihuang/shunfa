@@ -79,7 +79,9 @@ def test_web_backend_launch_path_register_byok_publish_and_profile(client, db):
         headers=headers,
     )
     assert save_key_response.status_code == 200
-    assert save_key_response.json() == {"configured": True, "preview": "...-key"}
+    save_key_body = save_key_response.json()
+    assert save_key_body["configured"] is True
+    assert save_key_body["preview"] == "...-key"
 
     topic_response = client.get("/api/hot_topics/today", headers=headers)
     assert topic_response.status_code == 200
@@ -100,7 +102,8 @@ def test_web_backend_launch_path_register_byok_publish_and_profile(client, db):
 
     with (
         patch(
-            "app.routers.content.quick_generate", new=AsyncMock(side_effect=_fake_quick_generate)
+            "app.services.generation_orchestrator.quick_generate",
+            new=AsyncMock(side_effect=_fake_quick_generate),
         ),
         patch(
             "app.routers.content.confirm_content",

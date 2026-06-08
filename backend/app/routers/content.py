@@ -12,6 +12,8 @@ from ..schemas import (
     ConfirmPublishRequest,
     ContentFeedbackRequest,
     ContentFeedbackResponse,
+    FormatPostRequest,
+    FormattedPostResponse,
     MessageRequest,
     MessageResponse,
     PublishResponse,
@@ -22,14 +24,12 @@ from ..schemas import (
     ReviseContentRequest,
     ReviseContentResponse,
 )
+from ..services.analytics import track
 from ..services.compose_service import compose_post_assets
 from ..services.content_service import AlreadyPublishedError, confirm_publish
 from ..services.discussion_service import process_message
 from ..services.draft_service import (
-    build_quick_generate_context,
-    build_quick_generate_context_from_checkin,
     confirm_content,
-    quick_generate,
     review_content_quality,
     revise_content_with_feedback,
 )
@@ -37,9 +37,11 @@ from ..services.fact_enrichment_service import enrich_facts
 from ..services.generation_context import (
     build_discussion_brief,
     build_fact_block_from_checkin,
+    load_generation_context,
     parse_generation_context,
     update_generation_context,
 )
+from ..services.generation_orchestrator import run_quick_generation
 from ..services.prompt_templates import prompts
 from ..utils.time_utils import get_now_cst, get_today_cst
 
@@ -90,106 +92,30 @@ async def quick_generate_endpoint(
     db: Session = Depends(get_db),
 ):
     """Quick mode: generate content in ~30s from a hot topic + angle. Stateless."""
-    hot_topic = body.hot_topic
-    fact_block = None
-    topic_record = None
-    counter_angle = ""
     checkin = None
     if body.checkin_id is not None:
         checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
         if checkin.status == CheckInStatus.completed:
             raise HTTPException(status_code=400, detail="今日已完成发布")
 
+    topic_record = None
     if body.topic_id is not None:
         topic_record = get_today_hot_topic_or_404(body.topic_id, db)
-        hot_topic = topic_record.title
-        counter_angle = topic_record.ai_counter_angle or ""
-        fact_block = build_quick_generate_context(
-            hot_topic=topic_record.title,
-            summary=topic_record.summary or "",
-            source=topic_record.source,
-            published_at=topic_record.published_at,
-            url=topic_record.url,
-        )
-    elif checkin is not None:
-        context = parse_generation_context(checkin)
-        counter_angle = context.get("counter_angle", "")
-        if any(
-            [
-                checkin.topic_source,
-                checkin.topic_summary,
-                checkin.topic_url,
-                checkin.topic_published_at,
-            ]
-        ):
-            hot_topic = checkin.topic
-            fact_block = build_quick_generate_context_from_checkin(checkin)
 
-    effective_fact_block = fact_block or build_quick_generate_context(hot_topic)
-
-    # Fact enrichment: try to get more context before drafting
-    article_url = (
-        (topic_record.url if topic_record else None) or (checkin.topic_url if checkin else "") or ""
-    )
-    ctx_cache = parse_generation_context(checkin) if checkin else {}
-    if ctx_cache.get("enriched_facts"):
-        # Reuse cached enrichment from a prior generate/revise call
-        effective_fact_block = ctx_cache["enriched_facts"]
-    else:
-        effective_fact_block = await enrich_facts(
-            base_fact_block=effective_fact_block,
-            article_url=article_url,
-            hot_topic=hot_topic,
-            angle=body.angle,
-        )
-
-    discussion_brief = body.discussion_brief or build_discussion_brief(
-        topic=hot_topic,
-        fact_block=effective_fact_block,
+    result = await run_quick_generation(
+        db=db,
+        user=current_user,
+        api_key=api_key,
+        hot_topic=body.hot_topic,
         angle=body.angle,
         platform=body.platform.value,
+        discussion_brief=body.discussion_brief,
         opportunities=body.opportunities,
         risks=body.risks,
-        counter_angle=counter_angle,
+        checkin=checkin,
+        topic_record=topic_record,
+        charge_free_quota=getattr(request.state, "api_key_source", None) == "free_quota",
     )
-    result = await quick_generate(
-        hot_topic=hot_topic,
-        angle=body.angle,
-        platform=body.platform.value,
-        fact_block=effective_fact_block,
-        discussion_brief=discussion_brief,
-        api_key=api_key,
-    )
-    if checkin is not None:
-        checkin.topic = hot_topic
-        if topic_record is not None:
-            checkin.topic_source = topic_record.source
-            checkin.topic_url = topic_record.url
-            checkin.topic_summary = topic_record.summary
-            checkin.topic_published_at = topic_record.published_at
-        checkin.content = result["content"]
-        checkin.status = CheckInStatus.draft_ready
-        update_generation_context(
-            checkin,
-            generation_mode="quick",
-            platform=result["platform"],
-            selected_angle=body.angle,
-            discussion_brief=discussion_brief,
-            char_count=result["char_count"],
-            fact_guard_result={"pass": result["fact_pass"], "issues": result["fact_issues"]},
-            discussion_guard_result={
-                "pass": result["discussion_pass"],
-                "issues": result["discussion_issues"],
-            },
-            hot_topic_id=topic_record.id if topic_record else None,
-            hot_topic_score=topic_record.score if topic_record else None,
-            hot_topic_category=topic_record.category if topic_record else None,
-            source_angle=topic_record.ai_angle if topic_record else None,
-            counter_angle=topic_record.ai_counter_angle if topic_record else counter_angle,
-            prompt_version=prompts.version,
-            enriched_facts=effective_fact_block,
-        )
-        db.commit()
     return QuickGenerateResponse(**result)
 
 
@@ -265,21 +191,40 @@ async def generate_content(
         fact_block=fact_block,
         discussion_brief=discussion_brief,
     )
+    track(
+        "discuss_round",
+        user_id=current_user.id,
+        props={"checkin_id": checkin.id, "platform": platform},
+    )
+    # If this round produced a draft, mark the funnel transition and charge a
+    # free-trial credit (discussion rounds that don't produce a draft stay free).
+    if result.get("status") == CheckInStatus.draft_ready and result.get("draft"):
+        track(
+            "draft_generated",
+            user_id=current_user.id,
+            props={"checkin_id": checkin.id, "platform": platform},
+        )
+        if getattr(request.state, "api_key_source", None) == "free_quota":
+            from ..services.free_quota import consume_free_quota
+
+            consume_free_quota(db, current_user)
     return MessageResponse(**result)
 
 
 @router.post("/confirm_content")
+@limiter.limit(settings.ai_analysis_rate_limit)
 async def confirm_content_endpoint(
-    request: ConfirmContentRequest,
+    request: Request,
+    body: ConfirmContentRequest,
     current_user: User = Depends(get_current_user),
     api_key: str = Depends(get_resolved_api_key),
     db: Session = Depends(get_db),
 ):
     """User confirms (possibly edited) draft content. Returns quality check result."""
-    checkin = get_checkin_or_404(request.checkin_id, current_user.id, db)
+    checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
 
     try:
-        qc_result = await confirm_content(checkin, request.content, db, api_key=api_key)
+        qc_result = await confirm_content(checkin, body.content, db, api_key=api_key)
         return {
             "status": "pending",
             "content_approved": qc_result["quality_pass"],
@@ -407,6 +352,11 @@ async def confirm_publish_endpoint(
 
     try:
         result = await confirm_publish(checkin, db, current_user)
+        track(
+            "publish",
+            user_id=current_user.id,
+            props={"checkin_id": checkin.id},
+        )
         return PublishResponse(**result)
     except AlreadyPublishedError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
@@ -427,3 +377,144 @@ async def compose_post_assets_endpoint(
     checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
     result = await compose_post_assets(checkin, api_key)
     return ComposePostAssetsResponse(**result)
+
+
+# ── W1.4: multi-platform format + export ────────────────────────────────────
+
+
+def _serialize_compose_tags(checkin: CheckIn) -> list[str]:
+    """Best-effort pull of tags from generation_context.compose_tags.
+
+    The compose service stores its full result inside generation_context.
+    On older checkins (before W1.4) this key may be missing — return [].
+    """
+    tags = load_generation_context(checkin).compose_tags
+    return [str(t) for t in tags if t]
+
+
+def _build_text_response(platform: str, requested: str, post) -> dict:
+    """Combine title+body+tags into a single paste-ready string.
+
+    Convention: we use double newlines (`\\n\\n`) between every section, and
+    the platform-specific tag style. This matches the byte length that
+    `format_post` already computed (its `char_count` reflects the
+    `\n\n`-joined form), so the response's `char_count` and `len(text)`
+    are always equal.
+    """
+    sections: list[str] = []
+    if post.title:
+        sections.append(post.title)
+    if post.body:
+        sections.append(post.body)
+    if post.tags:
+        if platform == "wechat_official":
+            # 公众号 uses no inline hashtags in the body at all.
+            pass
+        elif platform == "weibo":
+            sections.append(" ".join(f"#{t}#" for t in post.tags))
+        elif platform == "moments":
+            sections.append(" ".join(f"# {t}" for t in post.tags))
+        else:
+            sections.append(" ".join(f"#{t}" for t in post.tags))
+    if post.truncated and post.truncated_marker:
+        sections.append(post.truncated_marker)
+    text = "\n\n".join(sections)
+    return {
+        "platform": platform,
+        "requested_platform": requested,
+        "title": post.title,
+        "body": post.body,
+        "tags": post.tags,
+        "char_count": len(text),  # recompute from the actual `text` to stay in sync
+        "truncated": post.truncated,
+        "truncated_marker": post.truncated_marker,
+        "text": text,
+    }
+
+
+@router.post("/preview/format", response_model=FormattedPostResponse)
+async def preview_format_endpoint(
+    body: FormatPostRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FormattedPostResponse:
+    """Format one checkin for one target platform.
+
+    This is the step-2 of the W1.4 "≤2 steps" promise. It is intentionally
+    non-LLM: the formatters are deterministic and run in < 50ms. Frontend
+    then gives the user a one-click "复制" button.
+
+    Unknown platform ids fall back to `generic`. The response echoes both
+    the requested and the actual platform so the UI can warn.
+    """
+    checkin = get_checkin_or_404(body.checkin_id, current_user.id, db)
+    if not checkin.content:
+        raise HTTPException(status_code=400, detail="CheckIn has no content to format")
+
+    from ..services.publish_format_service import (
+        SUPPORTED_PLATFORMS,
+        format_post,
+    )
+
+    requested = body.platform
+    if requested not in SUPPORTED_PLATFORMS:
+        # Silent fallback. The "fallback" semantics are also why we don't
+        # return 400 — we'd rather give the user something to paste than
+        # a confusing error on a typo'd platform id.
+        used_platform = "generic"
+    else:
+        used_platform = requested
+
+    provided_tags = _serialize_compose_tags(checkin)
+    post = format_post(
+        topic=checkin.topic or "",
+        content=checkin.content or "",
+        platform=used_platform,
+        provided_tags=provided_tags,
+    )
+    payload = _build_text_response(used_platform, requested, post)
+    return FormattedPostResponse(checkin_id=checkin.id, **payload)
+
+
+@router.get("/preview/export")
+async def preview_export_endpoint(
+    checkin_id: int,
+    format: str = "md",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download the checkin content as .md or .txt.
+
+    `format` is `md` (default) or `txt`. The response is a plain-text
+    attachment so the browser can save it directly.
+    """
+    from fastapi.responses import PlainTextResponse
+
+    from ..services.publish_format_service import export_markdown, export_plain
+
+    fmt = (format or "md").lower()
+    if fmt not in ("md", "txt"):
+        raise HTTPException(status_code=400, detail="format must be 'md' or 'txt'")
+
+    checkin = get_checkin_or_404(checkin_id, current_user.id, db)
+    if not checkin.content:
+        raise HTTPException(status_code=400, detail="CheckIn has no content to export")
+
+    provided_tags = _serialize_compose_tags(checkin)
+    topic = checkin.topic or "未命名"
+    if fmt == "md":
+        body = export_markdown(topic, checkin.content, provided_tags)
+        media = "text/markdown; charset=utf-8"
+        suffix = "md"
+    else:
+        body = export_plain(topic, checkin.content, provided_tags)
+        media = "text/plain; charset=utf-8"
+        suffix = "txt"
+
+    # ASCII-safe filename for HTTP header. We keep the topic in the body,
+    # the filename stays ASCII to dodge encoding-edge-case browsers.
+    filename = f"shunfa-checkin-{checkin.id}.{suffix}"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+    return PlainTextResponse(content=body, media_type=media, headers=headers)

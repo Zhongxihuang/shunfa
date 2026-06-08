@@ -56,6 +56,30 @@ def client(db):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(scope="function", autouse=True)
+def analytics_session_local(db_engine):
+    """Point `app.services.analytics.SessionLocal` at the test engine so
+    track() writes go to the same in-memory DB the rest of the test sees.
+
+    analytics.track() deliberately uses its own SessionLocal() (not get_db) to
+    stay decoupled from the FastAPI request lifecycle — that's why we have to
+    rebind it here for tests.
+
+    autouse=True so every test automatically gets analytics wired up; the
+    helper is best-effort, so existing tests still pass even if events aren't
+    asserted on.
+    """
+    from app.services import analytics
+
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
+    original = analytics.SessionLocal
+    analytics.SessionLocal = TestingSessionLocal
+    try:
+        yield TestingSessionLocal
+    finally:
+        analytics.SessionLocal = original
+
+
 @pytest.fixture(autouse=True)
 def override_test_settings():
     original_admin_password = settings.admin_password
@@ -75,6 +99,22 @@ def override_test_settings():
         settings.coze_plugin_token = original_coze_plugin_token
         settings.enable_coze_plugin = original_enable_coze_plugin
         settings.environment = original_environment
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Reset the shared in-memory rate limiter before each test.
+
+    The limiter's storage is process-global, so per-minute counters otherwise
+    accumulate across the whole suite and a late test can spuriously hit 429.
+    """
+    from app.rate_limit import limiter
+
+    try:
+        limiter._storage.reset()
+    except Exception:
+        pass
+    yield
 
 
 @pytest.fixture(autouse=True)

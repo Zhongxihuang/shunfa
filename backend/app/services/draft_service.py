@@ -189,9 +189,14 @@ async def quick_generate(
     fact_block: str | None = None,
     discussion_brief: dict | None = None,
     api_key: str = "",
+    style_memory: str = "",
 ) -> dict:
     """
     Quick mode: single-shot content generation. No session state required.
+
+    `style_memory`, when provided, carries the user's learned preferences (from
+    past 👎 feedback) and is injected as extra requirements on every generation
+    pass so the model honours them from the first draft.
 
     Returns {"content": str, "platform": str, "char_count": int}
     """
@@ -206,6 +211,7 @@ async def quick_generate(
         discussion_brief=discussion_brief,
         temperature=0.45,
         api_key=api_key,
+        extra_requirements=style_memory,
     )
     content = remove_identity_framing(content.strip())
 
@@ -227,6 +233,9 @@ async def quick_generate(
 
     if all_issues:
         fixes = "\n".join(f"- {issue}" for issue in all_issues)
+        revision_requirements = f"上一版存在以下问题，请逐一修正：\n{fixes}"
+        if style_memory:
+            revision_requirements = f"{style_memory}\n\n{revision_requirements}"
         content = await _generate_quick_draft(
             hot_topic=hot_topic,
             angle=angle,
@@ -235,7 +244,7 @@ async def quick_generate(
             discussion_brief=discussion_brief,
             temperature=0.25,
             api_key=api_key,
-            extra_requirements=f"上一版存在以下问题，请逐一修正：\n{fixes}",
+            extra_requirements=revision_requirements,
         )
         content = remove_identity_framing(content.strip())
         # Re-run grounding check only to update the response field

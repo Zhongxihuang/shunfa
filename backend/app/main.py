@@ -15,7 +15,7 @@ from app.dependencies import get_db
 from app.errors import normalize_http_error
 from app.logging_config import get_logger, setup_logging
 from app.middleware import RequestIDMiddleware, RequestLoggingMiddleware
-from app.routers import admin, content, coze_plugin, hot_topics, reminder, topics, user
+from app.routers import admin, analytics, content, coze_plugin, hot_topics, reminder, topics, user
 from app.routers.my import router as my_router
 
 
@@ -52,9 +52,8 @@ async def lifespan(app: FastAPI):
 
     # Development: auto-upgrade to latest migration
     if settings.environment == "development":
-        from alembic.config import Config
-
         from alembic import command
+        from alembic.config import Config
 
         logger.debug("Running database migrations...")
         alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
@@ -140,7 +139,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     from app.logging_config import _request_id_context, get_logger
 
     logger = get_logger("exception")
-    request_id = _request_id_context or "unknown"
+    request_id = _request_id_context.get() or "unknown"
 
     logger.exception(f"Unhandled exception: {type(exc).__name__}: {str(exc)}")
 
@@ -160,6 +159,7 @@ app.include_router(content.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
 app.include_router(reminder.router, prefix="/api")
 app.include_router(hot_topics.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
 if settings.enable_coze_plugin:
     app.include_router(coze_plugin.router, prefix="/api")
 app.include_router(my_router, prefix="/api")

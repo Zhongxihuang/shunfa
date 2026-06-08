@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { isDevPreviewToken } from '@/lib/devPreview';
 
@@ -34,6 +34,7 @@ function SettingsContent() {
   const [apiKeySaving, setApiKeySaving] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (isDevPreviewToken(token)) {
@@ -87,12 +88,17 @@ function SettingsContent() {
   }
 
   async function handleDeleteApiKey() {
-    localStorage.removeItem('shunfa_api_key');
-    if (!isDevPreviewToken(token)) {
-      await api.delete('/api/user/api_key');
+    setError('');
+    try {
+      if (!isDevPreviewToken(token)) {
+        await api.delete('/api/user/api_key');
+      }
+      localStorage.removeItem('shunfa_api_key');
+      setApiKeyStatus({ configured: false, preview: null });
+      setApiKeyConfigured(false);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, '删除失败，请重试'));
     }
-    setApiKeyStatus({ configured: false, preview: null });
-    setApiKeyConfigured(false);
   }
 
   return (
@@ -119,6 +125,7 @@ function SettingsContent() {
           </span>
         </div>
 
+        {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
         {!apiKeyStatus.configured || showApiKey ? (
           <div className="space-y-3">
             <input

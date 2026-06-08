@@ -131,6 +131,11 @@ class UserStatusResponse(BaseModel):
     last_checkin_date: date | None
     today_completed: bool
     reminder_needed: bool = False
+    # Subtraction experiment (W2.7): when False the client hides all
+    # gamification UI (streak / points / level / diamonds / achievements).
+    gamification_enabled: bool = True
+    # Streak freeze (W3.8): protection cards that save the streak on a missed day.
+    streak_freezes: int = 0
 
     class Config:
         from_attributes = True
@@ -150,17 +155,37 @@ class RegisterRequest(BaseModel):
 
 
 class WebAuthLoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., max_length=100)
+    password: str = Field(..., max_length=200)
 
 
 class ApiKeyStatusResponse(BaseModel):
     configured: bool
     preview: str | None = None  # last 4 chars e.g. "...ab12"
+    # Entry-loop free trial. When free_quota_enabled is False the frontend
+    # should fall back to the legacy "configure key to start" copy.
+    free_quota_enabled: bool = False
+    free_quota_limit: int = 0
+    free_quota_used: int = 0
+    free_quota_remaining: int = 0
 
 
 class SaveApiKeyRequest(BaseModel):
     api_key: str = Field(..., min_length=10, pattern=r"^sk-")
+
+
+# ── Diamond sink / redemption (W3.9) ───────────────────────────────────────────
+
+
+class RedeemRequest(BaseModel):
+    item: str = Field(..., min_length=1, max_length=64)
+
+
+class RedeemResponse(BaseModel):
+    item: str
+    cost: int
+    diamonds: int  # remaining effective balance
+    streak_freezes: int
 
 
 class LoginResponse(BaseModel):
@@ -341,3 +366,31 @@ class ComposePostAssetsResponse(BaseModel):
     pages: list[str]  # 1-3 segments of body text, each for one image
     title: str  # Xiaohongshu-style title (with emoji, ≤20 chars)
     tags: list[str]  # 5-8 hashtags without # prefix
+
+
+# ── W1.4 真发布 MVP: format + export ──────────────────────────────────────────
+
+
+class FormatPostRequest(BaseModel):
+    checkin_id: int
+    platform: str = Field(
+        default="xiaohongshu",
+        max_length=32,
+        description=(
+            "Target platform id. Supported: xiaohongshu, moments, wechat_official, "
+            "twitter, weibo, generic. Unknown ids fall back to generic."
+        ),
+    )
+
+
+class FormattedPostResponse(BaseModel):
+    checkin_id: int
+    platform: str  # the platform id actually used (may be 'generic' fallback)
+    requested_platform: str  # what the caller asked for, before fallback
+    title: str
+    body: str
+    tags: list[str]
+    char_count: int
+    truncated: bool
+    truncated_marker: str = ""
+    text: str  # the full pre-formatted text (title + body + tags), ready to paste

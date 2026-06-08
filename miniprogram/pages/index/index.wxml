@@ -18,7 +18,7 @@
         </text>
       </view>
 
-      <view class="hero__metrics">
+      <view wx:if="{{userInfo.gamification_enabled}}" class="hero__metrics">
         <view class="hero__metric">
           <text class="hero__metric-value">{{userInfo.streak}}</text>
           <text class="hero__metric-label">当前连更</text>
@@ -57,7 +57,7 @@
       </view>
     </view>
 
-    <view class="summary-grid">
+    <view wx:if="{{userInfo.gamification_enabled}}" class="summary-grid">
       <view class="summary-card paper-card">
         <text class="section-label">写作进度</text>
         <view class="summary-card__component">

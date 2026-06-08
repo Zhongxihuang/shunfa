@@ -39,6 +39,7 @@ def test_consecutive_day_increments_streak(user, db):
 def test_gap_resets_streak(user, db):
     two_days_ago = get_today_cst() - timedelta(days=2)
     user.streak = 5
+    user.streak_freezes = 0  # no protection card → the gap should reset
     user.last_checkin_date = two_days_ago
     db.commit()
 
@@ -66,6 +67,7 @@ def test_longest_streak_not_decreased(user, db):
     two_days_ago = get_today_cst() - timedelta(days=2)
     user.streak = 3
     user.longest_streak = 15
+    user.streak_freezes = 0  # no protection card → the gap should reset
     user.last_checkin_date = two_days_ago
     db.commit()
 

@@ -70,7 +70,12 @@ Page({
 
   onViewCheckin(e) {
     const { id, status } = e.currentTarget.dataset;
-    // All checkins go to preview page - the preview page handles different statuses
+    if (status === 'topic_selected' || status === 'discussing') {
+      wx.navigateTo({
+        url: `/pages/discuss/discuss?checkin_id=${id}`
+      });
+      return;
+    }
     wx.navigateTo({
       url: `/pages/preview/preview?checkin_id=${id}`
     });

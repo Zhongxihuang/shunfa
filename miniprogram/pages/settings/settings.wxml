@@ -15,6 +15,48 @@
     </view>
 
     <view class="settings-card paper-card">
+      <view class="setting-row api-key-row">
+        <view class="setting-copy">
+          <text class="setting-label">DeepSeek API Key</text>
+          <text class="setting-desc">
+            {{apiKeyConfigured ? ('已配置 ' + apiKeyPreview + '。Key 只加密保存在服务端账号下。') : 'AI 选题、讨论和起稿需要先配置 DeepSeek Key。'}}
+          </text>
+        </view>
+        <view class="api-key-status {{apiKeyConfigured ? 'configured' : 'missing'}}">
+          {{apiKeyConfigured ? '已配置' : '未配置'}}
+        </view>
+      </view>
+
+      <view wx:if="{{!apiKeyConfigured || showApiKeyInput}}" class="api-key-form">
+        <input
+          class="api-key-input"
+          type="safe-password"
+          password="{{true}}"
+          placeholder="sk-..."
+          value="{{apiKeyInput}}"
+          bindinput="onApiKeyInput"
+        />
+        <view class="api-key-actions">
+          <button
+            class="btn-primary api-key-save {{apiKeySaving ? 'saving' : ''}}"
+            bindtap="onSaveApiKey"
+            disabled="{{apiKeySaving || !apiKeyInput}}"
+          >
+            {{apiKeySaving ? '保存中...' : '保存 Key'}}
+          </button>
+          <button wx:if="{{showApiKeyInput}}" class="api-key-secondary" bindtap="onCancelApiKeyInput">
+            取消
+          </button>
+        </view>
+      </view>
+
+      <view wx:else class="api-key-actions">
+        <button class="api-key-secondary" bindtap="onShowApiKeyInput">更换 Key</button>
+        <button class="api-key-danger" bindtap="onDeleteApiKey">移除</button>
+      </view>
+    </view>
+
+    <view class="settings-card paper-card">
       <view class="setting-row">
         <view class="setting-copy">
           <text class="setting-label">开启每日提醒</text>

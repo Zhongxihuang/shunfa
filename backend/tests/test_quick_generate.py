@@ -108,6 +108,29 @@ async def test_quick_generate_prompt_includes_topic_and_angle():
     assert '不得出现"作为AI从业者"' in prompt_text
 
 
+@pytest.mark.asyncio
+async def test_quick_generate_injects_style_memory_into_first_draft():
+    """A non-empty style_memory must appear in the very first generation prompt."""
+    style_memory = "之前的内容被反馈太平淡，请增强观点锐度。\n用户明确提过的偏好：少用感叹号"
+    with patch("app.services.draft_service.chat_completion", new_callable=AsyncMock) as mock_ai:
+        mock_ai.side_effect = [
+            "内容",
+            '{"pass": true, "issues": []}',
+            '{"pass": true, "issues": []}',
+        ]
+        await quick_generate(
+            hot_topic="某热点",
+            angle="某角度",
+            platform="xiaohongshu",
+            style_memory=style_memory,
+        )
+
+    first_prompt = mock_ai.await_args_list[0].args[0][0]["content"]
+    assert "额外修正要求" in first_prompt
+    assert "少用感叹号" in first_prompt
+    assert "增强观点锐度" in first_prompt
+
+
 def test_quick_generate_prompt_forbids_identity_framing():
     from app.services.prompt_templates import prompts
 

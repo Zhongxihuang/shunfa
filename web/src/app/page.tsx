@@ -65,6 +65,29 @@ function Dashboard() {
             <p className="mt-4 max-w-xl text-sm leading-7 text-[var(--ink-soft)]">
               选一个热点，形成一个判断。草稿可以回来继续，历史稿件也会一直保留。
             </p>
+            {user.gamification_enabled && (
+              <div className="mt-5 flex flex-wrap gap-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700">
+                  🔥 {user.streak > 0 ? `已连更 ${user.streak} 天` : '今天开始第一天'}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-3 py-1.5 text-sm font-medium text-yellow-700">
+                  ⭐ {user.points} 积分
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-600">
+                  Lv.{user.level}
+                </span>
+                {user.streak_freezes > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-700">
+                    🧊 {user.streak_freezes} 张保护卡
+                  </span>
+                )}
+              </div>
+            )}
+            {user.reminder_needed && !user.today_completed && (
+              <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
+                今天还没发，继续连胜的话现在可以开始 →
+              </div>
+            )}
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link href="/topics" className="sf-btn-primary flex-1">
                 开始今日写作

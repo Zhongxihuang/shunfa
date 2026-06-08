@@ -6,6 +6,7 @@ Page({
     topics: [],
     loading: false,
     generating: false,
+    apiKeyConfigured: false,
     selectedTopicId: null,
     emptyState: false,
     loadError: false,
@@ -14,6 +15,7 @@ Page({
   onLoad() {
     auth.ensureLoggedIn().then(() => {
       this.loadTopics();
+      this.loadApiKeyStatus();
     }).catch(err => {
       wx.showToast({ title: '请先登录', icon: 'none' });
     });
@@ -36,6 +38,16 @@ Page({
       });
   },
 
+  loadApiKeyStatus() {
+    api.get('/api/user/api_key/status')
+      .then(data => {
+        this.setData({ apiKeyConfigured: !!data.configured });
+      })
+      .catch(() => {
+        this.setData({ apiKeyConfigured: false });
+      });
+  },
+
   onSelectTopic(e) {
     const selected = this.data.topics.find(item => item.id === e.detail.id) || null;
     this.setData({
@@ -47,6 +59,19 @@ Page({
     const selected = this.data.topics.find(item => item.id === this.data.selectedTopicId);
     if (!selected || this.data.generating) {
       wx.showToast({ title: '请选择一个热点', icon: 'none' });
+      return;
+    }
+    if (!this.data.apiKeyConfigured) {
+      wx.showModal({
+        title: '需要配置 API Key',
+        content: 'AI 起稿需要先在设置页保存 DeepSeek API Key。',
+        confirmText: '去设置',
+        success: (res) => {
+          if (res.confirm) {
+            wx.navigateTo({ url: '/pages/settings/settings' });
+          }
+        }
+      });
       return;
     }
 
@@ -69,7 +94,19 @@ Page({
         });
       })
       .catch(err => {
-        wx.showToast({ title: err.data?.detail || '生成失败', icon: 'none' });
+        const detail = err.data?.detail || '生成失败';
+        if (detail.includes('API Key')) {
+          wx.showModal({
+            title: '需要配置 API Key',
+            content: detail,
+            confirmText: '去设置',
+            success: (res) => {
+              if (res.confirm) wx.navigateTo({ url: '/pages/settings/settings' });
+            }
+          });
+        } else {
+          wx.showToast({ title: detail, icon: 'none' });
+        }
       })
       .finally(() => {
         this.setData({ generating: false });

@@ -56,6 +56,74 @@
     linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(249, 244, 235, 0.98) 100%);
 }
 
+.api-key-row {
+  align-items: center;
+}
+
+.api-key-status {
+  flex-shrink: 0;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  border: 2rpx solid rgba(182, 172, 153, 0.56);
+}
+
+.api-key-status.configured {
+  color: var(--color-accent-dark);
+  background: rgba(232, 238, 228, 0.92);
+}
+
+.api-key-status.missing {
+  color: #b56a5b;
+  background: rgba(181, 106, 91, 0.08);
+}
+
+.api-key-form {
+  padding: 0 0 28rpx;
+}
+
+.api-key-input {
+  min-height: 88rpx;
+  padding: 0 24rpx;
+  border-radius: 24rpx;
+  border: 2rpx solid rgba(182, 172, 153, 0.56);
+  background: rgba(255, 253, 248, 0.9);
+  font-size: 28rpx;
+  color: var(--color-ink);
+}
+
+.api-key-actions {
+  display: flex;
+  gap: 16rpx;
+  padding: 0 0 28rpx;
+}
+
+.api-key-save {
+  flex: 1;
+  margin: 0;
+}
+
+.api-key-secondary,
+.api-key-danger {
+  flex: 1;
+  min-height: 80rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 253, 248, 0.9);
+  border: 2rpx solid rgba(182, 172, 153, 0.56);
+  color: var(--color-ink-soft);
+  font-size: 26rpx;
+}
+
+.api-key-danger {
+  color: #b56a5b;
+  border-color: rgba(181, 106, 91, 0.3);
+}
+
+.api-key-secondary::after,
+.api-key-danger::after {
+  border: none;
+}
+
 .setting-row {
   display: flex;
   justify-content: space-between;

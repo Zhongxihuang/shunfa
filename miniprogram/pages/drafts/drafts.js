@@ -38,17 +38,15 @@ Page({
 
   onContinueDraft(e) {
     const { id, status } = e.currentTarget.dataset;
-    // Navigate to discuss for topic_selected, discussing, draft_ready
-    // Navigate to preview for pending
-    if (status === 'pending' || status === 'draft') {
-      wx.navigateTo({
-        url: `/pages/preview/preview?checkin_id=${id}`
-      });
-    } else {
+    if (status === 'topic_selected' || status === 'discussing') {
       wx.navigateTo({
         url: `/pages/discuss/discuss?checkin_id=${id}`
       });
+      return;
     }
+    wx.navigateTo({
+      url: `/pages/preview/preview?checkin_id=${id}`
+    });
   },
 
   onRetryLoad() {

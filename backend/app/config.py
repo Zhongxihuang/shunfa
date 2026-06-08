@@ -7,6 +7,14 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     deepseek_base_url: str = "https://api.deepseek.com"
     require_user_api_key: bool = False
+    # Entry-loop "先爽后配": new users get this many free generations on the
+    # platform's shared key before being asked to bring their own. 0 = disabled
+    # (preserves the legacy hard BYOK wall). The shared key is `deepseek_api_key`.
+    free_quota_limit: int = 0
+    # Subtraction experiment (W2.7): percentage of users (0-100) for whom ALL
+    # gamification UI is hidden, so Week-3 can measure whether gamification
+    # creates retention. 0 = everyone keeps gamification (safe default).
+    subtraction_experiment_pct: int = 0
     api_key_encryption_secret: str = "change-me-to-a-random-32-char-secret"
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
@@ -81,17 +89,44 @@ class Settings(BaseSettings):
 
     def validate_encryption_secret(self) -> None:
         """Validate Fernet encryption secret at startup."""
-        if self.environment == "production":
+        non_dev_envs = {"production", "staging"}
+        if self.environment in non_dev_envs:
             default = "change-me-to-a-random-32-char-secret"
             if self.api_key_encryption_secret == default:
                 raise ValueError(
-                    "API_KEY_ENCRYPTION_SECRET must be changed from the default in production. "
+                    "API_KEY_ENCRYPTION_SECRET must be changed from the default in non-development environments. "
                     'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
                 )
             if len(self.api_key_encryption_secret) < 32:
                 raise ValueError(
-                    "API_KEY_ENCRYPTION_SECRET must be at least 32 characters in production."
+                    "API_KEY_ENCRYPTION_SECRET must be at least 32 characters."
                 )
+
+    def validate_admin_password(self) -> None:
+        """Validate admin password strength at startup."""
+        if self.environment == "production":
+            if len(self.admin_password) < 12:
+                raise ValueError(
+                    "ADMIN_PASSWORD must be at least 12 characters in production."
+                )
+
+    def validate_rate_limit_storage(self) -> None:
+        """Warn when production relies on the in-memory rate limiter.
+
+        slowapi's default storage is per-process and in-memory. Behind more than
+        one worker/replica each process keeps its own counters, so the effective
+        limit multiplies by the worker count and an attacker can simply spread
+        requests across workers. Production should point
+        `RATE_LIMIT_STORAGE_URI` at a shared backend (e.g. redis://...).
+        """
+        if self.environment == "production" and not self.rate_limit_storage_uri:
+            logger = logging.getLogger("config")
+            logger.warning(
+                "RATE_LIMIT_STORAGE_URI is empty in production. The in-memory "
+                "rate limiter is per-process and will not hold across multiple "
+                "workers/replicas. Set a shared backend (e.g. redis://...) to "
+                "enforce limits globally."
+            )
 
     def validate_cors(self) -> list[str]:
         """
@@ -120,3 +155,5 @@ settings = Settings()
 if settings.environment == "production":
     settings.validate_jwt_secret()
     settings.validate_encryption_secret()
+    settings.validate_admin_password()
+    settings.validate_rate_limit_storage()

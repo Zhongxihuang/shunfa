@@ -45,6 +45,14 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=True, index=True)
     password_hash = Column(String(256), nullable=True)
     deepseek_api_key = Column(String(512), nullable=True)  # encrypted via Fernet
+    # Entry-loop free trial: how many shared-key generations this user has used.
+    free_quota_used = Column(Integer, default=0, nullable=False)
+    # Streak freeze (W3.8): protection cards that save the streak on a missed day.
+    # Everyone starts with one free card; more can be redeemed with diamonds.
+    streak_freezes = Column(Integer, default=1, nullable=False)
+    # Diamond sink (W3.9): lifetime diamonds spent on redemptions. Effective
+    # balance = earned (3 + points//100) − spent, so spending actually persists.
+    diamonds_spent = Column(Integer, default=0, nullable=False)
 
     checkins = relationship("CheckIn", back_populates="user", lazy="selectin")
     topic_history = relationship("TopicHistory", back_populates="user", lazy="selectin")
@@ -140,3 +148,33 @@ class HotTopic(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (UniqueConstraint("topic_date", "title", name="uq_hot_topics_date_title"),)
+
+
+class Event(Base):
+    """Product analytics event (added in 2026-06 W1.1).
+
+    Used to compute the funnel, the north-star metric (≥3-day streak ratio), and
+    any custom funnel for product retrofits. Tracking is best-effort — see
+    `app.services.analytics.track` — failures must never break the request flow.
+    """
+
+    __tablename__ = "events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Nullable so login-failure / anonymous events can still be recorded.
+    # SET NULL on user delete: we keep the event, lose the linkage.
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    event = Column(String(64), nullable=False)
+    props_json = Column(Text, nullable=True)  # JSON string; nullable when no props
+    ts = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        # Funnel queries: "for user X, in time window, find event Y"
+        Index("ix_events_user_event_ts", "user_id", "event", "ts"),
+        # Global event counts / time-range slices
+        Index("ix_events_event_ts", "event", "ts"),
+        # Time-range queries across all events
+        Index("ix_events_ts", "ts"),
+    )

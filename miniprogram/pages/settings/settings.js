@@ -7,6 +7,11 @@ Page({
     reminderEnabled: false,
     reminderTime: '21:00',
     wechatPushConfigured: false,
+    apiKeyConfigured: false,
+    apiKeyPreview: '',
+    apiKeyInput: '',
+    showApiKeyInput: false,
+    apiKeySaving: false,
     loading: false,
     saving: false
   },
@@ -14,6 +19,7 @@ Page({
   onLoad() {
     auth.ensureLoggedIn().then(() => {
       this.loadReminderStatus();
+      this.loadApiKeyStatus();
     });
   },
 
@@ -31,6 +37,84 @@ Page({
       .catch(() => {
         this.setData({ loading: false });
       });
+  },
+
+  loadApiKeyStatus() {
+    api.get('/api/user/api_key/status')
+      .then(data => {
+        this.setData({
+          apiKeyConfigured: !!data.configured,
+          apiKeyPreview: data.preview || ''
+        });
+      })
+      .catch(() => {
+        this.setData({ apiKeyConfigured: false, apiKeyPreview: '' });
+      });
+  },
+
+  onApiKeyInput(e) {
+    this.setData({ apiKeyInput: e.detail.value });
+  },
+
+  onShowApiKeyInput() {
+    this.setData({ showApiKeyInput: true, apiKeyInput: '' });
+  },
+
+  onCancelApiKeyInput() {
+    this.setData({ showApiKeyInput: false, apiKeyInput: '' });
+  },
+
+  onSaveApiKey() {
+    const key = (this.data.apiKeyInput || '').trim();
+    if (!key) {
+      wx.showToast({ title: '请输入 API Key', icon: 'none' });
+      return;
+    }
+    if (!key.startsWith('sk-') || key.length < 10) {
+      wx.showToast({ title: 'Key 格式应以 sk- 开头', icon: 'none' });
+      return;
+    }
+    this.setData({ apiKeySaving: true });
+    api.post('/api/user/api_key', { api_key: key })
+      .then(data => {
+        this.setData({
+          apiKeyConfigured: true,
+          apiKeyPreview: data.preview || '',
+          apiKeyInput: '',
+          showApiKeyInput: false,
+          apiKeySaving: false
+        });
+        wx.showToast({ title: 'Key 已保存', icon: 'success' });
+      })
+      .catch(err => {
+        this.setData({ apiKeySaving: false });
+        wx.showToast({ title: err.data?.detail || 'Key 保存失败', icon: 'none' });
+      });
+  },
+
+  onDeleteApiKey() {
+    wx.showModal({
+      title: '移除 API Key',
+      content: '移除后将无法使用 AI 生成、讨论和质量提示。',
+      confirmText: '移除',
+      confirmColor: '#b56a5b',
+      success: (res) => {
+        if (!res.confirm) return;
+        api.delete('/api/user/api_key')
+          .then(() => {
+            this.setData({
+              apiKeyConfigured: false,
+              apiKeyPreview: '',
+              apiKeyInput: '',
+              showApiKeyInput: false
+            });
+            wx.showToast({ title: '已移除', icon: 'success' });
+          })
+          .catch(err => {
+            wx.showToast({ title: err.data?.detail || '移除失败', icon: 'none' });
+          });
+      }
+    });
   },
 
   onToggleReminder(e) {

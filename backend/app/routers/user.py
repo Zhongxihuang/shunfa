@@ -1,3 +1,4 @@
+import hmac
 from datetime import UTC, date, datetime, timedelta
 
 import bcrypt
@@ -18,12 +19,15 @@ from ..schemas import (
     ApiKeyStatusResponse,
     LoginRequest,
     LoginResponse,
+    RedeemRequest,
+    RedeemResponse,
     RegisterRequest,
     SaveApiKeyRequest,
     UserStatusResponse,
     WebAuthLoginRequest,
     WebLoginRequest,
 )
+from ..services.analytics import track
 from ..services.reminder_service import check_reminder_needed
 from ..utils.time_utils import get_today_cst
 
@@ -108,9 +112,10 @@ def get_user_today_status(user: User, today: date, db: Session) -> bool:
     return checkin is not None
 
 
-def _build_login_response(user: User, today: date, db: Session) -> LoginResponse:
-    token = create_jwt_token(user.id, user.token_version)
-    user_status = UserStatusResponse(
+def _build_user_status(user: User, today: date, db: Session) -> UserStatusResponse:
+    from ..services.feature_flags import gamification_enabled
+
+    return UserStatusResponse(
         id=user.id,
         streak=user.streak,
         longest_streak=user.longest_streak,
@@ -122,8 +127,14 @@ def _build_login_response(user: User, today: date, db: Session) -> LoginResponse
         last_checkin_date=user.last_checkin_date,
         today_completed=get_user_today_status(user, today, db),
         reminder_needed=check_reminder_needed(user, db),
+        gamification_enabled=gamification_enabled(user.id),
+        streak_freezes=user.streak_freezes or 0,
     )
-    return LoginResponse(token=token, user=user_status)
+
+
+def _build_login_response(user: User, today: date, db: Session) -> LoginResponse:
+    token = create_jwt_token(user.id, user.token_version)
+    return LoginResponse(token=token, user=_build_user_status(user, today, db))
 
 
 def _safe_api_key_preview(plaintext: str) -> str | None:
@@ -152,6 +163,7 @@ async def login(request: Request, body: LoginRequest, db: Session = Depends(get_
             db.rollback()
             user = db.query(User).filter(User.openid == openid).first()
 
+    track("login", user_id=user.id, props={"method": "wechat"})
     return _build_login_response(user, get_today_cst(), db)
 
 
@@ -183,6 +195,7 @@ async def register(request: Request, body: RegisterRequest, db: Session = Depend
         db.rollback()
         raise HTTPException(status_code=400, detail="用户名已存在") from exc
 
+    track("register", user_id=user.id, props={"method": "web_password"})
     return _build_login_response(user, get_today_cst(), db)
 
 
@@ -196,6 +209,7 @@ async def auth_login(request: Request, body: WebAuthLoginRequest, db: Session = 
     if not _verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
 
+    track("login", user_id=user.id, props={"method": "web_password"})
     return _build_login_response(user, get_today_cst(), db)
 
 
@@ -205,7 +219,7 @@ async def web_login(request: Request, body: WebLoginRequest, db: Session = Depen
     """Legacy single-password admin login. Kept for backward compatibility."""
     if not settings.admin_password:
         raise HTTPException(status_code=503, detail="Web login is not configured")
-    if body.password != settings.admin_password:
+    if not hmac.compare_digest(body.password.encode(), settings.admin_password.encode()):
         raise HTTPException(status_code=401, detail="Invalid password")
 
     openid = "web_admin"
@@ -220,6 +234,7 @@ async def web_login(request: Request, body: WebLoginRequest, db: Session = Depen
             db.rollback()
             user = db.query(User).filter(User.openid == openid).first()
 
+    track("login", user_id=user.id, props={"method": "admin_password"})
     return _build_login_response(user, get_today_cst(), db)
 
 
@@ -229,16 +244,28 @@ async def web_login(request: Request, body: WebLoginRequest, db: Session = Depen
 @router.get("/user/api_key/status", response_model=ApiKeyStatusResponse)
 async def get_api_key_status(current_user: User = Depends(get_current_user)):
     """Check if the user has a DeepSeek API key configured (never returns the plaintext key)."""
+    from ..services.free_quota import (
+        free_quota_enabled,
+        free_quota_limit,
+        free_quota_remaining,
+    )
+
+    quota = {
+        "free_quota_enabled": free_quota_enabled(),
+        "free_quota_limit": free_quota_limit(),
+        "free_quota_used": current_user.free_quota_used or 0,
+        "free_quota_remaining": free_quota_remaining(current_user),
+    }
     if not current_user.deepseek_api_key:
-        return ApiKeyStatusResponse(configured=False)
+        return ApiKeyStatusResponse(configured=False, **quota)
     try:
         from ..utils.crypto import decrypt_api_key
 
         plaintext = decrypt_api_key(current_user.deepseek_api_key)
         preview = _safe_api_key_preview(plaintext)
-        return ApiKeyStatusResponse(configured=True, preview=preview)
+        return ApiKeyStatusResponse(configured=True, preview=preview, **quota)
     except Exception:
-        return ApiKeyStatusResponse(configured=True, preview=None)
+        return ApiKeyStatusResponse(configured=True, preview=None, **quota)
 
 
 @router.post("/user/api_key", response_model=ApiKeyStatusResponse)
@@ -253,6 +280,7 @@ async def save_api_key(
     current_user.deepseek_api_key = encrypt_api_key(request.api_key.strip())
     db.commit()
     preview = _safe_api_key_preview(request.api_key)
+    track("key_configured", user_id=current_user.id, props={"key_preview": preview})
     return ApiKeyStatusResponse(configured=True, preview=preview)
 
 
@@ -282,24 +310,30 @@ async def get_achievements(
     )
 
 
+@router.post("/redeem", response_model=RedeemResponse)
+async def redeem_item(
+    body: RedeemRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Spend diamonds on a catalog item (currently: a streak-freeze card)."""
+    from ..errors import raise_api_error
+    from ..services.redeem_service import RedeemError, redeem
+
+    try:
+        result = redeem(db, current_user, body.item)
+    except RedeemError as exc:
+        status = 404 if exc.code == "unknown_item" else 400
+        raise_api_error(status, exc.code, exc.message)
+    return RedeemResponse(**result)
+
+
 @router.get("/user_status", response_model=UserStatusResponse)
 async def get_user_status(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     today = get_today_cst()
-    return UserStatusResponse(
-        id=current_user.id,
-        streak=current_user.streak,
-        longest_streak=current_user.longest_streak,
-        points=current_user.points,
-        level=current_user.level,
-        diamonds=current_user.diamonds,
-        reminder_time=current_user.reminder_time,
-        reminder_enabled=current_user.reminder_enabled,
-        last_checkin_date=current_user.last_checkin_date,
-        today_completed=get_user_today_status(current_user, today, db),
-        reminder_needed=check_reminder_needed(current_user, db),
-    )
+    return _build_user_status(current_user, today, db)
 
 
 # ── Admin: token revocation ────────────────────────────────────────────────────

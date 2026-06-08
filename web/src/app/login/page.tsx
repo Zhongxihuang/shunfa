@@ -129,14 +129,16 @@ export default function LoginPage() {
           </p>
         )}
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={devLogin}
-            className="text-xs text-gray-400 hover:text-gray-500 underline underline-offset-2"
-          >
-            跳过登录（界面预览）
-          </button>
-        </div>
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-6 text-center">
+            <button
+              onClick={devLogin}
+              className="text-xs text-gray-400 hover:text-gray-500 underline underline-offset-2"
+            >
+              跳过登录（界面预览）
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
