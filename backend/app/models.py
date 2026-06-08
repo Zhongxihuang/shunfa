@@ -53,6 +53,10 @@ class User(Base):
     # Diamond sink (W3.9): lifetime diamonds spent on redemptions. Effective
     # balance = earned (3 + points//100) − spent, so spending actually persists.
     diamonds_spent = Column(Integer, default=0, nullable=False)
+    # Appendix A (cold-start within-subject experiment): per-user override of the
+    # stable md5 gamification bucket. "on"/"off" force the arm; NULL falls back to
+    # in_subtraction_experiment() so existing users are completely unchanged.
+    gamification_override = Column(String(8), nullable=True)
 
     checkins = relationship("CheckIn", back_populates="user", lazy="selectin")
     topic_history = relationship("TopicHistory", back_populates="user", lazy="selectin")
