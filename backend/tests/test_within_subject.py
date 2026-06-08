@@ -105,3 +105,42 @@ def test_within_subject_to_dict_shape(db):
     assert payload["off"]["discuss_round_count"] == 3
     assert len(payload["segments"]) == 3
     assert payload["segments"][0]["arm"] == "on"
+
+
+# ── C2: admin within-subject endpoint ──────────────────────────────────────────
+
+
+def test_within_subject_endpoint_requires_admin(client, db):
+    user = User(openid="ws_regular")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    resp = client.get(
+        f"/api/admin/metrics/within_subject/{user.id}",
+        headers={"Authorization": f"Bearer {create_jwt_token(user.id)}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_within_subject_endpoint_404_for_unknown_user(client, db):
+    admin = _ensure_admin(db)
+    resp = client.get(
+        "/api/admin/metrics/within_subject/999999",
+        headers=_admin_auth(admin),
+    )
+    assert resp.status_code == 404
+
+
+def test_within_subject_endpoint_returns_rollup(client, db):
+    admin = _ensure_admin(db)
+    user = _seed_abab(db)
+    resp = client.get(
+        f"/api/admin/metrics/within_subject/{user.id}",
+        headers=_admin_auth(admin),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["user_id"] == user.id
+    assert body["on"]["publish_count"] == 3
+    assert body["off"]["discuss_round_count"] == 3
+    assert len(body["segments"]) == 3

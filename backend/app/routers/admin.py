@@ -22,6 +22,7 @@ from ..services.analytics_queries import (
     get_funnel,
     get_north_star,
     get_user_funnel_position,
+    get_within_subject_comparison,
 )
 from ..services.prompt_templates import prompts
 from ..utils.time_utils import get_now_cst
@@ -264,3 +265,23 @@ def set_gamification_override(
         "from": from_value,
         "to": to_value,
     }
+
+
+# ── Appendix C: within-subject (ABAB) comparison dashboard ────────────────────
+
+
+@router.get("/metrics/within_subject/{user_id}")
+def metrics_within_subject(
+    user_id: int,
+    _current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Same user, override=on vs override=off: publish/discuss behaviour per arm.
+
+    Read-only, admin-only (get_admin_user). Backs the Ring-0 ABAB self-experiment
+    readout; never exposed to the miniprogram or public frontend.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return get_within_subject_comparison(db, user_id).to_dict()
