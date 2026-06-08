@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1440px; }
+  .card {
+    width: 1080px; height: 1440px;
+    background: linear-gradient(160deg, #1c3f8f 0%, #0d1f4d 100%);
+    padding: 112px 100px; display: flex; flex-direction: column;
+    font-family: "Songti SC", "Noto Serif SC", Georgia, serif; color: #f1ece1;
+  }
+  .kicker { font-size: 26px; letter-spacing: 10px; text-transform: uppercase; color: #aebbe0; }
+  .ttl { margin-top: auto; font-weight: 600; font-size: 84px; line-height: 1.4; color: #fff; }
+  .ttl .u { border-bottom: 4px solid #e8b04f; padding-bottom: 6px; }
+  .body { margin-top: auto; }
+  .body p { font-size: 42px; line-height: 1.85; margin-bottom: 30px; color: #eee6d8; }
+  .foot { margin-top: 48px; display: flex; align-items: center; gap: 22px;
+          font-size: 26px; letter-spacing: 4px; color: #9fb0dd; }
+  .foot .ln { width: 64px; height: 2px; background: #e8b04f; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="kicker">Insight · No.{{ "%02d"|format(page.index) }}</div>
+    {% if page.kind == 'cover' %}
+      <div class="ttl"><span class="u">{{ page.title }}</span></div>
+    {% else %}
+      <div class="body">{% for p in page.paragraphs %}<p>{{ p }}</p>{% endfor %}</div>
+    {% endif %}
+    <div class="foot"><span class="ln"></span>顺发 · 行业洞察 · {{ "%02d"|format(page.index) }} / {{ "%02d"|format(total) }}</div>
+  </div>
+</body>
+</html>
