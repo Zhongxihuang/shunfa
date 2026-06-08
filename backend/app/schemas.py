@@ -154,6 +154,12 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8)
 
 
+class GamificationOverrideRequest(BaseModel):
+    user_id: int
+    # "on" / "off" force the arm; null clears the override (back to md5 bucket).
+    override: str | None = None
+
+
 class WebAuthLoginRequest(BaseModel):
     username: str = Field(..., max_length=100)
     password: str = Field(..., max_length=200)

@@ -13,7 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_admin_user, get_db
-from ..models import CheckIn, CheckInStatus, User
+from ..models import CheckIn, CheckInStatus, Event, User
+from ..schemas import GamificationOverrideRequest
+from ..services.analytics import track
 from ..services.analytics_queries import (
     FUNNEL_STEPS,
     get_distribution_metrics,
@@ -215,4 +217,44 @@ def metrics_funnel_for_user(
         "furthest_step_label": pos.furthest_step_label,
         "has_published": pos.has_published,
         "funnel_definition": [{"event": ev, "label": lbl} for ev, lbl in FUNNEL_STEPS],
+    }
+
+
+# ── Appendix A: per-user gamification override (within-subject switch) ─────────
+
+
+@router.post("/gamification_override")
+def set_gamification_override(
+    body: GamificationOverrideRequest,
+    _current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Force a user's gamification arm on/off, or clear back to the md5 bucket.
+
+    Records a `gamification_override_changed` event on the *target* user's
+    timeline so the within-subject (ABAB) dashboard can attribute later
+    publish/discuss behaviour to the arm that was active at the time.
+    """
+    if body.override not in (None, "on", "off"):
+        raise HTTPException(status_code=400, detail="override must be 'on', 'off', or null")
+
+    user = db.query(User).filter(User.id == body.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from_value = user.gamification_override or "default"
+    to_value = body.override or "default"
+    user.gamification_override = body.override
+    db.commit()
+
+    track(
+        "gamification_override_changed",
+        user_id=user.id,
+        props={"from": from_value, "to": to_value},
+    )
+    return {
+        "user_id": user.id,
+        "gamification_override": user.gamification_override,
+        "from": from_value,
+        "to": to_value,
     }
