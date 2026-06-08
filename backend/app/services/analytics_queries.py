@@ -113,16 +113,43 @@ def _distinct_user_ids(db: Session, event_name: str, since: datetime | None) -> 
     return {row[0] for row in q.distinct().all()}
 
 
+def _register_src_user_ids(db: Session, src: str) -> set[int]:
+    """User ids whose `register` event carried this `src` in its props.
+
+    Matches the JSON that analytics.track writes — json.dumps uses ": " after the
+    key, so the LIKE pattern is `%"src": "<src>"%`. Admin-only input; the value is
+    a bound LIKE parameter (no string interpolation into SQL text).
+    """
+    pattern = f'%"src": "{src}"%'
+    rows = (
+        db.query(Event.user_id)
+        .filter(
+            Event.event == "register",
+            Event.user_id.is_not(None),
+            Event.props_json.like(pattern),
+        )
+        .distinct()
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
 def _distinct_user_count(
-    db: Session, event_name: str, since: datetime | None, cohort: str | None = None
+    db: Session,
+    event_name: str,
+    since: datetime | None,
+    cohort: str | None = None,
+    restrict_ids: set[int] | None = None,
 ) -> int:
     """Count distinct users who triggered the given event, optionally restricted
-    to one experiment arm.
+    to one experiment arm and/or to a fixed id set (e.g. a `src` cohort).
 
     Anonymous events (user_id IS NULL) are excluded — the funnel is about
     real users, not unknown visitors.
     """
     ids = _distinct_user_ids(db, event_name, since)
+    if restrict_ids is not None:
+        ids = ids & restrict_ids
     if cohort is None:
         return len(ids)
     return sum(1 for uid in ids if _in_cohort(uid, cohort))
@@ -133,6 +160,7 @@ def get_funnel(
     since: datetime | None = None,
     window_days: int = 0,
     cohort: str | None = None,
+    src: str | None = None,
 ) -> FunnelReport:
     """Compute the registration→publish funnel for an optional time window.
 
@@ -142,8 +170,14 @@ def get_funnel(
         window_days: convenience label for the response; pass 0 for "all time".
         cohort: restrict to one experiment arm ("control" / "subtraction"); None
             counts both arms (legacy behaviour).
+        src: restrict to users who registered with this flywheel source token
+            (Appendix B). None = all sources.
     """
-    counts = {event: _distinct_user_count(db, event, since, cohort) for event, _ in FUNNEL_STEPS}
+    restrict_ids = _register_src_user_ids(db, src) if src else None
+    counts = {
+        event: _distinct_user_count(db, event, since, cohort, restrict_ids)
+        for event, _ in FUNNEL_STEPS
+    }
     first_count = next(iter(counts.values()), 0) if counts else 0
     prev_count = 0
     steps: list[FunnelStep] = []
