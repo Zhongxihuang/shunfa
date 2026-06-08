@@ -26,6 +26,7 @@ isn't doing the work the design assumed.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -426,4 +427,109 @@ def get_user_funnel_position(db: Session, user_id: int) -> UserFunnelPosition:
         furthest_step=furthest_event,
         furthest_step_label=furthest_label,
         has_published="publish" in event_names,
+    )
+
+
+# ── Appendix C: within-subject (ABAB) comparison ──────────────────────────────
+
+TOGGLE_EVENT = "gamification_override_changed"
+
+
+@dataclass(frozen=True)
+class ArmSegment:
+    """One time window during which a single arm ("on"/"off") was active.
+
+    Bounded by consecutive `gamification_override_changed` events on the user's
+    timeline. `end is None` means the final, still-open segment.
+    """
+
+    arm: str
+    start: datetime
+    end: datetime | None
+    publish_count: int
+    discuss_round_count: int
+
+    def to_dict(self) -> dict:
+        return {
+            "arm": self.arm,
+            "start": self.start.isoformat(),
+            "end": self.end.isoformat() if self.end else None,
+            "publish_count": self.publish_count,
+            "discuss_round_count": self.discuss_round_count,
+        }
+
+
+@dataclass(frozen=True)
+class WithinSubjectReport:
+    """ABAB self-experiment readout for one user.
+
+    Only counts behaviour from the first toggle forward — the pre-experiment
+    period has no explicit arm and is intentionally excluded. Reports
+    event-derived signals only (publish cadence, discuss rounds); historical
+    streak is a snapshot and is honestly not reconstructable here.
+    """
+
+    user_id: int
+    segments: list[ArmSegment]
+    on_publish: int
+    on_discuss: int
+    off_publish: int
+    off_discuss: int
+
+    def to_dict(self) -> dict:
+        return {
+            "user_id": self.user_id,
+            "segments": [s.to_dict() for s in self.segments],
+            "on": {"publish_count": self.on_publish, "discuss_round_count": self.on_discuss},
+            "off": {"publish_count": self.off_publish, "discuss_round_count": self.off_discuss},
+        }
+
+
+def get_within_subject_comparison(db: Session, user_id: int) -> WithinSubjectReport:
+    """Cut a user's timeline at override toggles and bucket behaviour per arm."""
+    toggles = (
+        db.query(Event)
+        .filter(Event.user_id == user_id, Event.event == TOGGLE_EVENT)
+        .order_by(Event.ts.asc())
+        .all()
+    )
+    if not toggles:
+        return WithinSubjectReport(user_id, [], 0, 0, 0, 0)
+
+    def _count(event_name: str, start: datetime, end: datetime | None) -> int:
+        q = db.query(func.count(Event.id)).filter(
+            Event.user_id == user_id,
+            Event.event == event_name,
+            Event.ts >= start,
+        )
+        if end is not None:
+            q = q.filter(Event.ts < end)
+        return int(q.scalar() or 0)
+
+    segments: list[ArmSegment] = []
+    for idx, ev in enumerate(toggles):
+        try:
+            props = json.loads(ev.props_json) if ev.props_json else {}
+        except (TypeError, ValueError):
+            props = {}
+        arm = props.get("to") or "default"
+        start = ev.ts
+        end = toggles[idx + 1].ts if idx + 1 < len(toggles) else None
+        segments.append(
+            ArmSegment(
+                arm=arm,
+                start=start,
+                end=end,
+                publish_count=_count("publish", start, end),
+                discuss_round_count=_count("discuss_round", start, end),
+            )
+        )
+
+    return WithinSubjectReport(
+        user_id=user_id,
+        segments=segments,
+        on_publish=sum(s.publish_count for s in segments if s.arm == "on"),
+        on_discuss=sum(s.discuss_round_count for s in segments if s.arm == "on"),
+        off_publish=sum(s.publish_count for s in segments if s.arm == "off"),
+        off_discuss=sum(s.discuss_round_count for s in segments if s.arm == "off"),
     )
