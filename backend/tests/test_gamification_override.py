@@ -64,3 +64,32 @@ def test_resolve_null_falls_back_to_stable_bucket():
     user = User(openid="ovr_null", gamification_override=None)
     user.id = 4242  # bucketing is a pure function of id
     assert resolve_gamification_enabled(user) == gamification_enabled(4242)
+
+
+# ── A3: user_status reflects the override ──────────────────────────────────────
+
+
+def test_user_status_reflects_override_off(client, db):
+    user = User(openid="ovr_status_off", gamification_override="off")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    resp = client.get(
+        "/api/user_status",
+        headers={"Authorization": f"Bearer {create_jwt_token(user.id)}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["gamification_enabled"] is False
+
+
+def test_user_status_reflects_override_on(client, db):
+    user = User(openid="ovr_status_on", gamification_override="on")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    resp = client.get(
+        "/api/user_status",
+        headers={"Authorization": f"Bearer {create_jwt_token(user.id)}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["gamification_enabled"] is True

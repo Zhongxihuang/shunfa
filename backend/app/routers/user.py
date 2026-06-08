@@ -113,7 +113,7 @@ def get_user_today_status(user: User, today: date, db: Session) -> bool:
 
 
 def _build_user_status(user: User, today: date, db: Session) -> UserStatusResponse:
-    from ..services.feature_flags import gamification_enabled
+    from ..services.feature_flags import resolve_gamification_enabled
 
     return UserStatusResponse(
         id=user.id,
@@ -127,7 +127,7 @@ def _build_user_status(user: User, today: date, db: Session) -> UserStatusRespon
         last_checkin_date=user.last_checkin_date,
         today_completed=get_user_today_status(user, today, db),
         reminder_needed=check_reminder_needed(user, db),
-        gamification_enabled=gamification_enabled(user.id),
+        gamification_enabled=resolve_gamification_enabled(user),
         streak_freezes=user.streak_freezes or 0,
     )
 
