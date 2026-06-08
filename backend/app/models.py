@@ -182,3 +182,31 @@ class Event(Base):
         # Time-range queries across all events
         Index("ix_events_ts", "ts"),
     )
+
+
+class ImageJobStatus(enum.Enum):
+    draft = "draft"
+    rendered = "rendered"
+    failed = "failed"
+
+
+class ImageJob(Base):
+    """Paste-to-cards job (added 2026-06). Decoupled from CheckIn: this is a
+    standalone formatting tool, it does NOT affect streak / points / diamonds.
+
+    We deliberately do NOT store rendered image bytes — images are re-rendered
+    on demand from raw_text + template, so the table stays tiny.
+    """
+
+    __tablename__ = "image_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    raw_text = Column(Text, nullable=False)  # user's pasted article, stored verbatim
+    template = Column(String(8), nullable=False, default="a")  # 'a' | 'b' | 'c'
+    cover_title = Column(Text, nullable=True)  # user override; empty -> first paragraph
+    page_count = Column(Integer, default=0, nullable=False)  # filled after pagination
+    status = Column(SAEnum(ImageJobStatus), default=ImageJobStatus.draft, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
