@@ -55,5 +55,9 @@ Page({
 
   onStartWriting() {
     wx.navigateTo({ url: '/pages/topics/topics' });
+  },
+
+  goComposeImage() {
+    wx.navigateTo({ url: '/pages/compose-image/compose-image' });
   }
 });

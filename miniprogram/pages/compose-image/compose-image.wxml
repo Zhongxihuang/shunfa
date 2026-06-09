@@ -1,0 +1,65 @@
+<view class="page">
+  <view class="hint">把你写好的文章粘贴进来，自动排成小红书卡片图。</view>
+
+  <textarea
+    class="input"
+    placeholder="粘贴正文…（第一段会作为封面金句，也可在下方自定义封面）"
+    value="{{ rawText }}"
+    bindinput="onTextInput"
+    maxlength="20000"
+    auto-height
+  />
+
+  <input
+    class="cover-input"
+    placeholder="可选：自定义封面文字"
+    value="{{ coverTitle }}"
+    bindinput="onCoverInput"
+  />
+
+  <view class="templates">
+    <view
+      wx:for="{{ templates }}"
+      wx:key="id"
+      class="tpl {{ template === item.id ? 'tpl-active' : '' }}"
+      data-id="{{ item.id }}"
+      bindtap="onPickTemplate"
+    >{{ item.name }}</view>
+  </view>
+
+  <button class="btn" bindtap="onPreview" loading="{{ previewing }}">生成预览</button>
+
+  <view wx:if="{{ overflow }}" class="overflow-warn">
+    内容较长（{{ pageCount }} 页，建议精简到 8 页内）。
+  </view>
+
+  <view wx:if="{{ pages.length }}" class="preview">
+    <view wx:for="{{ pages }}" wx:key="index" class="preview-card">
+      <text class="pc-idx">{{ item.index }} / {{ pageCount }}</text>
+      <text wx:if="{{ item.kind === 'cover' }}" class="pc-title">{{ item.title }}</text>
+      <block wx:else>
+        <text wx:for="{{ item.paragraphs }}" wx:for-item="p" wx:key="*this" class="pc-p">{{ p }}</text>
+      </block>
+    </view>
+  </view>
+
+  <button
+    wx:if="{{ pages.length }}"
+    class="btn btn-primary"
+    bindtap="onRender"
+    loading="{{ rendering }}"
+  >渲染高清图</button>
+
+  <view wx:if="{{ images.length }}" class="images">
+    <image
+      wx:for="{{ images }}"
+      wx:key="*this"
+      class="result-img"
+      src="{{ item }}"
+      mode="widthFix"
+      bindtap="onSaveImage"
+      data-src="{{ item }}"
+    />
+    <view class="save-tip">点击任意图片保存到相册</view>
+  </view>
+</view>

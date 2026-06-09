@@ -57,6 +57,12 @@
       </view>
     </view>
 
+    <view class="entry-card paper-card" bindtap="goComposeImage">
+      <text class="section-label">粘贴排版</text>
+      <text class="entry-card__title">把已写好的文章排成小红书卡片图</text>
+      <text class="entry-card__desc">粘贴正文，自动分页，选模板渲染高清图，一键存相册。</text>
+    </view>
+
     <view wx:if="{{userInfo.gamification_enabled}}" class="summary-grid">
       <view class="summary-card paper-card">
         <text class="section-label">写作进度</text>

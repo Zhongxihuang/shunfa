@@ -132,6 +132,26 @@
   margin-top: 24rpx;
 }
 
+.entry-card {
+  margin-top: 24rpx;
+}
+
+.entry-card__title {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.entry-card__desc {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: var(--color-ink-soft);
+}
+
 .primary-action__complete {
   margin-top: 22rpx;
   padding: 24rpx;
