@@ -23,3 +23,21 @@ def test_image_job_model_defaults(db):
     assert job.status == ImageJobStatus.draft
     assert job.page_count == 0
     assert job.created_at is not None
+
+
+def test_image_job_create_request_rejects_empty_text():
+    import pytest
+    from pydantic import ValidationError
+
+    from app.schemas import ImageJobCreateRequest
+
+    with pytest.raises(ValidationError):
+        ImageJobCreateRequest(raw_text="", template="a")
+
+
+def test_image_job_create_request_defaults_template_a():
+    from app.schemas import ImageJobCreateRequest
+
+    req = ImageJobCreateRequest(raw_text="一些文字")
+    assert req.template == "a"
+    assert req.cover_title is None

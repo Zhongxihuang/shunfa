@@ -403,3 +403,40 @@ class FormattedPostResponse(BaseModel):
     truncated: bool
     truncated_marker: str = ""
     text: str  # the full pre-formatted text (title + body + tags), ready to paste
+
+
+# ── Paste-to-cards (image jobs) ──────────────────────────────────────────────
+
+
+class ImageJobCreateRequest(BaseModel):
+    raw_text: str = Field(min_length=1, max_length=20000)
+    template: Literal["a", "b", "c"] = "a"
+    cover_title: str | None = Field(default=None, max_length=120)
+
+
+class ImageJobRenderRequest(BaseModel):
+    template: Literal["a", "b", "c"] | None = None
+
+
+class PageModel(BaseModel):
+    index: int
+    kind: Literal["cover", "body"]
+    title: str | None = None
+    paragraphs: list[str] = []
+
+
+class ImageJobResponse(BaseModel):
+    job_id: int
+    template: str
+    cover_title: str | None
+    pages: list[PageModel]
+    page_count: int
+    overflow: bool
+    status: str
+
+
+class ImageJobRenderResponse(BaseModel):
+    job_id: int
+    template: str
+    images: list[str]  # base64-encoded PNG, one per page
+    page_count: int
