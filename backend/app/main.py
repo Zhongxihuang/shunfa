@@ -15,7 +15,7 @@ from app.dependencies import get_db
 from app.errors import normalize_http_error
 from app.logging_config import get_logger, setup_logging
 from app.middleware import RequestIDMiddleware, RequestLoggingMiddleware
-from app.routers import admin, analytics, content, coze_plugin, hot_topics, reminder, topics, user
+from app.routers import admin, analytics, content, coze_plugin, hot_topics, image_jobs, reminder, topics, user
 from app.routers.my import router as my_router
 
 
@@ -62,6 +62,9 @@ async def lifespan(app: FastAPI):
 
     yield
     logger.info("Shutting down 顺发 API")
+    from app.services.render_service import shutdown_browser
+
+    await shutdown_browser()
 
 
 _is_prod = settings.environment == "production"
@@ -163,6 +166,7 @@ app.include_router(analytics.router, prefix="/api")
 if settings.enable_coze_plugin:
     app.include_router(coze_plugin.router, prefix="/api")
 app.include_router(my_router, prefix="/api")
+app.include_router(image_jobs.router, prefix="/api")
 app.include_router(admin.router)
 
 
