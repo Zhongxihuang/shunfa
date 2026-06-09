@@ -20,3 +20,11 @@ prometheus-fastapi-instrumentator>=6.1.0
 slowapi>=0.1.9
 bcrypt>=4.0.0
 psycopg2-binary>=2.9.9  # PostgreSQL adapter — required when DATABASE_URL starts with postgresql://
+
+# Paste-to-cards image rendering
+jinja2>=3.1
+playwright>=1.40
+# NOTE: after `pip install -r requirements.txt`, run `playwright install chromium`
+# once per environment to download the headless browser. The target host must
+# also have CJK fonts (Songti/PingFang or Noto Serif/Sans CJK) installed for the
+# card templates to render correctly.
