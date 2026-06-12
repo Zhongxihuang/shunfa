@@ -12,8 +12,8 @@ def test_create_jwt_token():
 def test_user_status_requires_auth(client):
     """Test that user_status endpoint requires auth."""
     response = client.get("/api/user_status")
-    assert response.status_code == 401
-    assert response.json()["error_code"] == "invalid_token"
+    assert response.status_code == 403
+    assert response.json()["error_code"] == "forbidden"
 
 
 def test_user_status_with_valid_token(client, db):

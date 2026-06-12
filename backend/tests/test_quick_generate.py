@@ -307,8 +307,8 @@ def test_quick_generate_api_requires_auth(client):
             "platform": "xiaohongshu",
         },
     )
-    assert response.status_code == 401
-    assert response.json()["error_code"] == "invalid_token"
+    assert response.status_code == 403
+    assert response.json()["error_code"] == "forbidden"
 
 
 def test_quick_generate_api_endpoint(client):

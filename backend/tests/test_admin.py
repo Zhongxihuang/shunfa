@@ -5,8 +5,8 @@ from app.utils.time_utils import get_today_cst
 
 def test_prompt_health_requires_auth(client):
     response = client.get("/api/admin/prompt_health")
-    assert response.status_code == 401
-    assert response.json()["error_code"] == "invalid_token"
+    assert response.status_code == 403
+    assert response.json()["error_code"] == "forbidden"
 
 
 def test_prompt_health_rejects_regular_user(client, db):

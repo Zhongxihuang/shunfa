@@ -120,13 +120,13 @@ def test_compose_post_assets_no_content_400(user, checkin_no_content, client):
     assert response.status_code == 400
 
 
-def test_compose_post_assets_unauthenticated_401(checkin_with_content, client):
+def test_compose_post_assets_unauthenticated_403(checkin_with_content, client):
     response = client.post(
         "/api/compose_post_assets",
         json={"checkin_id": checkin_with_content.id, "template": "beige"},
     )
-    assert response.status_code == 401
-    assert response.json()["error_code"] == "invalid_token"
+    assert response.status_code == 403
+    assert response.json()["error_code"] == "forbidden"
 
 
 def test_compose_post_assets_wrong_user_404(checkin_with_content, client, db):
