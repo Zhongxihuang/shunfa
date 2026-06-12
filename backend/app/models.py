@@ -208,5 +208,9 @@ class ImageJob(Base):
     template = Column(String(8), nullable=False, default="a")  # 'a' | 'b' | 'c'
     cover_title = Column(Text, nullable=True)  # user override; empty -> first paragraph
     page_count = Column(Integer, default=0, nullable=False)  # filled after pagination
+    # AI-generated Xiaohongshu-style title + tags (JSON: {"title": str, "tags": [str]}).
+    # Populated by POST /api/image_jobs via compose_service.generate_post_copy().
+    # Nullable because the field is new (2026-06 W2.x) and existing rows predate it.
+    ai_copy = Column(Text, nullable=True)
     status = Column(SAEnum(ImageJobStatus), default=ImageJobStatus.draft, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

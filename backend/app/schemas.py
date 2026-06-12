@@ -433,6 +433,11 @@ class ImageJobResponse(BaseModel):
     page_count: int
     overflow: bool
     status: str
+    # AI-generated Xiaohongshu-style title (best-effort, may be empty if LLM
+    # failed). Pair with `ai_tags` for the "copy" convenience layer.
+    ai_title: str = ""
+    # AI-generated hashtags, no # prefix, 2-6 chars each (best-effort).
+    ai_tags: list[str] = []
 
 
 class ImageJobRenderResponse(BaseModel):

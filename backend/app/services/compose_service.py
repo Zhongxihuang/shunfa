@@ -69,3 +69,63 @@ async def compose_post_assets(
     tags = [str(t).strip() for t in data.get("tags", []) if str(t).strip()]
 
     return {"pages": pages, "title": title, "tags": tags}
+
+
+async def generate_post_copy(
+    content: str,
+    api_key: str = "",
+) -> dict:
+    """Generate Xiaohongshu-style title + tags from article content.
+
+    This is a safe-failure variant of `compose_post_assets` used by the
+    paste-to-cards (image_jobs) flow. The contract is intentionally different:
+
+    - `compose_post_assets` is tied to a CheckIn; on LLM parse failure it
+      raises HTTPException(502) because the caller is asking the AI to
+      produce ALL post assets (pages + title + tags) and a bad parse is a
+      user-visible error.
+    - `generate_post_copy` is a convenience layer ON TOP of the deterministic
+      pagination the user already has. If the AI call fails, the user can
+      still save their image cards — they just lose the AI-generated copy.
+      Therefore, NEVER raise. Return `{"title": "", "tags": []}` on any
+      failure mode (empty input, network error, parse error, retry failure).
+
+    Args:
+        content: the user's pasted article body. May be empty.
+        api_key: BYOK / shared API key, plumbed through unchanged.
+
+    Returns:
+        `{"title": str, "tags": list[str]}`. Both are best-effort and may be
+        empty.
+    """
+    if not content or not content.strip():
+        return {"title": "", "tags": []}
+
+    prompt = prompts.compose_post_assets_prompt.format(content=content)
+    messages = [{"role": "user", "content": prompt}]
+
+    # Attempt 1
+    try:
+        raw = await chat_completion(
+            messages, temperature=0.7, max_tokens=1400, api_key=api_key
+        )
+        data = _parse_compose_response(raw)
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        logger.warning("generate_post_copy: first parse failed, retrying: %r", e)
+        # Attempt 2 — same prompt, lower temperature for more conservative output
+        try:
+            raw = await chat_completion(
+                messages, temperature=0.5, max_tokens=1400, api_key=api_key
+            )
+            data = _parse_compose_response(raw)
+        except Exception as e2:
+            logger.warning("generate_post_copy: second attempt failed: %r", e2)
+            return {"title": "", "tags": []}
+    except Exception as e:
+        # Network errors, auth errors, etc. — never propagate.
+        logger.warning("generate_post_copy: chat_completion raised: %r", e)
+        return {"title": "", "tags": []}
+
+    title = str(data.get("title", "")).strip()
+    tags = [str(t).strip() for t in data.get("tags", []) if str(t).strip()]
+    return {"title": title, "tags": tags}

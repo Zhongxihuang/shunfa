@@ -129,3 +129,118 @@ def test_render_image_job_502_on_render_failure(client, db):
             headers=_auth(user),
         )
     assert resp.status_code == 502
+
+
+# ── AI copy (title + tags) layer on top of the deterministic pagination ─────
+
+
+def test_create_image_job_includes_ai_copy_on_success(client, db):
+    """Happy path: the AI call returns valid JSON, the response carries the
+    generated title and tags, and the job is persisted with ai_copy set."""
+    import json
+
+    user = _make_user(db, openid="ij_copy_ok")
+
+    fake_payload = json.dumps(
+        {
+            "pages": ["p1"],
+            "title": "AI 文案生成的标题",
+            "tags": ["AI", "效率", "内容创作"],
+        },
+        ensure_ascii=False,
+    )
+
+    async def fake_chat(messages, temperature, max_tokens, api_key):
+        return fake_payload
+
+    with patch("app.services.compose_service.chat_completion", side_effect=fake_chat):
+        resp = client.post(
+            "/api/image_jobs",
+            json={"raw_text": "OpenAI 这次定价有玄机。\n\n第一段分析。", "template": "a"},
+            headers=_auth(user),
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ai_title"] == "AI 文案生成的标题"
+    assert body["ai_tags"] == ["AI", "效率", "内容创作"]
+
+    # Persisted.
+    job = db.query(ImageJob).filter(ImageJob.id == body["job_id"]).first()
+    assert job is not None
+    assert job.ai_copy is not None
+    parsed = json.loads(job.ai_copy)
+    assert parsed["title"] == "AI 文案生成的标题"
+    assert parsed["tags"] == ["AI", "效率", "内容创作"]
+
+
+def test_create_image_job_returns_empty_copy_on_ai_failure(client, db):
+    """If the LLM fails twice, the user still gets a 200 response with empty
+    ai_title / ai_tags — losing the copy is a degraded but recoverable UX."""
+    user = _make_user(db, openid="ij_copy_fail")
+
+    async def fake_chat(messages, temperature, max_tokens, api_key):
+        return "this is not parseable JSON at all"
+
+    with patch("app.services.compose_service.chat_completion", side_effect=fake_chat):
+        resp = client.post(
+            "/api/image_jobs",
+            json={"raw_text": "一段没有标签的内容。", "template": "a"},
+            headers=_auth(user),
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ai_title"] == ""
+    assert body["ai_tags"] == []
+
+
+def test_get_image_job_round_trips_ai_copy(client, db):
+    """ai_copy is persisted, so a later GET on the same job returns the same
+    title + tags the user saw at create time — no need to re-call the LLM."""
+    import json
+
+    user = _make_user(db, openid="ij_copy_roundtrip")
+
+    async def fake_chat(messages, temperature, max_tokens, api_key):
+        return json.dumps(
+            {"pages": ["p1"], "title": "持久化标题", "tags": ["A", "B"]},
+            ensure_ascii=False,
+        )
+
+    with patch("app.services.compose_service.chat_completion", side_effect=fake_chat):
+        created = client.post(
+            "/api/image_jobs",
+            json={"raw_text": "正文", "template": "a"},
+            headers=_auth(user),
+        ).json()
+
+    # Now GET it (LLM mock is gone — must come from DB).
+    resp = client.get(f"/api/image_jobs/{created['job_id']}", headers=_auth(user))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ai_title"] == "持久化标题"
+    assert body["ai_tags"] == ["A", "B"]
+
+
+def test_get_image_job_handles_legacy_null_ai_copy(client, db):
+    """Pre-migration rows (ai_copy = NULL) and any corrupted JSON must return
+    empty title + tags rather than 500ing."""
+    user = _make_user(db, openid="ij_copy_legacy")
+    job = ImageJob(
+        user_id=user.id,
+        raw_text="legacy row",
+        template="a",
+        page_count=1,
+        ai_copy=None,
+        status=ImageJobStatus.draft,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    resp = client.get(f"/api/image_jobs/{job.id}", headers=_auth(user))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ai_title"] == ""
+    assert body["ai_tags"] == []
