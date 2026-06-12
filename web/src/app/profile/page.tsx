@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { CheckinItem, CheckinsResponse, continueHref, statusLabel } from '@/lib/checkins';
+import { isDevPreviewToken } from '@/lib/devPreview';
 
 interface RedeemResponse {
   item: string;
@@ -41,6 +42,11 @@ function ProfileContent() {
   }, [refreshUser]);
 
   const loadProfileLists = useCallback(() => {
+    // Dev preview has no backend session — show the empty state, not a 401.
+    if (isDevPreviewToken(localStorage.getItem('token'))) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setLoadError(false);
     Promise.all([
@@ -63,7 +69,7 @@ function ProfileContent() {
 
   return (
     <div className="sf-shell md:max-w-4xl xl:max-w-4xl">
-      <section className="sf-card mb-5 p-6 md:p-8">
+      <section className="sf-card sf-rise mb-5 p-6 md:p-8">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <span className="sf-eyebrow">我的内容</span>

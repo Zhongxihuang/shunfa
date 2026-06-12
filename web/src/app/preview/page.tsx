@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import Spinner from '@/components/Spinner';
 import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import TemplateBeige from '@/components/post-templates/TemplateBeige';
@@ -129,9 +130,17 @@ function PreviewContent() {
 
   useEffect(() => loadCheckin(), [loadCheckin]);
 
-  // Re-render PNGs whenever assets or template changes
+  // Re-render PNGs whenever assets or template changes. `step` is in deps only
+  // as a *gate* — if PNGs already match the current assets+template, do not
+  // re-render (publish-failure rolls `step` back to 'compose_ready' without
+  // touching the image, and we don't want to re-run html2canvas for that).
   useEffect(() => {
     if (!composeAssets || step !== 'compose_ready') return;
+
+    // Skip when we already have a full set of rendered PNGs for this
+    // assets+template combo. Bumping the template still re-renders because
+    // `template` is in the deps array.
+    if (pngs.length === composeAssets.pages.length) return;
 
     let cancelled = false;
 
@@ -160,6 +169,9 @@ function PreviewContent() {
       cancelled = true;
       clearTimeout(timer);
     };
+    // `pngs` is intentionally NOT a dep — it's only read for the skip check,
+    // and including it would re-trigger render on every setPngs() tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composeAssets, template, step]);
 
   async function handleCheckQuality() {
@@ -389,7 +401,7 @@ function PreviewContent() {
   if (result) {
     return (
       <div className="sf-shell md:max-w-4xl">
-        <div className="sf-card mx-auto max-w-2xl p-8 text-center">
+        <div className="sf-card sf-rise mx-auto max-w-2xl p-8 text-center">
           <p className="sf-eyebrow">发布完成</p>
           <h1 className="sf-display mt-4 text-[40px] font-bold leading-tight text-[var(--ink)]">这篇已经发出去了</h1>
           {user && (
@@ -417,14 +429,21 @@ function PreviewContent() {
   return (
     <div className="sf-shell md:max-w-4xl xl:max-w-4xl">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700">←</button>
+      <div className="sf-rise mb-6 flex items-center gap-3">
+        <button
+          onClick={() => router.back()}
+          aria-label="返回上一页"
+          className="sf-btn-secondary h-10 min-h-10 w-10 px-0"
+        >
+          ←
+        </button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">预览 & 发布</h1>
-          {topic && (
-            <p className="mt-1 text-xs text-gray-400">
-              #{topic}{checkinStatus === 'completed' ? ' · 已发布' : ''}
-            </p>
+          <p className="sf-eyebrow">预览 & 发布</p>
+          <h1 className="sf-display mt-1 truncate text-2xl font-semibold text-[var(--ink)]">
+            {topic || '最后看一眼，发出去'}
+          </h1>
+          {topic && checkinStatus === 'completed' && (
+            <p className="mt-1 text-xs text-[var(--ink-muted)]">已发布</p>
           )}
         </div>
       </div>
@@ -443,10 +462,10 @@ function PreviewContent() {
 
       {(step === 'preview' || step === 'quality_check') && (
         <>
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-sm font-medium text-gray-700">文章内容</label>
-              <span className="text-xs text-gray-400">
+          <div className="sf-rise sf-rise-1 mb-4">
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-sm font-medium text-[var(--ink-soft)]">文章内容</label>
+              <span className="text-xs text-[var(--ink-muted)]">
                 {content.length} 字{content.length < 140 && ' · 建议 140-300 字'}
               </span>
             </div>
@@ -455,14 +474,13 @@ function PreviewContent() {
               onChange={(e) => setContent(e.target.value)}
               rows={12}
               disabled={step === 'quality_check'}
-              className="min-h-80 w-full rounded-xl border border-gray-300 px-4 py-3 text-sm leading-relaxed focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 md:text-base"
+              className="sf-textarea min-h-80 md:text-base"
             />
           </div>
           {step === 'quality_check' && (
-            <div className="mb-4 rounded-2xl bg-white px-4 py-5 text-center shadow-sm">
-              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-gray-600">AI 正在生成质量提示...</p>
-              <p className="text-sm text-gray-400 mt-2">AI 正在审稿，通常需要 20-40 秒...</p>
+            <div className="sf-card sf-fade mb-4 px-4 py-5 text-center">
+              <Spinner className="mx-auto mb-3" />
+              <p className="text-sm text-[var(--ink-soft)]">AI 正在审稿，通常需要 20-40 秒...</p>
             </div>
           )}
         </>
@@ -470,18 +488,22 @@ function PreviewContent() {
 
       {/* Quality result */}
       {step === 'quality_result' && (
-        <div className={`mb-4 rounded-2xl border px-4 py-4 ${qualityPass ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+        <div className={`sf-fade mb-4 rounded-2xl border px-5 py-4 ${
+          qualityPass
+            ? 'border-[rgba(111,135,115,0.25)] bg-[var(--accent-soft)]'
+            : 'border-[rgba(170,151,123,0.25)] bg-[var(--highlight)]'
+        }`}>
           <div className="mb-3 flex items-center gap-2">
             <span>{qualityPass ? '✅' : '💡'}</span>
-            <h2 className="text-sm font-semibold text-gray-900">
+            <h2 className="text-sm font-semibold text-[var(--ink)]">
               {qualityPass ? '内容质量良好' : '内容可以更好'}
             </h2>
           </div>
-          <p className="mb-3 text-xs text-gray-500">以下只是提示，不影响发布。</p>
+          <p className="mb-3 text-xs text-[var(--ink-muted)]">以下只是提示，不影响发布。</p>
           {qualityIssues.length > 0 && (
             <div className="space-y-1">
               {qualityIssues.map((issue) => (
-                <p key={issue} className="text-sm text-gray-700">- {issue}</p>
+                <p key={issue} className="text-sm leading-6 text-[var(--ink-soft)]">- {issue}</p>
               ))}
             </div>
           )}
@@ -490,7 +512,7 @@ function PreviewContent() {
               <button
                 onClick={() => setStep('preview')}
                 disabled={submitting}
-                className="flex-1 rounded-xl border border-gray-300 py-2 text-sm text-gray-700 hover:bg-white disabled:opacity-50"
+                className="sf-btn-secondary min-h-10 flex-1 px-3 text-xs"
               >
                 返回修改
               </button>
@@ -498,7 +520,7 @@ function PreviewContent() {
                 <button
                   onClick={handleReviseFromIssues}
                   disabled={submitting}
-                  className="flex-1 rounded-xl bg-primary py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+                  className="sf-btn-primary min-h-10 flex-1 px-3 text-xs"
                 >
                   {submitting ? '改写中...' : '按提示改一版'}
                 </button>
@@ -506,7 +528,7 @@ function PreviewContent() {
               <button
                 onClick={handleFeedback}
                 disabled={feedbackSent || submitting}
-                className="flex-1 rounded-xl border border-amber-300 py-2 text-sm text-amber-700 disabled:opacity-60"
+                className="min-h-10 flex-1 rounded-full border border-[rgba(170,151,123,0.4)] px-3 text-xs text-[var(--ink-soft)] transition hover:bg-white/50 disabled:opacity-60"
               >
                 {feedbackSent ? '已记录这版一般' : '这版一般'}
               </button>
@@ -517,9 +539,9 @@ function PreviewContent() {
 
       {/* Composing loading */}
       {step === 'composing' && (
-        <div className="mb-4 rounded-2xl bg-white px-4 py-5 text-center shadow-sm">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-gray-600">AI 正在生成图文素材...</p>
+        <div className="sf-card sf-fade mb-4 px-4 py-5 text-center">
+          <Spinner className="mx-auto mb-3" />
+          <p className="text-sm text-[var(--ink-soft)]">AI 正在生成图文素材...</p>
         </div>
       )}
 
@@ -529,31 +551,24 @@ function PreviewContent() {
           {/* Template selector + re-roll */}
           <div className="flex items-center justify-between">
             <div className="flex gap-2">
-              <button
-                onClick={() => setTemplate('beige')}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  template === 'beige'
-                    ? 'bg-primary text-white'
-                    : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                衬线研究卡
-              </button>
-              <button
-                onClick={() => setTemplate('magazine')}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  template === 'magazine'
-                    ? 'bg-primary text-white'
-                    : 'border border-gray-300 text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                绿调索引卡
-              </button>
+              {([['beige', '衬线研究卡'], ['magazine', '绿调索引卡']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setTemplate(id)}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                    template === id
+                      ? 'bg-[var(--ink)] text-white'
+                      : 'border border-[var(--border-strong)] bg-white/60 text-[var(--ink-soft)] hover:bg-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <button
               onClick={() => handleCompose(true)}
               disabled={submitting || renderingImages}
-              className="text-xs text-primary hover:underline disabled:opacity-50"
+              className="text-xs font-medium text-primary-dark hover:underline disabled:opacity-50"
             >
               换一版
             </button>
@@ -585,9 +600,9 @@ function PreviewContent() {
 
           {/* Image gallery */}
           {renderingImages ? (
-            <div className="rounded-2xl bg-white px-4 py-5 text-center shadow-sm">
-              <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-gray-500">渲染图片中...</p>
+            <div className="sf-card px-4 py-5 text-center">
+              <Spinner size="sm" className="mx-auto mb-3" />
+              <p className="text-sm text-[var(--ink-muted)]">渲染图片中...</p>
             </div>
           ) : (
             <div>
@@ -603,7 +618,7 @@ function PreviewContent() {
                     />
                     <button
                       onClick={() => downloadSinglePng(png, `顺发-${topic}-${i + 1}`)}
-                      className="mt-2 w-full rounded-lg border border-gray-300 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                      className="mt-2 w-full rounded-lg border border-[var(--border-strong)] bg-white/60 py-1.5 text-xs text-[var(--ink-soft)] transition hover:bg-white"
                     >
                       保存第 {i + 1} 张
                     </button>
@@ -613,7 +628,7 @@ function PreviewContent() {
               {pngs.length > 1 && (
                 <button
                   onClick={() => downloadAsZip(pngs, `顺发-${topic}`)}
-                  className="mt-2 w-full rounded-xl border border-gray-300 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="sf-btn-secondary mt-2 min-h-11 w-full"
                 >
                   下载全部 ZIP（{pngs.length} 张）
                 </button>
@@ -622,30 +637,27 @@ function PreviewContent() {
           )}
 
           {/* Title card */}
-          <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">小红书标题</span>
-              <button onClick={handleCopyTitle} className="text-xs text-primary hover:underline">
+          <div className="sf-card px-5 py-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="sf-eyebrow">小红书标题</span>
+              <button onClick={handleCopyTitle} className="text-xs font-medium text-primary-dark hover:underline">
                 {copiedTitle ? '已复制 ✓' : '复制'}
               </button>
             </div>
-            <p className="text-sm text-gray-900 leading-relaxed">{composeAssets.title}</p>
+            <p className="text-sm leading-relaxed text-[var(--ink)]">{composeAssets.title}</p>
           </div>
 
           {/* Tags card */}
-          <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">标签</span>
-              <button onClick={handleCopyTags} className="text-xs text-primary hover:underline">
+          <div className="sf-card px-5 py-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="sf-eyebrow">标签</span>
+              <button onClick={handleCopyTags} className="text-xs font-medium text-primary-dark hover:underline">
                 {copiedTags ? '已复制 ✓' : '复制全部'}
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {composeAssets.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700"
-                >
+                <span key={tag} className="sf-pill">
                   #{tag}
                 </span>
               ))}
@@ -656,30 +668,30 @@ function PreviewContent() {
 
       {/* Publishing loading */}
       {step === 'publishing' && (
-        <div className="mb-4 rounded-2xl bg-white px-4 py-5 text-center shadow-sm">
-          <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-gray-600">记录打卡中...</p>
+        <div className="sf-card sf-fade mb-4 px-4 py-5 text-center">
+          <Spinner className="mx-auto mb-3" />
+          <p className="text-sm text-[var(--ink-soft)]">记录打卡中...</p>
         </div>
       )}
 
       {error && (
-        <div className="mb-4 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm">{error}</div>
+        <div className="sf-note-card mb-4 px-4 py-3 text-sm text-[var(--danger)]">{error}</div>
       )}
 
       {/* CTA buttons */}
       {step === 'preview' && (
-        <div className="flex gap-3">
+        <div className="sf-rise sf-rise-2 flex gap-3">
           <button
             onClick={() => router.back()}
-            className="flex-1 py-3 border border-gray-300 rounded-xl text-sm text-gray-700 hover:bg-gray-50"
+            className="sf-btn-secondary flex-1"
           >
             返回修改
           </button>
-            <button
-              onClick={handleCheckQuality}
-              disabled={submitting || checkinLoading || !!checkinLoadError || !content.trim()}
-              className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
-            >
+          <button
+            onClick={handleCheckQuality}
+            disabled={submitting || checkinLoading || !!checkinLoadError || !content.trim()}
+            className="sf-btn-primary flex-1"
+          >
             {submitting ? '评估中...' : checkinLoading ? '加载中...' : checkinStatus === 'completed' ? '查看内容提示' : '查看发布提示'}
           </button>
         </div>
@@ -687,14 +699,12 @@ function PreviewContent() {
 
       {/* W1.4 多平台格式 + 导出 (fast path, visible whenever a draft exists) */}
       {content.trim() && (
-        <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-gray-900">直接发到目标平台</p>
-              <p className="mt-0.5 text-xs text-gray-500">
-                选平台 → 复制 → 粘贴。W1.4 目标：从这里到「内容出现在目标平台」≤ 2 步。
-              </p>
-            </div>
+        <div className="sf-soft-card sf-rise sf-rise-3 mt-6 px-5 py-4">
+          <div className="mb-3">
+            <p className="text-sm font-semibold text-[var(--ink)]">直接发到目标平台</p>
+            <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+              选平台 → 复制 → 粘贴，两步发出去。
+            </p>
           </div>
 
           {/* Platform pills */}
@@ -707,10 +717,10 @@ function PreviewContent() {
                   type="button"
                   onClick={() => handleFormatForPlatform(p.id)}
                   disabled={formatting}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                     active
-                      ? 'bg-primary text-white'
-                      : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                      ? 'bg-[var(--ink)] text-white'
+                      : 'border border-[var(--border-strong)] bg-white/70 text-[var(--ink-soft)] hover:bg-white'
                   }`}
                   title={p.hint}
                 >
@@ -722,32 +732,32 @@ function PreviewContent() {
 
           {/* Formatted preview */}
           {formatting && (
-            <div className="rounded-xl bg-white px-3 py-3 text-center text-xs text-gray-500 shadow-sm">
+            <div className="sf-card px-3 py-3 text-center text-xs text-[var(--ink-muted)]">
               正在格式化...
             </div>
           )}
           {formatError && !formatting && (
-            <div className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">
+            <div className="rounded-xl bg-[rgba(181,106,91,0.08)] px-3 py-2 text-xs text-[var(--danger)]">
               {formatError}
             </div>
           )}
           {formatted && !formatting && (
             <>
-              <div className="relative rounded-xl bg-white px-3 py-3 shadow-sm">
-                <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-800">
+              <div className="sf-card relative px-4 py-3">
+                <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-[inherit] text-sm leading-relaxed text-[var(--ink)]">
                   {formatted.text}
                 </pre>
                 {formatted.truncated && (
-                  <span className="absolute right-2 top-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">
+                  <span className="absolute right-2 top-2 rounded bg-[var(--highlight)] px-1.5 py-0.5 text-[10px] text-[var(--ink-soft)]">
                     已截断
                   </span>
                 )}
               </div>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
+              <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--ink-muted)]">
                 <span>
                   平台: {PLATFORMS.find((p) => p.id === formatted.platform)?.label ?? formatted.platform}
                   {formatted.platform !== formatted.requested_platform && (
-                    <span className="ml-1 text-amber-600">
+                    <span className="ml-1 text-[var(--danger)]">
                       (未知平台「{formatted.requested_platform}」,已用通用格式)
                     </span>
                   )}
@@ -758,15 +768,15 @@ function PreviewContent() {
                 <button
                   type="button"
                   onClick={handleCopyFormatted}
-                  className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-white hover:bg-primary-dark transition-colors"
+                  className="sf-btn-primary min-h-11 flex-1"
                 >
-                  {copiedFormatted ? '✓ 已复制' : '📋 复制到剪贴板'}
+                  {copiedFormatted ? '✓ 已复制' : '复制到剪贴板'}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDownload('md')}
                   disabled={downloadingFormat !== null}
-                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="sf-btn-secondary min-h-11 px-4"
                 >
                   {downloadingFormat === 'md' ? '下载中...' : '⬇ .md'}
                 </button>
@@ -774,7 +784,7 @@ function PreviewContent() {
                   type="button"
                   onClick={() => handleDownload('txt')}
                   disabled={downloadingFormat !== null}
-                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  className="sf-btn-secondary min-h-11 px-4"
                 >
                   {downloadingFormat === 'txt' ? '下载中...' : '⬇ .txt'}
                 </button>
@@ -785,11 +795,11 @@ function PreviewContent() {
       )}
 
       {step === 'quality_result' && (
-        <div className="flex gap-3">
+        <div className="mt-4 flex gap-3">
           {(qualityPass || checkinStatus === 'completed') && (
             <button
               onClick={() => setStep('preview')}
-              className="flex-1 py-3 border border-gray-300 rounded-xl text-sm text-gray-700 hover:bg-gray-50"
+              className="sf-btn-secondary flex-1"
             >
               返回修改
             </button>
@@ -798,14 +808,14 @@ function PreviewContent() {
             <button
               onClick={() => handleCompose(false)}
               disabled={submitting}
-              className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
+              className="sf-btn-primary flex-1"
             >
               {submitting ? '生成中...' : '生成图文素材'}
             </button>
           ) : (
             <Link
               href="/history?tab=completed"
-              className="flex-1 rounded-xl bg-primary py-3 text-center text-sm font-medium text-white transition-colors hover:bg-primary-dark"
+              className="sf-btn-primary flex-1"
             >
               返回历史
             </Link>
@@ -814,17 +824,17 @@ function PreviewContent() {
       )}
 
       {step === 'compose_ready' && checkinStatus !== 'completed' && (
-        <div className="flex gap-3">
+        <div className="mt-4 flex gap-3">
           <button
             onClick={() => setStep('quality_result')}
-            className="flex-1 py-3 border border-gray-300 rounded-xl text-sm text-gray-700 hover:bg-gray-50"
+            className="sf-btn-secondary flex-1"
           >
             返回修改
           </button>
           <button
             onClick={handlePublish}
             disabled={submitting || renderingImages}
-            className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
+            className="sf-btn-primary flex-1"
           >
             {submitting ? '记录中...' : '我已发到目标平台，确认打卡'}
           </button>
@@ -837,15 +847,15 @@ function PreviewContent() {
           boundary via localStorage (URLs cap at ~2KB and a 20k-char draft
           blows past that). /image-cards clears the key on read. */}
       {step === 'compose_ready' && content.trim() && (
-        <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
-          <p className="text-sm font-semibold text-gray-900">想要小红书卡片图？</p>
-          <p className="mt-1 text-xs leading-5 text-gray-500">
+        <div className="sf-note-card mt-4 px-5 py-4">
+          <p className="text-sm font-semibold text-[var(--ink)]">想要小红书卡片图？</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">
             顺发会把这份草稿带过去，预填正文和封面，点一下就能出图。
           </p>
           <button
             type="button"
             onClick={handleBridgeToImageCards}
-            className="mt-3 w-full rounded-xl border border-primary bg-white py-2.5 text-sm font-medium text-primary-dark transition hover:bg-primary/5"
+            className="sf-btn-secondary mt-3 min-h-11 w-full"
           >
             用此草稿生成小红书卡片图 →
           </button>
@@ -859,8 +869,8 @@ export default function PreviewPage() {
   return (
     <ProtectedRoute>
       <Suspense fallback={
-        <div className="flex items-center justify-center h-screen">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="flex h-screen items-center justify-center">
+          <Spinner />
         </div>
       }>
         <PreviewContent />

@@ -4,9 +4,13 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import AuthFailNotice from '@/components/AuthFailNotice';
+import SkeletonCard from '@/components/Skeleton';
 import Navbar from '@/components/Navbar';
-import { api } from '@/lib/api';
+import Spinner from '@/components/Spinner';
+import { api, normalizeApiError } from '@/lib/api';
 import { CheckinItem, CheckinsResponse, continueHref, statusLabel } from '@/lib/checkins';
+import { isDevPreviewToken } from '@/lib/devPreview';
 
 const PAGE_SIZE = 20;
 type Tab = 'all' | 'completed' | 'draft';
@@ -27,6 +31,7 @@ function HistoryContent() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  const [isAuthError, setIsAuthError] = useState(false);
 
   const buildPath = useCallback((tab: Tab, nextOffset: number) => {
     const query = new URLSearchParams({
@@ -37,10 +42,18 @@ function HistoryContent() {
     return `/api/my/checkins?${query.toString()}`;
   }, []);
 
-  const load = useCallback((tab: Tab, nextOffset: number, append = false) => {
+  const load = useCallback((tab: Tab, nextOffset: number, append = false, isRetry = false) => {
+    // Dev preview has no backend session — show the empty state, not a 401.
+    if (isDevPreviewToken(localStorage.getItem('token'))) {
+      setLoading(false);
+      return;
+    }
     if (!append) {
       setLoading(true);
-      setError('');
+      if (!isRetry) {
+        setError('');
+        setIsAuthError(false);
+      }
     } else {
       setLoadingMore(true);
     }
@@ -49,10 +62,13 @@ function HistoryContent() {
         setItems((prev) => append ? [...prev, ...data.checkins] : data.checkins);
         setOffset(nextOffset + data.checkins.length);
         setHasMore(data.checkins.length === PAGE_SIZE);
+        setError('');
+        setIsAuthError(false);
       })
       .catch((e: unknown) => {
-        const err = e as { data?: { detail?: string } };
-        setError(err?.data?.detail ?? '历史记录加载失败');
+        const { message, is401 } = normalizeApiError(e, '历史记录加载失败');
+        if (!append) setIsAuthError(is401);
+        setError(message);
       })
       .finally(() => {
         setLoading(false);
@@ -74,7 +90,7 @@ function HistoryContent() {
 
   return (
     <div className="sf-shell">
-      <section className="sf-card mb-5 p-6 md:p-8">
+      <section className="sf-card sf-rise mb-5 p-6 md:p-8">
         <span className="sf-eyebrow">历史稿件</span>
         <h1 className="sf-display mt-4 text-[36px] font-bold leading-tight text-[var(--ink)]">你的每一次表达轨迹</h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--ink-soft)]">
@@ -82,7 +98,7 @@ function HistoryContent() {
         </p>
       </section>
 
-      <div className="mb-4 flex rounded-full border border-[var(--border)] bg-white/60 p-1">
+      <div className="sf-rise sf-rise-1 mb-4 flex rounded-full border border-[var(--border)] bg-white/60 p-1">
         {tabs.map((tab) => (
           <button
             key={tab.value}
@@ -98,17 +114,25 @@ function HistoryContent() {
         ))}
       </div>
 
-      {error && (
+      {isAuthError ? (
+        <AuthFailNotice message="登录状态异常，无法加载历史记录。" />
+      ) : error && (
         <div className="sf-note-card mb-4 px-4 py-3 text-sm text-[var(--danger)]">
           <p>{error}</p>
-          <button onClick={() => load(activeTab, 0, false)} className="mt-2 text-xs font-semibold text-primary-dark underline">重新加载</button>
+          <button
+            onClick={() => load(activeTab, 0, false, true)}
+            disabled={loading}
+            className="mt-2 text-xs font-semibold text-primary-dark underline disabled:opacity-50"
+          >
+            {loading ? '重新加载中...' : '重新加载'}
+          </button>
         </div>
       )}
 
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-2xl bg-white/60" />
+            <SkeletonCard key={i} height="h-32" />
           ))}
         </div>
       ) : items.length > 0 ? (
@@ -151,7 +175,7 @@ function HistoryContent() {
 export default function HistoryPage() {
   return (
     <ProtectedRoute>
-      <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+      <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Spinner /></div>}>
         <HistoryContent />
       </Suspense>
       <Navbar />

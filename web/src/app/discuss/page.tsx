@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import ChatBubble from '@/components/ChatBubble';
+import Spinner from '@/components/Spinner';
 import { api, getErrorMessage } from '@/lib/api';
 
 interface Message {
@@ -15,6 +16,27 @@ interface Message {
 
 function now() {
   return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function TypingIndicator({ slow }: { slow: boolean }) {
+  return (
+    <div className="mb-3 flex justify-start">
+      <div className="rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--surface-strong)] px-4 py-3 shadow-[var(--shadow-soft)]">
+        <div className="flex gap-1">
+          {[0, 150, 300].map((delay) => (
+            <span
+              key={delay}
+              className="h-2 w-2 animate-bounce rounded-full bg-[var(--accent-strong)]"
+              style={{ animationDelay: `${delay}ms` }}
+            />
+          ))}
+        </div>
+        {slow && (
+          <p className="mt-2 text-sm text-[var(--ink-muted)]">AI 正在分析话题，通常需要 15-30 秒...</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function DiscussContent() {
@@ -31,14 +53,14 @@ function DiscussContent() {
   const [inputDisabled, setInputDisabled] = useState(false);
   const [showRefreshAngles, setShowRefreshAngles] = useState(false);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
+  const [initFailed, setInitFailed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const hasSentInit = useRef(false);
 
-  useEffect(() => {
-    if (!checkinId || hasSentInit.current) return;
-    hasSentInit.current = true;
+  const sendInit = useCallback(() => {
     setLoading(true);
+    setInitFailed(false);
 
     api.postGeneration<{ reply: string; status: string; draft?: string }>('/api/generate_content', {
       checkin_id: checkinId,
@@ -57,10 +79,16 @@ function DiscussContent() {
         if (detail.includes('API Key')) {
           setApiKeyMissing(true);
         } else {
-          setMessages([{ role: 'assistant', content: '加载失败，请返回重试～', time: now() }]);
+          setInitFailed(true);
         }
       });
   }, [checkinId, angle, platform]);
+
+  useEffect(() => {
+    if (!checkinId || hasSentInit.current) return;
+    hasSentInit.current = true;
+    sendInit();
+  }, [checkinId, sendInit]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -149,50 +177,50 @@ function DiscussContent() {
   return (
     <div className="mx-auto flex h-[100dvh] max-w-md flex-col md:h-[calc(100dvh-3rem)] md:max-w-4xl md:py-6">
       {/* Header */}
-      <div className="flex flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 md:rounded-t-2xl md:border-x md:border-t">
-        <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700">
+      <div className="flex flex-shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--surface-strong)] px-4 py-3 md:rounded-t-2xl md:border-x md:border-t">
+        <button
+          onClick={() => router.back()}
+          aria-label="返回上一页"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--ink-muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"
+        >
           ←
         </button>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-gray-400">话题</p>
-          <p className="text-sm font-medium text-gray-800 truncate">{topic}</p>
+        <div className="min-w-0 flex-1">
+          <p className="sf-eyebrow">深度讨论</p>
+          <p className="truncate text-sm font-medium text-[var(--ink)]">{topic}</p>
         </div>
       </div>
 
       {/* BYOK error banner */}
       {apiKeyMissing && (
-        <div className="flex-shrink-0 px-4 py-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-800">
+        <div className="flex-shrink-0 border-b border-[rgba(170,151,123,0.25)] bg-[var(--highlight)] px-4 py-3 text-sm text-[var(--ink-soft)]">
           <span>需要配置 DeepSeek API Key 才能继续。</span>
-          <Link href="/settings" className="ml-2 text-primary underline font-medium">
+          <Link href="/settings" className="ml-2 font-medium text-primary-dark underline">
             前往设置 →
           </Link>
         </div>
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-bg px-4 py-4 md:border-x md:border-gray-200 md:px-8">
+      <div className="flex-1 overflow-y-auto px-4 py-4 md:border-x md:border-[var(--border)] md:px-8">
         {messages.map((m, i) => (
           <ChatBubble key={i} role={m.role} content={m.content} time={m.time} />
         ))}
-        {loading && (
-          <div className="flex justify-start mb-3">
-            <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-              {messages.length === 0 && (
-                <p className="text-sm text-gray-400 mt-2">AI 正在分析话题，通常需要 15-30 秒...</p>
-              )}
-            </div>
+        {loading && <TypingIndicator slow={messages.length === 0} />}
+        {initFailed && !loading && (
+          <div className="sf-note-card mx-auto max-w-sm px-5 py-4 text-center">
+            <p className="text-sm font-medium text-[var(--ink)]">开场分析没有加载出来</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--ink-soft)]">可能是网络波动，重试一次通常就好。</p>
+            <button onClick={sendInit} className="sf-btn-secondary mt-3 min-h-9 px-5 text-xs">
+              重试
+            </button>
           </div>
         )}
         {showRefreshAngles && !loading && (
-          <div className="flex justify-center mt-2 mb-1">
+          <div className="mb-1 mt-2 flex justify-center">
             <button
               onClick={handleRefreshAngles}
-              className="text-xs text-gray-400 hover:text-primary underline"
+              className="text-xs text-[var(--ink-muted)] underline underline-offset-2 transition hover:text-primary-dark"
             >
               换一批角度
             </button>
@@ -202,8 +230,8 @@ function DiscussContent() {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3 md:rounded-b-2xl md:border-x md:border-b md:px-8">
-        <div className="flex gap-2 items-end">
+      <div className="flex-shrink-0 border-t border-[var(--border)] bg-[var(--surface-strong)] px-4 py-3 md:rounded-b-2xl md:border-x md:border-b md:px-8">
+        <div className="flex items-end gap-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -211,12 +239,12 @@ function DiscussContent() {
             disabled={inputDisabled || loading}
             placeholder={inputDisabled ? '草稿已生成，即将跳转...' : '选一个角度编号，或输入你的想法'}
             rows={2}
-            className="flex-1 resize-none px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary disabled:opacity-50"
+            className="sf-textarea flex-1 rounded-xl px-3 py-2"
           />
           <button
             onClick={() => handleSend(input)}
             disabled={!input.trim() || loading || inputDisabled}
-            className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-primary-dark transition-colors flex-shrink-0"
+            className="sf-btn-primary min-h-11 flex-shrink-0 rounded-xl px-5"
           >
             发送
           </button>
@@ -229,7 +257,7 @@ function DiscussContent() {
 export default function DiscussPage() {
   return (
     <ProtectedRoute>
-      <Suspense fallback={<div className="flex items-center justify-center h-screen"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+      <Suspense fallback={<div className="flex h-screen items-center justify-center"><Spinner /></div>}>
         <DiscussContent />
       </Suspense>
     </ProtectedRoute>

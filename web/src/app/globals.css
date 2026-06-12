@@ -41,6 +41,39 @@ body {
   }
 }
 
+@keyframes sf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-rise {
+    animation: sf-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .sf-rise-1 { animation-delay: 70ms; }
+  .sf-rise-2 { animation-delay: 140ms; }
+  .sf-rise-3 { animation-delay: 210ms; }
+  .sf-rise-4 { animation-delay: 280ms; }
+  .sf-fade {
+    animation: sf-fade 0.3s ease-out both;
+  }
+}
+
 @layer components {
   .sf-shell {
     @apply mx-auto min-h-screen w-full max-w-md px-4 pb-24 pt-6 md:max-w-5xl md:px-8 md:pb-12 md:pt-24 xl:max-w-6xl;
@@ -68,6 +101,20 @@ body {
     border-radius: 16px;
     box-shadow: var(--shadow-card);
     backdrop-filter: blur(12px);
+  }
+
+  /* Interactive cards (links/buttons) lift slightly on hover. */
+  a.sf-card,
+  button.sf-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a.sf-card:hover,
+    button.sf-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 22px 56px rgba(25, 25, 25, 0.09);
+    }
   }
 
   .sf-note-card {
@@ -119,12 +166,62 @@ body {
     background: linear-gradient(180deg, #373d37 0%, #242724 100%);
   }
 
+  .sf-btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .sf-btn-primary:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+
   .sf-btn-secondary {
     @apply inline-flex min-h-12 items-center justify-center rounded-full px-6 text-center text-sm font-medium transition disabled:opacity-50;
     background: rgba(255, 253, 250, 0.84);
     color: var(--ink);
     border: 1px solid var(--border-strong);
     box-shadow: var(--shadow-soft);
+  }
+
+  .sf-btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 253, 250, 0.98);
+    border-color: rgba(124, 120, 111, 0.42);
+  }
+
+  .sf-btn-secondary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .sf-btn-secondary:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+
+  .sf-input {
+    @apply w-full rounded-2xl px-4 py-3 text-sm;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+
+  .sf-input::placeholder {
+    color: var(--ink-muted);
+  }
+
+  .sf-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.92);
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .sf-input:disabled {
+    opacity: 0.55;
+  }
+
+  .sf-textarea {
+    @apply sf-input resize-none leading-7;
   }
 
   .sf-muted {

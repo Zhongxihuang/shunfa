@@ -3,23 +3,40 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import AuthFailNotice from '@/components/AuthFailNotice';
+import SkeletonCard from '@/components/Skeleton';
 import Navbar from '@/components/Navbar';
-import { api } from '@/lib/api';
+import { api, normalizeApiError } from '@/lib/api';
 import { CheckinItem, CheckinsResponse, continueHref, statusLabel } from '@/lib/checkins';
+import { isDevPreviewToken } from '@/lib/devPreview';
 
 function DraftsContent() {
   const [drafts, setDrafts] = useState<CheckinItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isAuthError, setIsAuthError] = useState(false);
 
-  function loadDrafts() {
+  function loadDrafts(isRetry = false) {
+    // Dev preview has no backend session — show the empty state, not a 401.
+    if (isDevPreviewToken(localStorage.getItem('token'))) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    setError('');
+    if (!isRetry) {
+      setError('');
+      setIsAuthError(false);
+    }
     api.get<CheckinsResponse>('/api/my/checkins?status_filter=draft&limit=100&offset=0')
-      .then((data) => setDrafts(data.checkins))
+      .then((data) => {
+        setDrafts(data.checkins);
+        setError('');
+        setIsAuthError(false);
+      })
       .catch((e: unknown) => {
-        const err = e as { data?: { detail?: string } };
-        setError(err?.data?.detail ?? '草稿加载失败');
+        const { message, is401 } = normalizeApiError(e, '草稿加载失败');
+        setIsAuthError(is401);
+        setError(message);
       })
       .finally(() => setLoading(false));
   }
@@ -30,7 +47,7 @@ function DraftsContent() {
 
   return (
     <div className="sf-shell">
-      <section className="sf-card mb-5 p-6 md:p-8">
+      <section className="sf-card sf-rise mb-5 p-6 md:p-8">
         <div className="mb-4 flex items-center justify-between gap-3">
           <span className="sf-eyebrow">草稿箱</span>
           <Link href="/topics" className="sf-pill sf-pill-accent">新建</Link>
@@ -41,17 +58,25 @@ function DraftsContent() {
         </p>
       </section>
 
-      {error && (
+      {isAuthError ? (
+        <AuthFailNotice message="登录状态异常，无法加载草稿。" />
+      ) : error && (
         <div className="sf-note-card mb-4 px-4 py-3 text-sm text-[var(--danger)]">
           <p>{error}</p>
-          <button onClick={loadDrafts} className="mt-2 text-xs font-semibold text-primary-dark underline">重新加载</button>
+          <button
+            onClick={() => loadDrafts(true)}
+            disabled={loading}
+            className="mt-2 text-xs font-semibold text-primary-dark underline disabled:opacity-50"
+          >
+            {loading ? '重新加载中...' : '重新加载'}
+          </button>
         </div>
       )}
 
       {loading ? (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-40 animate-pulse rounded-2xl bg-white/60" />
+            <SkeletonCard key={i} height="h-40" />
           ))}
         </div>
       ) : drafts.length > 0 ? (

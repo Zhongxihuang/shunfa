@@ -62,6 +62,26 @@ export function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Normalize an unknown error into a `{ message, is401 }` pair.
+ * `is401` lets call sites branch into "force re-login" UX (e.g. show a
+ * "重新登录" affordance) without each page re-implementing status checks.
+ */
+export interface NormalizedError {
+  message: string;
+  is401: boolean;
+}
+
+export function normalizeApiError(error: unknown, fallback: string): NormalizedError {
+  if (error instanceof ApiError) {
+    return { message: error.data.message, is401: error.status === 401 };
+  }
+  if (error instanceof Error) {
+    return { message: error.message || fallback, is401: false };
+  }
+  return { message: fallback, is401: false };
+}
+
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('token');

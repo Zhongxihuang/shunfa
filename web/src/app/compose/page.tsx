@@ -4,6 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import Spinner from '@/components/Spinner';
+import { Skeleton } from '@/components/Skeleton';
 import { api, getErrorMessage } from '@/lib/api';
 
 type Platform = 'xiaohongshu' | 'twitter' | 'weibo' | 'wechat_short' | 'generic';
@@ -50,6 +52,10 @@ function ComposeContent() {
   const router = useRouter();
   const params = useSearchParams();
   const topicId = parseInt(params.get('topic_id') ?? '0', 10);
+  // useSearchParams().get() already decodes — calling decodeURIComponent again
+  // throws URIError on any value containing a bare `%` (e.g. "100% 渗透率").
+  const topicText = params.get('topic') ?? '';
+  const batchId = params.get('batch_id') ?? '';
 
   const [topic, setTopic] = useState<HotTopicDetail | null>(null);
   const [analysis, setAnalysis] = useState<HotTopicAnalysis | null>(null);
@@ -64,7 +70,20 @@ function ComposeContent() {
     setPlatform(getSavedPlatform());
   }, []);
 
+  // Reset composition state on every topic change so navigating between two
+  // custom topics (or a hot topic → custom topic) doesn't carry over the
+  // previously-typed angle or stale error.
   useEffect(() => {
+    setSelectedAngle('');
+    setAnalysis(null);
+    setError('');
+  }, [topicId, topicText]);
+
+  useEffect(() => {
+    if (topicText) {
+      setLoading(false);
+      return;
+    }
     if (!topicId) {
       setLoading(false);
       setError('缺少热点 ID，请返回重新选择');
@@ -72,7 +91,6 @@ function ComposeContent() {
     }
 
     setLoading(true);
-    setError('');
     api.get<HotTopicDetail>(`/api/hot_topics/${topicId}`)
       .then((data) => {
         setTopic(data);
@@ -82,7 +100,7 @@ function ComposeContent() {
         setError(getErrorMessage(e, '热点详情加载失败'));
       })
       .finally(() => setLoading(false));
-  }, [topicId]);
+  }, [topicId, topicText]);
 
   function handlePlatformChange(next: Platform) {
     setPlatform(next);
@@ -101,13 +119,20 @@ function ComposeContent() {
   }, [topic, analysis]);
 
   async function createCheckin() {
-    if (!topic) throw new Error('缺少热点信息');
-    return api.post<{ checkin_id: number }>('/api/select_topic', {
-      topic: topic.title,
-      hot_topic_id: topic.id,
-      selected_angle: selectedAngle,
-      platform,
-    });
+    if (topic) {
+      return api.post<{ checkin_id: number }>('/api/select_topic', {
+        topic: topic.title,
+        hot_topic_id: topic.id,
+        selected_angle: selectedAngle,
+        platform,
+      });
+    }
+    if (topicText) {
+      const body: Record<string, string> = { topic: topicText };
+      if (batchId) body.batch_id = batchId;
+      return api.post<{ checkin_id: number }>('/api/select_topic', body);
+    }
+    throw new Error('缺少话题信息');
   }
 
   async function handleDigDeeper() {
@@ -130,8 +155,8 @@ function ComposeContent() {
   }
 
   async function handleQuickGenerate() {
-    if (!topic || !selectedAngle.trim()) {
-      setError('请选择一个写作角度');
+    if (!selectedAngle.trim()) {
+      setError('请输入或选择一个写作角度');
       return;
     }
 
@@ -140,9 +165,9 @@ function ComposeContent() {
     try {
       const selected = await createCheckin();
       const draft = await api.postGeneration<{ content: string; platform: Platform; char_count: number }>('/api/quick_generate', {
-        topic_id: topic.id,
+        topic_id: topic?.id,
         checkin_id: selected.checkin_id,
-        hot_topic: topic.title,
+        hot_topic: topic?.title ?? topicText,
         angle: selectedAngle.trim(),
         platform,
         opportunities: analysis?.opportunities ?? [],
@@ -157,14 +182,17 @@ function ComposeContent() {
   }
 
   async function handleDeepDiscuss() {
-    if (!topic) return;
+    if (!topic && !topicText) {
+      setError('缺少话题信息，请返回重新选择');
+      return;
+    }
     setSubmitting('deep');
     setError('');
     try {
       const selected = await createCheckin();
       const query = new URLSearchParams({
         checkin_id: String(selected.checkin_id),
-        topic: topic.title,
+        topic: topic?.title ?? topicText,
         angle: selectedAngle,
         platform,
       });
@@ -178,11 +206,11 @@ function ComposeContent() {
   if (loading) {
     return (
       <div className="sf-shell">
-        <div className="mb-4 h-8 w-32 animate-pulse rounded bg-white/60" />
+        <Skeleton className="mb-4 h-8 w-32 rounded" />
         <div className="space-y-3">
-          <div className="h-28 animate-pulse rounded-2xl bg-white/60" />
-          <div className="h-40 animate-pulse rounded-2xl bg-white/60" />
-          <div className="h-24 animate-pulse rounded-2xl bg-white/60" />
+          <Skeleton className="h-28" />
+          <Skeleton className="h-40" />
+          <Skeleton className="h-24" />
         </div>
       </div>
     );
@@ -215,7 +243,68 @@ function ComposeContent() {
         </div>
       )}
 
-      {topic ? (
+      {topicText && !topic ? (
+        <div className="sf-page-grid">
+          <div className="sf-page-main">
+            <section className="sf-card mb-4 p-5 md:p-6">
+              <span className="sf-eyebrow">已选选题</span>
+              <h2 className="mt-2 text-base font-semibold leading-relaxed text-[var(--ink)] md:text-xl">{topicText}</h2>
+            </section>
+
+            <section className="sf-card mb-4 p-5 md:p-6">
+              <h2 className="sf-display mb-3 text-2xl font-semibold text-[var(--ink)]">你的写作角度</h2>
+              <textarea
+                value={selectedAngle}
+                onChange={(e) => setSelectedAngle(e.target.value)}
+                placeholder="写下你对这个话题的核心判断或立场，比如：这件事最被忽视的地方是……"
+                rows={3}
+                className="sf-textarea"
+              />
+            </section>
+          </div>
+
+          <div className="sf-page-side">
+            <section className="sf-card mb-4 p-5">
+              <h2 className="sf-display mb-3 text-2xl font-semibold text-[var(--ink)]">发布平台</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {PLATFORM_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => handlePlatformChange(option.value)}
+                    className={`rounded-2xl border px-3 py-2 text-left ${
+                      platform === option.value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-[var(--border)] bg-white/50 hover:border-[var(--border-strong)]'
+                    }`}
+                  >
+                    <p className={`text-sm font-medium ${platform === option.value ? 'text-primary-dark' : 'text-[var(--ink)]'}`}>
+                      {option.label}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">{option.hint}</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleDeepDiscuss}
+                disabled={!!submitting}
+                className="sf-btn-secondary flex-1"
+              >
+                {submitting === 'deep' ? '进入中...' : '深度讨论'}
+              </button>
+              <button
+                onClick={handleQuickGenerate}
+                disabled={!!submitting || !selectedAngle.trim()}
+                className="sf-btn-primary flex-1"
+              >
+                {submitting === 'quick' ? '生成中...' : '生成草稿'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : topic ? (
         <div className="sf-page-grid">
           <div className="sf-page-main">
             <section className="sf-card mb-4 p-5 md:p-6">
@@ -386,7 +475,7 @@ function ComposeContent() {
 export default function ComposePage() {
   return (
     <ProtectedRoute>
-      <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+      <Suspense fallback={<div className="flex h-screen items-center justify-center"><Spinner /></div>}>
         <ComposeContent />
       </Suspense>
     </ProtectedRoute>

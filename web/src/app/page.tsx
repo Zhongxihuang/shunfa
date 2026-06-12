@@ -4,26 +4,34 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
-import { api } from '@/lib/api';
+import SkeletonCard from '@/components/Skeleton';
+import { api, ApiError } from '@/lib/api';
 import { CheckinItem, CheckinsResponse, continueHref, statusLabel } from '@/lib/checkins';
 import { useAuth } from '@/lib/auth';
+import { isDevPreviewToken } from '@/lib/devPreview';
 
 function Dashboard() {
-  const { user, refreshUser, apiKeyConfigured } = useAuth();
+  const { user, apiKeyConfigured, logout } = useAuth();
   const [recent, setRecent] = useState<CheckinItem[]>([]);
   const [drafts, setDrafts] = useState<CheckinItem[]>([]);
   const [draftCount, setDraftCount] = useState(0);
   const [loadingLists, setLoadingLists] = useState(true);
   const [listError, setListError] = useState(false);
+  const [listAuthError, setListAuthError] = useState(false);
 
-  useEffect(() => {
-    refreshUser();
-  }, [refreshUser]);
-
+  // AuthProvider already calls refreshUser() on mount (auth.tsx); the cached
+  // user flows into this component via the context, so the dashboard does not
+  // need a second /api/user_status call.
   const loadDashboardLists = useCallback(() => {
+    // Dev preview has no real backend session — show the empty states instead
+    // of letting the 401 surface as a scary auth banner during UI demos.
+    if (isDevPreviewToken(localStorage.getItem('token'))) {
+      setLoadingLists(false);
+      return;
+    }
     let cancelled = false;
     setLoadingLists(true);
-    setListError(false);
+    setListAuthError(false);
     Promise.all([
       api.get<CheckinsResponse>('/api/my/checkins?limit=3&offset=0'),
       api.get<CheckinsResponse>('/api/my/checkins?status_filter=draft&limit=3&offset=0'),
@@ -33,9 +41,11 @@ function Dashboard() {
         setRecent(recentData.checkins);
         setDrafts(draftData.checkins);
         setDraftCount(draftData.draft_count);
+        setListError(false);
       })
-      .catch(() => {
+      .catch((e: unknown) => {
         if (cancelled) return;
+        setListAuthError(e instanceof ApiError && e.status === 401);
         setListError(true);
       })
       .finally(() => {
@@ -54,7 +64,7 @@ function Dashboard() {
     <div className="sf-shell">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
         <main className="min-w-0">
-          <section className="sf-card mb-5 p-6 md:p-8">
+          <section className="sf-card sf-rise mb-5 p-6 md:p-8">
             <div className="mb-5 flex items-start justify-between gap-3">
               <span className="sf-eyebrow">顺发</span>
               <span className="sf-pill sf-pill-accent">{user.today_completed ? '今日已发布' : '今日待发'}</span>
@@ -108,7 +118,28 @@ function Dashboard() {
             </div>
           )}
 
-          <section className="mb-5">
+          <section className="sf-rise sf-rise-2 mb-5">
+            {listError && (
+              <div className="mb-3 flex items-center justify-between rounded-xl bg-white/50 px-4 py-2 text-xs text-[var(--ink-muted)]">
+                {listAuthError ? (
+                  <>
+                    <span>登录状态异常，无法加载数据</span>
+                    <button onClick={logout} className="font-medium text-primary-dark underline">重新登录</button>
+                  </>
+                ) : (
+                  <>
+                    <span>内容加载失败，可能是网络问题</span>
+                    <button
+                      onClick={loadDashboardLists}
+                      disabled={loadingLists}
+                      className="font-medium text-primary-dark underline disabled:opacity-50"
+                    >
+                      {loadingLists ? '重试中...' : '重试'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             <div className="mb-3 flex items-center justify-between px-1">
               <div>
                 <p className="sf-eyebrow">最近创作</p>
@@ -120,16 +151,8 @@ function Dashboard() {
             {loadingLists ? (
               <div className="grid gap-3 md:grid-cols-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-32 animate-pulse rounded-2xl bg-white/60" />
+                  <SkeletonCard key={i} height="h-32" />
                 ))}
-              </div>
-            ) : listError ? (
-              <div className="sf-note-card px-5 py-6">
-                <p className="text-sm font-semibold text-[var(--ink)]">创作记录加载失败</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">网络或登录状态可能临时异常，请重试。</p>
-                <button onClick={loadDashboardLists} className="sf-btn-secondary mt-4 min-h-10 px-4">
-                  重新加载
-                </button>
               </div>
             ) : recent.length > 0 ? (
               <div className="grid gap-3 md:grid-cols-3">
@@ -155,18 +178,13 @@ function Dashboard() {
           </section>
         </main>
 
-        <aside className="lg:sticky lg:top-24 lg:self-start">
+        <aside className="sf-rise sf-rise-3 lg:sticky lg:top-24 lg:self-start">
           <section className="sf-card mb-5 p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="sf-display text-2xl font-semibold text-[var(--ink)]">草稿箱</h2>
               <span className="sf-pill">{draftCount > 0 ? `${draftCount} 篇` : '空'}</span>
             </div>
-            {listError ? (
-              <div>
-                <p className="mb-4 text-sm leading-6 text-[var(--ink-soft)]">草稿箱加载失败，当前不展示空状态。</p>
-                <button onClick={loadDashboardLists} className="sf-btn-secondary w-full">重新加载</button>
-              </div>
-            ) : drafts.length > 0 ? (
+            {drafts.length > 0 ? (
               <div className="space-y-3">
                 {drafts.map((item) => (
                   <Link key={item.id} href={continueHref(item)} className="block rounded-2xl border border-[var(--border)] bg-white/50 p-3 transition hover:bg-white/70">
