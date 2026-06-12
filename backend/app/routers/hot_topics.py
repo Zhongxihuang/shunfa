@@ -13,7 +13,11 @@ from ..schemas import (
 )
 from ..services.hot_topic_refresh_service import refresh_hot_topic_supply
 from ..services.hot_topic_service import analyze_hot_topic
-from ..services.local_hot_topic_store import ensure_topics_for_date, to_list_items
+from ..services.local_hot_topic_store import (
+    ensure_topics_for_date,
+    records_are_fallback,
+    to_list_items,
+)
 from ..utils.time_utils import get_today_cst
 
 router = APIRouter()
@@ -43,6 +47,32 @@ async def get_today_hot_topics(
     return HotTopicsResponse(
         date=today,
         topics=to_list_items(records),
+        is_fallback=records_are_fallback(records),
+    )
+
+
+@router.post("/hot_topics/reload", response_model=HotTopicsResponse)
+@limiter.limit("6/hour")
+async def reload_today_hot_topics(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """User-triggered attempt to fetch real hot topics.
+
+    Unlike GET /hot_topics/today (which returns whatever supply already exists),
+    this runs the RSS + scoring pipeline so the "重新加载" button can actually
+    replace fallback topics with fresh ones. If fetching/scoring fails or yields
+    nothing (e.g. no system API key locally), the supply stays on backups and the
+    response keeps is_fallback=True so the client still warns the user.
+    """
+    await refresh_hot_topic_supply(db=db)
+    today = get_today_cst()
+    records = ensure_topics_for_date(topic_date=today, limit=3, db=db)
+    return HotTopicsResponse(
+        date=today,
+        topics=to_list_items(records),
+        is_fallback=records_are_fallback(records),
     )
 
 

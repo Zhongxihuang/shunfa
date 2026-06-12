@@ -65,6 +65,7 @@ def test_hot_topics_today_returns_structured_topics(client, db):
     assert data["topics"][0]["title"] == "OpenAI 发布新定价"
     assert data["topics"][0]["url"] == "https://example.com/openai-pricing"
     assert data["topics"][0]["source"] == "TechCrunch AI"
+    assert data["is_fallback"] is False
 
 
 def test_hot_topics_today_falls_back_to_latest_topics(client, db):
@@ -99,6 +100,8 @@ def test_hot_topics_today_falls_back_to_latest_topics(client, db):
     assert data["date"] == get_today_cst().isoformat()
     assert data["topics"][0]["title"] == "昨天仍可用的AI热点"
     assert data["topics"][0]["id"] != old_topic.id
+    # Cloned-but-real topics are stale, not synthetic backups.
+    assert data["is_fallback"] is False
 
     detail_response = client.get(
         f"/api/hot_topics/{data['topics'][0]['id']}",
@@ -124,12 +127,74 @@ def test_hot_topics_today_seeds_static_fallback_when_empty(client, db):
     assert data["date"] == get_today_cst().isoformat()
     assert len(data["topics"]) == 3
     assert data["topics"][0]["source"] == "顺发兜底"
+    assert data["is_fallback"] is True
 
     detail_response = client.get(
         f"/api/hot_topics/{data['topics'][0]['id']}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert detail_response.status_code == 200
+
+
+def test_hot_topics_reload_replaces_fallback_with_fresh(client, db):
+    user = User(openid="hot_topics_reload_user")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = create_jwt_token(user.id)
+
+    fresh_topic = ScoredTopic(
+        hot_topic="重新加载拿到的真实热点",
+        hot_source="TechCrunch AI",
+        hot_url="https://example.com/reloaded",
+        hot_summary="用户点重新加载后抓到的真实热点。",
+        topic_category=TopicCategory.ai_product,
+        ai_angle="按需刷新让备用话题退场",
+        ai_counter_angle="按需刷新也有成本，需要限流",
+        score=9,
+    )
+
+    with (
+        patch(
+            "app.services.hot_topic_refresh_service.fetch_all_sources", new_callable=AsyncMock
+        ) as mock_fetch,
+        patch(
+            "app.services.hot_topic_refresh_service.score_and_filter", new_callable=AsyncMock
+        ) as mock_score,
+    ):
+        mock_fetch.return_value = [object()]
+        mock_score.return_value = [fresh_topic]
+        response = client.post(
+            "/api/hot_topics/reload",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_fallback"] is False
+    assert data["topics"][0]["title"] == "重新加载拿到的真实热点"
+
+
+def test_hot_topics_reload_stays_fallback_when_no_fresh(client, db):
+    user = User(openid="hot_topics_reload_fallback_user")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = create_jwt_token(user.id)
+
+    with patch(
+        "app.services.hot_topic_refresh_service.fetch_all_sources", new_callable=AsyncMock
+    ) as mock_fetch:
+        mock_fetch.return_value = []
+        response = client.post(
+            "/api/hot_topics/reload",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_fallback"] is True
+    assert len(data["topics"]) == 3
 
 
 def test_hot_topics_health_reports_current_supply(client, db):

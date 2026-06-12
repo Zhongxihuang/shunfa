@@ -14,11 +14,16 @@ from ..utils.time_utils import get_today_cst
 # This eliminates a SQLite query on every /hot_topics/today call.
 _hot_topic_cache: TTLCache = TTLCache(maxsize=8, ttl=43200)
 
+# Source label stamped on synthetic backup topics. Used both to seed the rows
+# and to detect, on read, whether the supply is degraded (fallback) so the Web
+# client can warn the user instead of silently showing evergreen placeholders.
+FALLBACK_SOURCE = "顺发兜底"
+
 FALLBACK_TOPICS = [
     {
         "title": "AI产品进入日常工作流",
         "summary": "当模型能力接近时，真正拉开差距的是谁能把AI嵌进稳定、可重复的工作流程。",
-        "source": "顺发兜底",
+        "source": FALLBACK_SOURCE,
         "url": "https://example.com/shunfa-hot-topic-fallback-ai-workflow",
         "category": "ai_product",
         "score": 7,
@@ -28,7 +33,7 @@ FALLBACK_TOPICS = [
     {
         "title": "内容创作者开始重视分发效率",
         "summary": "创作不只是写出观点，还要能快速生成标题、标签、图文素材并完成发布闭环。",
-        "source": "顺发兜底",
+        "source": FALLBACK_SOURCE,
         "url": "https://example.com/shunfa-hot-topic-fallback-content",
         "category": "industry",
         "score": 7,
@@ -38,7 +43,7 @@ FALLBACK_TOPICS = [
     {
         "title": "自动化工具需要更可靠的兜底机制",
         "summary": "用户不关心后台哪一步失败，只关心关键链路能不能持续给出可用结果。",
-        "source": "顺发兜底",
+        "source": FALLBACK_SOURCE,
         "url": "https://example.com/shunfa-hot-topic-fallback-reliability",
         "category": "tech",
         "score": 7,
@@ -46,6 +51,16 @@ FALLBACK_TOPICS = [
         "ai_counter_angle": "兜底内容只能保链路，不能替代高质量实时热点",
     },
 ]
+
+
+def records_are_fallback(records: list[HotTopic]) -> bool:
+    """True when the supplied topics are synthetic backups rather than real hot topics.
+
+    Stale-but-real topics cloned from a previous day are NOT treated as fallback —
+    they loaded successfully, just on an earlier date. Only the evergreen
+    FALLBACK_TOPICS (stamped with FALLBACK_SOURCE) count as degraded supply.
+    """
+    return any(record.source == FALLBACK_SOURCE for record in records)
 
 
 def replace_topics_for_date(

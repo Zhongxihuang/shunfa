@@ -125,6 +125,8 @@ def test_get_hot_topics_returns_list(client, db):
     assert data["topics"][0]["record_id"] == str(topic.id)
     assert data["topics"][0]["index"] == 1
     assert "date" in data
+    # A real stored topic is not a synthetic fallback.
+    assert data["is_fallback"] is False
 
 
 def test_get_hot_topics_falls_back_to_latest_local_topics(client, db):
@@ -138,6 +140,22 @@ def test_get_hot_topics_falls_back_to_latest_local_topics(client, db):
     assert data["date"] == get_today_cst().isoformat()
     assert data["topics"][0]["hot_topic"] == "昨天的高分热点"
     assert data["topics"][0]["record_id"] != str(topic.id)
+    # Cloned-from-yesterday is real content, not synthetic fallback.
+    assert data["is_fallback"] is False
+
+
+def test_get_hot_topics_surfaces_fallback_when_database_empty(client, db):
+    """Empty database → seeded evergreen fallback → is_fallback must be true
+    so push consumers (WeChat daily push) can warn the user."""
+    _create_feishu_user(db)
+
+    response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["topics"]) == 3
+    assert data["topics"][0]["hot_source"] == "顺发兜底"
+    assert data["is_fallback"] is True
 
 
 def test_get_hot_topics_without_user_header_returns_list(client, db):

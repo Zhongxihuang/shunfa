@@ -29,7 +29,7 @@ from ..services.draft_service import (
     confirm_content,
     quick_generate,
 )
-from ..services.local_hot_topic_store import ensure_topics_for_date
+from ..services.local_hot_topic_store import ensure_topics_for_date, records_are_fallback
 from ..utils.time_utils import get_today_cst
 
 router = APIRouter(prefix="/coze")
@@ -108,6 +108,10 @@ def get_coze_user(
 class GetHotTopicsResponse(BaseModel):
     topics: list[dict]
     date: str
+    # True when topics are synthetic backups (no real hot topics loaded yet).
+    # Push consumers (WeChat daily push etc.) should surface this so users
+    # don't see evergreen placeholders labelled as "today's hot topic".
+    is_fallback: bool = False
 
 
 class QuickGeneratePluginRequest(BaseModel):
@@ -206,6 +210,7 @@ async def get_hot_topics(
     return GetHotTopicsResponse(
         topics=topic_list,
         date=topic_date.isoformat(),
+        is_fallback=records_are_fallback(topics),
     )
 
 

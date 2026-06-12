@@ -76,6 +76,9 @@ class HotTopicListItem(BaseModel):
 class HotTopicsResponse(BaseModel):
     date: date
     topics: list[HotTopicListItem]
+    # True when topics are synthetic backups (no real hot topics loaded yet),
+    # so the client can warn the user and offer a meaningful reload.
+    is_fallback: bool = False
 
 
 class HotTopicAnalysisRequest(BaseModel):
