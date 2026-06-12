@@ -62,4 +62,23 @@
     />
     <view class="save-tip">点击任意图片保存到相册</view>
   </view>
+
+  <!-- AI 文案（标题 + 标签）—— 仅当后端有返回时显示 -->
+  <view wx:if="{{ hasAiCopy }}" class="ai-copy">
+    <view class="ai-section-title">AI 文案（去小红书粘贴）</view>
+    <view wx:if="{{ aiTitle }}" class="ai-row">
+      <view class="ai-label">标题</view>
+      <view class="ai-text ai-title">{{ aiTitle }}</view>
+      <view class="ai-copy-btn" bindtap="onCopyTitle">复制</view>
+    </view>
+    <view wx:if="{{ aiTagsFormatted }}" class="ai-row">
+      <view class="ai-label">标签</view>
+      <view class="ai-text ai-tags">{{ aiTagsFormatted }}</view>
+      <view class="ai-copy-btn" bindtap="onCopyTags">复制</view>
+    </view>
+    <view class="ai-copy-all" bindtap="onCopyAll">一键复制标题+标签</view>
+  </view>
+  <view wx:elif="{{ pages.length }}" class="ai-copy-empty">
+    AI 文案本次未生成（可能 LLM 暂时不可用），可手动写或重试。
+  </view>
 </view>

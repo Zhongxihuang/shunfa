@@ -1,5 +1,21 @@
 const api = require('../../utils/api');
 
+function formatTagsForCopy(tags) {
+  // Storage is `["机器学习", "AI", ...]`; users want `#机器学习 #AI` for paste
+  // into 小红书. This is the only place that format is decided.
+  if (!tags || !tags.length) return '';
+  return tags.map((t) => (t.startsWith('#') ? t : '#' + t)).join(' ');
+}
+
+function buildAllCopy(title, tags) {
+  // Compose the full post body the user will paste into 小红书's
+  // caption field. Empty title or no tags is OK — we just skip the line.
+  const tagLine = formatTagsForCopy(tags);
+  const titleLine = (title || '').trim();
+  if (titleLine && tagLine) return `${titleLine}\n\n${tagLine}`;
+  return titleLine || tagLine;
+}
+
 Page({
   data: {
     rawText: '',
@@ -16,7 +32,13 @@ Page({
     overflow: false,
     images: [],
     previewing: false,
-    rendering: false
+    rendering: false,
+    // AI-generated Xiaohongshu-style copy. Populated by POST /api/image_jobs
+    // and persisted on the job, so they survive template re-renders.
+    aiTitle: '',
+    aiTags: [],
+    aiTagsFormatted: '',
+    hasAiCopy: false
   },
 
   onTextInput(e) {
@@ -43,12 +65,18 @@ Page({
       template: this.data.template,
       cover_title: this.data.coverTitle.trim() || null
     }).then((res) => {
+      const aiTitle = res.ai_title || '';
+      const aiTags = res.ai_tags || [];
       this.setData({
         jobId: res.job_id,
         pages: res.pages,
         pageCount: res.page_count,
         overflow: res.overflow,
         images: [],
+        aiTitle,
+        aiTags,
+        aiTagsFormatted: formatTagsForCopy(aiTags),
+        hasAiCopy: !!(aiTitle || aiTags.length),
         previewing: false
       });
     }).catch(() => {
@@ -98,6 +126,47 @@ Page({
           wx.showToast({ title: '保存失败', icon: 'none' });
         }
       }
+    });
+  },
+
+  // ── AI 文案复制 ──────────────────────────────────────────────────────
+  // Three flavours so the user can pick the granularity that matches where
+  // they're pasting. All three go through the same wx.setClipboardData;
+  // the only difference is what we hand it.
+
+  onCopyTitle() {
+    const title = (this.data.aiTitle || '').trim();
+    if (!title) {
+      wx.showToast({ title: 'AI 还没生成标题', icon: 'none' });
+      return;
+    }
+    wx.setClipboardData({
+      data: title,
+      success: () => wx.showToast({ title: '标题已复制', icon: 'success' })
+    });
+  },
+
+  onCopyTags() {
+    const formatted = this.data.aiTagsFormatted;
+    if (!formatted) {
+      wx.showToast({ title: 'AI 还没生成标签', icon: 'none' });
+      return;
+    }
+    wx.setClipboardData({
+      data: formatted,
+      success: () => wx.showToast({ title: '标签已复制', icon: 'success' })
+    });
+  },
+
+  onCopyAll() {
+    const all = buildAllCopy(this.data.aiTitle, this.data.aiTags);
+    if (!all) {
+      wx.showToast({ title: 'AI 还没生成文案', icon: 'none' });
+      return;
+    }
+    wx.setClipboardData({
+      data: all,
+      success: () => wx.showToast({ title: '标题+标签已复制', icon: 'success' })
     });
   }
 });
