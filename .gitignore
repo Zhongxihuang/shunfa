@@ -42,3 +42,6 @@ CLAUDE.md
 docs/
 backend/scripts/inspect_reminder_deliveries.py
 backend/scripts/smoke_test_reminder_flow.py
+
+# superpowers brainstorming visual companion (local, ephemeral)
+.superpowers/

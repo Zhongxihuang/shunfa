@@ -303,6 +303,24 @@ function PreviewContent() {
     } catch { /* best-effort */ }
   }
 
+  // W2.x bridge: hand the current draft to /image-cards via localStorage
+  // (URL params cap at ~2KB; a 20k-char paste would not survive the navigation).
+  function handleBridgeToImageCards() {
+    if (!content.trim()) return;
+    try {
+      const payload = {
+        raw_text: content,
+        cover_title: composeAssets?.title?.trim() || '',
+        ts: Date.now(),
+      };
+      localStorage.setItem('shunfa:image-cards-prefill', JSON.stringify(payload));
+    } catch {
+      // localStorage might be full / disabled — degrade silently and let the
+      // user paste manually on the other side.
+    }
+    router.push('/image-cards');
+  }
+
   // W1.4: 拉取目标平台格式化的文本. 触发后,用户点"复制"就是第 2 步.
   async function handleFormatForPlatform(platform: PlatformId) {
     if (!checkinId || formatting) return;
@@ -809,6 +827,27 @@ function PreviewContent() {
             className="flex-1 py-3 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
           >
             {submitting ? '记录中...' : '我已发到目标平台，确认打卡'}
+          </button>
+        </div>
+      )}
+
+      {/* W2.x bridge: from the canonical preview flow into the paste-to-cards
+          side tool, so the user can render the same draft to image cards
+          without re-pasting the text. The data crosses the navigation
+          boundary via localStorage (URLs cap at ~2KB and a 20k-char draft
+          blows past that). /image-cards clears the key on read. */}
+      {step === 'compose_ready' && content.trim() && (
+        <div className="mt-4 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
+          <p className="text-sm font-semibold text-gray-900">想要小红书卡片图？</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500">
+            顺发会把这份草稿带过去，预填正文和封面，点一下就能出图。
+          </p>
+          <button
+            type="button"
+            onClick={handleBridgeToImageCards}
+            className="mt-3 w-full rounded-xl border border-primary bg-white py-2.5 text-sm font-medium text-primary-dark transition hover:bg-primary/5"
+          >
+            用此草稿生成小红书卡片图 →
           </button>
         </div>
       )}

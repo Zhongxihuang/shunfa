@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
@@ -80,6 +80,40 @@ function ImageCardsContent() {
   const [copiedTitle, setCopiedTitle] = useState(false);
   const [copiedTags, setCopiedTags] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
+
+  // W2.x bridge: when the user came from the preview flow, the draft was
+  // stashed in localStorage (URLs cap at ~2KB and a 20k-char draft blows
+  // past that). Read it once on mount, pre-fill state, then clear the key
+  // so a manual reload doesn't keep replaying it.
+  const [prefilledFromDraft, setPrefilledFromDraft] = useState(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('shunfa:image-cards-prefill');
+      if (!raw) return;
+      const data = JSON.parse(raw) as {
+        raw_text?: string;
+        cover_title?: string;
+        ts?: number;
+      };
+      // Drop stale payloads (older than 5 min) so we don't surface a draft
+      // the user has long since moved past.
+      if (data?.ts && Date.now() - data.ts > 5 * 60 * 1000) {
+        localStorage.removeItem('shunfa:image-cards-prefill');
+        return;
+      }
+      if (typeof data?.raw_text === 'string' && data.raw_text.trim()) {
+        setRawText(data.raw_text);
+        if (typeof data.cover_title === 'string' && data.cover_title.trim()) {
+          setCoverTitle(data.cover_title);
+        }
+        setPrefilledFromDraft(true);
+      }
+    } catch {
+      // Malformed JSON or quota error — ignore and let the user paste manually.
+    } finally {
+      try { localStorage.removeItem('shunfa:image-cards-prefill'); } catch { /* noop */ }
+    }
+  }, []);
 
   const onPreview = useCallback(async () => {
     const trimmed = rawText.trim();
@@ -172,6 +206,12 @@ function ImageCardsContent() {
           <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
             把写好的内容粘进来，自动分页 + AI 写标题/标签 + 高清 PNG 卡片，可直接保存到相册。
           </p>
+
+          {prefilledFromDraft && (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+              ✓ 已从草稿预填正文和封面，点「生成预览」即可出图。
+            </div>
+          )}
 
           <textarea
             className="sf-textarea mt-5 min-h-[280px]"
@@ -288,6 +328,7 @@ function ImageCardsContent() {
                   onClick={() => downloadDataUrl(dataUrl, `shunfa-card-${idx + 1}.png`)}
                   className="block overflow-hidden rounded-2xl border border-[var(--border)] bg-white/40 transition hover:border-[var(--border-strong)]"
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- PNGs are client-rendered data URLs from html2canvas. */}
                   <img
                     src={dataUrl}
                     alt={`card-${idx + 1}`}
