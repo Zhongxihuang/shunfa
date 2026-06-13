@@ -37,7 +37,7 @@
 
 ## 项目亮点
 
-- 🧩 **三端一体** — FastAPI 后端 + Next.js 14 Web + 微信小程序，共享同一套 API 与业务逻辑。
+- 🧩 **全栈一体** — FastAPI 后端 + Next.js 16 Web，从 API 设计到 UI 交互独立端到端交付。
 - 🔑 **BYOK 安全模型** — 用户自带 DeepSeek Key，Fernet 加密存储，作者无法查看明文，AI 费用用户自付。
 - 📊 **可度量的留存** — 内建埋点 → 漏斗 → 北极星指标（≥3 天连胜占发布者比例），运营靠数据而非感觉。
 - 🗞️ **自动化选题供给** — RSS 抓取 → 事实增强 → 网络检索的热点管线，降低「今天写什么」的摩擦。
@@ -260,6 +260,5 @@ CORS_ORIGINS=https://your-app.vercel.app
 ## 开源说明
 
 - 仓库中不含任何真实 API Key 或用户数据
-- 微信 AppID 已替换为 `YOUR_WECHAT_APPID` 占位符
 - Fork 后只需修改 `.env` 即可启动，无需改动代码
 - 线上 Demo 强制 BYOK（`REQUIRE_USER_API_KEY=true`），作者不承担 AI 调用费用
