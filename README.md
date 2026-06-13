@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)](https://fastapi.tiangolo.com) [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2016-black)](https://nextjs.org)
 
-**在线 Demo：** _待补充_ · **上线清单：** [docs/launch-checklist.md](docs/launch-checklist.md)
+**在线 Demo：** _待补充_
 
 ---
 
@@ -217,8 +217,6 @@ shunfa/
 ---
 
 ## 部署
-
-Before production deployment, complete [docs/launch-checklist.md](docs/launch-checklist.md). The checklist includes migration rollback, PostgreSQL verification, BYOK redaction, timeout policy, rate limits, Web build, and manual smoke validation.
 
 ### Vercel（前端）
 
