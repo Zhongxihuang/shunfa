@@ -100,9 +100,9 @@ TopicHistory: user_id, topic, batch_id(UUID), was_used
 
 ```bash
 pytest tests/test_streak.py   # 连胜边界（7 tests）
-pytest tests/test_points.py   # 积分计算（8 tests）
-pytest tests/test_topics.py   # 去重+刷新限制（6 tests）
-pytest tests/test_content.py  # 状态流+防重复（8 tests）
+pytest tests/test_points.py   # 积分计算（10 tests）
+pytest tests/test_topics.py   # 去重+刷新限制（3 tests）
+pytest tests/test_content.py  # 状态流+防重复（20 tests）
 pytest tests/test_user.py     # JWT+登录（5 tests）
 ```
 
