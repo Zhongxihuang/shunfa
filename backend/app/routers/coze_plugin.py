@@ -82,15 +82,15 @@ def get_coze_user(
 ) -> User:
     """Extract Feishu user ID from Coze request headers and look up/create User."""
     if not settings.enable_coze_plugin:
-        raise HTTPException(status_code=404, detail="Coze plugin is disabled")
+        raise HTTPException(status_code=404, detail="Not Found")
     if not settings.coze_plugin_token:
-        raise HTTPException(status_code=503, detail="Plugin auth is not configured")
+        raise HTTPException(status_code=503, detail="Service Unavailable")
     # Constant-time comparison: a plain `!=` short-circuits on the first
     # differing byte, leaking the shared secret one character at a time to a
     # timing attacker. compare_digest takes the same time regardless of where
     # the strings diverge.
     if not hmac.compare_digest(x_coze_plugin_token, settings.coze_plugin_token):
-        raise HTTPException(status_code=401, detail="Invalid plugin token")
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
     openid = _resolve_user_identity(request, x_feishu_user_id)
     user = db.query(User).filter(User.openid == openid).first()
