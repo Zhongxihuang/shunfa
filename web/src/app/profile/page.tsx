@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
+import SkeletonCard from '@/components/Skeleton';
 import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { CheckinItem, CheckinsResponse, continueHref, statusLabel } from '@/lib/checkins';
@@ -94,9 +95,9 @@ function ProfileContent() {
                 断签当天自动消耗一张，连胜不归零。用攒下的钻石兑换，让积分不再是死数字。
               </p>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="text-sm font-medium text-[var(--ink-soft)]">💎 {user.diamonds}</p>
-              <p className="mt-1 text-sm font-medium text-sky-700">🧊 {user.streak_freezes} 张</p>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <span className="sf-stat sf-stat-gold">💎 {user.diamonds}</span>
+              <span className="sf-stat sf-stat-frost">🧊 {user.streak_freezes} 张</span>
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -113,7 +114,7 @@ function ProfileContent() {
           </div>
           {redeemNote && (
             <p
-              className={`mt-3 text-sm ${redeemNote.kind === 'ok' ? 'text-emerald-700' : 'text-[var(--danger)]'}`}
+              className={`sf-fade mt-3 text-sm ${redeemNote.kind === 'ok' ? 'text-[var(--accent-deep)]' : 'text-[var(--danger)]'}`}
             >
               {redeemNote.text}
             </p>
@@ -154,7 +155,7 @@ function ProfileContent() {
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/60" />
+              <SkeletonCard key={i} height="h-24" />
             ))}
           </div>
         ) : loadError ? (

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
@@ -15,8 +15,15 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "顺发",
-  description: "热点发文助手",
+  title: {
+    default: "顺发 · 热点发文助手",
+    template: "%s · 顺发",
+  },
+  description: "选一个热点，形成一个判断，发出去。AI 帮你走完从选题到发布的每一步。",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f6f3ee",
 };
 
 export default function RootLayout({
@@ -25,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh">
+    <html lang="zh-CN">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-bg min-h-screen`}>
         <AuthProvider>
           {children}

@@ -198,7 +198,7 @@ function ImageCardsContent() {
   return (
     <div className="sf-shell">
       <div className="mx-auto max-w-3xl">
-        <section className="sf-card mb-5 p-6 md:p-8">
+        <section className="sf-card sf-rise mb-5 p-6 md:p-8">
           <p className="sf-eyebrow">工具</p>
           <h1 className="sf-display mt-1 text-2xl font-bold text-[var(--ink)] md:text-3xl">
             粘贴正文，生成小红书卡片图
@@ -208,7 +208,7 @@ function ImageCardsContent() {
           </p>
 
           {prefilledFromDraft && (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+            <div className="sf-notice sf-notice-ok sf-fade mt-4">
               ✓ 已从草稿预填正文和封面，点「生成预览」即可出图。
             </div>
           )}
@@ -240,7 +240,7 @@ function ImageCardsContent() {
                 }}
                 className={`rounded-full border px-4 py-2 text-sm transition ${
                   template === tpl.id
-                    ? 'border-primary bg-primary text-white'
+                    ? 'border-[var(--ink)] bg-[var(--ink)] text-white'
                     : 'border-[var(--border)] bg-white/60 text-[var(--ink)] hover:border-[var(--border-strong)]'
                 }`}
                 title={tpl.hint}
@@ -272,13 +272,13 @@ function ImageCardsContent() {
           </div>
 
           {error && (
-            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-800">
+            <div className="sf-notice sf-notice-danger sf-fade mt-4">
               {error}
             </div>
           )}
 
           {overflow && (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            <div className="sf-notice mt-4">
               内容较长（{pageCount} 页），建议精简到 8 页内。
             </div>
           )}
@@ -350,7 +350,7 @@ function ImageCardsContent() {
 
             {aiTitle.trim() && (
               <div className="mt-3 flex items-start gap-3">
-                <span className="mt-0.5 inline-flex flex-none items-center rounded-md bg-stone-100 px-2 py-1 text-xs font-medium text-stone-600">
+                <span className="sf-pill mt-0.5 flex-none">
                   标题
                 </span>
                 <p className="flex-1 text-base font-semibold leading-7 text-[var(--ink)]">
@@ -368,7 +368,7 @@ function ImageCardsContent() {
 
             {aiTagsFormatted && (
               <div className="mt-3 flex items-start gap-3">
-                <span className="mt-0.5 inline-flex flex-none items-center rounded-md bg-stone-100 px-2 py-1 text-xs font-medium text-stone-600">
+                <span className="sf-pill mt-0.5 flex-none">
                   标签
                 </span>
                 <p className="flex-1 text-sm leading-7 text-[var(--ink-soft)]">
@@ -388,7 +388,7 @@ function ImageCardsContent() {
               <button
                 type="button"
                 onClick={() => copyText(allCopy, 'all')}
-                className="mt-4 w-full rounded-full bg-primary py-2.5 text-sm font-medium text-white transition hover:bg-primary-dark"
+                className="sf-btn-primary mt-4 min-h-11 w-full"
               >
                 {copiedAll ? '标题+标签已复制 ✓' : '一键复制标题+标签'}
               </button>

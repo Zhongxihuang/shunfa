@@ -77,24 +77,24 @@ function Dashboard() {
             </p>
             {user.gamification_enabled && (
               <div className="mt-5 flex flex-wrap gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700">
+                <span className="sf-stat sf-stat-ember">
                   🔥 {user.streak > 0 ? `已连更 ${user.streak} 天` : '今天开始第一天'}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-3 py-1.5 text-sm font-medium text-yellow-700">
+                <span className="sf-stat sf-stat-gold">
                   ⭐ {user.points} 积分
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-600">
+                <span className="sf-stat">
                   Lv.{user.level}
                 </span>
                 {user.streak_freezes > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-700">
+                  <span className="sf-stat sf-stat-frost">
                     🧊 {user.streak_freezes} 张保护卡
                   </span>
                 )}
               </div>
             )}
             {user.reminder_needed && !user.today_completed && (
-              <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
+              <div className="sf-notice mt-4">
                 今天还没发，继续连胜的话现在可以开始 →
               </div>
             )}

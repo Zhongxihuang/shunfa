@@ -174,6 +174,24 @@ function DiscussContent() {
     }
   }
 
+  // Deep links without a checkin (bookmark, stale tab) have nothing to discuss
+  // against — offer the way back instead of a dead chat box.
+  if (!checkinId) {
+    return (
+      <div className="sf-shell md:max-w-2xl">
+        <div className="sf-card sf-rise mx-auto mt-10 max-w-sm px-6 py-8 text-center">
+          <p className="sf-display text-2xl font-semibold text-[var(--ink)]">缺少稿件信息</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
+            这个讨论没有关联的稿件，请从选题页重新进入。
+          </p>
+          <Link href="/topics" className="sf-btn-primary mt-5 w-full">
+            去选题
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex h-[100dvh] max-w-md flex-col md:h-[calc(100dvh-3rem)] md:max-w-4xl md:py-6">
       {/* Header */}

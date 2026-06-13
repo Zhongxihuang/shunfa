@@ -406,10 +406,10 @@ function PreviewContent() {
           <h1 className="sf-display mt-4 text-[40px] font-bold leading-tight text-[var(--ink)]">这篇已经发出去了</h1>
           {user && (
             <div className="mt-5 flex flex-wrap justify-center gap-3">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-4 py-2 text-base font-semibold text-orange-700">
+              <span className="sf-stat sf-stat-ember px-4 py-2 text-base font-semibold">
                 🔥 已连更 {user.streak} 天！
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-4 py-2 text-base font-semibold text-yellow-700">
+              <span className="sf-stat sf-stat-gold px-4 py-2 text-base font-semibold">
                 ⭐ {user.points} 积分
               </span>
             </div>
