@@ -12,8 +12,10 @@ def test_create_jwt_token():
 def test_user_status_requires_auth(client):
     """Test that user_status endpoint requires auth."""
     response = client.get("/api/user_status")
-    assert response.status_code == 403
-    assert response.json()["error_code"] == "forbidden"
+    # FastAPI's HTTPBearer rejects missing credentials with 403 before 0.116
+    # and 401 afterwards; both mean "no usable credentials" to the client.
+    assert response.status_code in (401, 403)
+    assert response.json()["error_code"] in ("invalid_token", "forbidden")
 
 
 def test_user_status_with_valid_token(client, db):

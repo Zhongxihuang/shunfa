@@ -307,8 +307,10 @@ def test_quick_generate_api_requires_auth(client):
             "platform": "xiaohongshu",
         },
     )
-    assert response.status_code == 403
-    assert response.json()["error_code"] == "forbidden"
+    # FastAPI's HTTPBearer rejects missing credentials with 403 before 0.116
+    # and 401 afterwards; both mean "no usable credentials" to the client.
+    assert response.status_code in (401, 403)
+    assert response.json()["error_code"] in ("invalid_token", "forbidden")
 
 
 def test_quick_generate_api_endpoint(client):

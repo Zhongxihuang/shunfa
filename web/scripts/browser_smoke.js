@@ -39,7 +39,8 @@ async function clickByText(page, text) {
   await page.waitForSelector('text=...-key', { timeout: 10000 });
 
   await page.goto(`${TARGET_URL}/topics`, { waitUntil: 'networkidle' });
-  await page.waitForSelector('text=选一个热点直接开写', { timeout: 15000 });
+  // Stable hero copy that renders regardless of fallback/real topic supply.
+  await page.waitForSelector('text=今天选一条就够了', { timeout: 15000 });
   await page.locator('button.min-h-40').first().click();
   await clickByText(page, '就选这一条');
   await page.waitForURL(/\/compose\?topic_id=/, { timeout: 15000 });
@@ -52,8 +53,8 @@ async function clickByText(page, text) {
   await clickByText(page, '查看发布提示');
   await page.waitForSelector('text=生成图文素材', { timeout: 30000 });
   await clickByText(page, '生成图文素材');
-  await page.waitForSelector('text=我已发到小红书，确认打卡', { timeout: 30000 });
-  await clickByText(page, '我已发到小红书，确认打卡');
+  await page.waitForSelector('text=我已发到目标平台，确认打卡', { timeout: 30000 });
+  await clickByText(page, '我已发到目标平台，确认打卡');
   await page.waitForSelector('text=发布完成', { timeout: 15000 });
 
   await page.goto(`${TARGET_URL}/profile`, { waitUntil: 'networkidle' });
