@@ -6,9 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)](https://fastapi.tiangolo.com) [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2016-black)](https://nextjs.org)
 
-> 📖 想看「为什么这么做、做对了什么、哪里诚实地承认做得不够」——一个人用 AI 从 0 到可上线的完整复盘，见 **[案例研究 docs/SHOWCASE.md](docs/SHOWCASE.md)**。本 README 只讲「怎么跑起来」。
-
-**在线 Demo：** _待补充_ · **案例研究：** [docs/SHOWCASE.md](docs/SHOWCASE.md) · **上线清单：** [docs/launch-checklist.md](docs/launch-checklist.md)
+**在线 Demo：** _待补充_ · **上线清单：** [docs/launch-checklist.md](docs/launch-checklist.md)
 
 ---
 
@@ -45,8 +43,6 @@
 - 🗞️ **自动化选题供给** — RSS 抓取 → 事实增强 → 网络检索的热点管线，降低「今天写什么」的摩擦。
 - ✅ **工程纪律** — 293 个测试函数（359 passed，含参数化）、4 条 CI 流水线、16 个 Alembic 迁移、可勾选的上线检查清单。
 - 🚀 **可落地** — 一键部署 Vercel + Railway，Fork 后改 `.env` 即可启动，无需改代码。
-
-> 完整设计取舍与诚实复盘见 **[案例研究 docs/SHOWCASE.md](docs/SHOWCASE.md)**。
 
 ---
 
