@@ -62,8 +62,9 @@ async def lifespan(app: FastAPI):
 
     # Development: auto-upgrade to latest migration
     if settings.environment == "development":
-        from alembic import command
         from alembic.config import Config
+
+        from alembic import command
 
         logger.debug("Running database migrations...")
         alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))

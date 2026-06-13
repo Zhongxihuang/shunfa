@@ -162,8 +162,9 @@ def test_w2x_closed_loop_main_path_and_paste_to_cards(client, db):
         patch(
             "app.services.compose_service.chat_completion",
             new=AsyncMock(
-                side_effect=lambda *a, **kw: '{"pages":["p"],'
-                '"title":"小红书风标题","tags":["AI","效率","发布"]}'
+                side_effect=lambda *a, **kw: (
+                    '{"pages":["p"],"title":"小红书风标题","tags":["AI","效率","发布"]}'
+                )
             ),
         ),
         patch(

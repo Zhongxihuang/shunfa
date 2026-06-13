@@ -96,7 +96,8 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install linting tools
-        run: pip install ruff mypy types-python-dateutil
+        # Pin ruff so CI and local runs agree on import-sorting rules.
+        run: pip install 'ruff==0.15.17' mypy types-python-dateutil
 
       - name: Run ruff (linting)
         run: |
