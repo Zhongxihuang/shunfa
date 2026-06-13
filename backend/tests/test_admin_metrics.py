@@ -119,7 +119,14 @@ def test_funnel_counts_distinct_users_per_step(client, db):
         db.add(u)
         db.commit()
         db.refresh(u)
-        for ev in ("register", "key_configured", "topic_selected", "discuss_round", "draft_generated", "publish"):
+        for ev in (
+            "register",
+            "key_configured",
+            "topic_selected",
+            "discuss_round",
+            "draft_generated",
+            "publish",
+        ):
             _emit(db, u, ev)
         # Set streak ≥ 3 for north-star numerator.
         u.streak = 5

@@ -80,8 +80,8 @@ def test_remaining_and_consume(db, free_trial):
 @pytest.mark.asyncio
 async def test_own_key_beats_free_pool(db, free_trial):
     """A user with their own key never burns the free pool."""
-    from app.utils.crypto import encrypt_api_key
     from app.dependencies import get_resolved_api_key
+    from app.utils.crypto import encrypt_api_key
 
     user = _make_user(db, deepseek_api_key=encrypt_api_key("sk-user-own-key"))
 
@@ -153,12 +153,15 @@ def _draft_result():
 
 def test_quick_generate_charges_one_free_credit(client, db, free_trial):
     user = _make_user(db, openid="fq_quick")
-    with patch(
-        "app.services.generation_orchestrator.quick_generate",
-        new=AsyncMock(return_value=_draft_result()),
-    ), patch(
-        "app.services.generation_orchestrator.enrich_facts",
-        new=AsyncMock(side_effect=lambda **kw: kw["base_fact_block"]),
+    with (
+        patch(
+            "app.services.generation_orchestrator.quick_generate",
+            new=AsyncMock(return_value=_draft_result()),
+        ),
+        patch(
+            "app.services.generation_orchestrator.enrich_facts",
+            new=AsyncMock(side_effect=lambda **kw: kw["base_fact_block"]),
+        ),
     ):
         resp = client.post(
             "/api/quick_generate",

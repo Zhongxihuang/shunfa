@@ -2,8 +2,6 @@ import logging
 from collections.abc import Generator
 
 from fastapi import Depends, HTTPException, Request
-
-logger = logging.getLogger(__name__)
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -11,6 +9,8 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import SessionLocal
 from .errors import raise_api_error
+
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 

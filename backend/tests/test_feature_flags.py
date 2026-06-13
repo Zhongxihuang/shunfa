@@ -13,8 +13,6 @@ creates retention. What we verify:
 - user_status / login surface `gamification_enabled` so the client can hide UI
 """
 
-import pytest
-
 from app.config import settings
 from app.models import User
 from app.routers.user import create_jwt_token

@@ -209,9 +209,7 @@ def test_format_endpoint_400_when_no_content(client, db):
 
 def test_format_endpoint_xiaohongshu_returns_text(client, db):
     user = _make_user(db)
-    checkin = _make_checkin(
-        db, user, content="第一段\n\n第二段", topic="我用 AI 写了第一篇博客"
-    )
+    checkin = _make_checkin(db, user, content="第一段\n\n第二段", topic="我用 AI 写了第一篇博客")
     resp = client.post(
         "/api/preview/format",
         json={"checkin_id": checkin.id, "platform": "xiaohongshu"},

@@ -161,8 +161,10 @@ def test_w2x_closed_loop_main_path_and_paste_to_cards(client, db):
     with (
         patch(
             "app.services.compose_service.chat_completion",
-            new=AsyncMock(side_effect=lambda *a, **kw: '{"pages":["p"],'
-            '"title":"小红书风标题","tags":["AI","效率","发布"]}'),
+            new=AsyncMock(
+                side_effect=lambda *a, **kw: '{"pages":["p"],'
+                '"title":"小红书风标题","tags":["AI","效率","发布"]}'
+            ),
         ),
         patch(
             "app.routers.image_jobs.render_cards",
@@ -198,6 +200,7 @@ def test_w2x_closed_loop_main_path_and_paste_to_cards(client, db):
         assert len(render_body["images"]) == 2
         # base64 decodes back to something PNG-shaped
         import base64
+
         decoded = base64.b64decode(render_body["images"][0])
         assert decoded.startswith(b"\x89PNG")
 

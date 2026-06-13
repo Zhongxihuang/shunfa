@@ -8,7 +8,7 @@ Covers:
 - admin endpoint: auth gating, 404, and the rolled-up payload
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.models import Event, User
 from app.routers.user import create_jwt_token
@@ -39,15 +39,26 @@ def _seed_abab(db) -> User:
     db.add(user)
     db.commit()
     db.refresh(user)
-    base = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    base = datetime(2026, 6, 1, tzinfo=UTC)
 
     # toggles
-    _add_event(db, user.id, "gamification_override_changed",
-               base, '{"from": "default", "to": "on"}')
-    _add_event(db, user.id, "gamification_override_changed",
-               base + timedelta(days=2), '{"from": "on", "to": "off"}')
-    _add_event(db, user.id, "gamification_override_changed",
-               base + timedelta(days=4), '{"from": "off", "to": "on"}')
+    _add_event(
+        db, user.id, "gamification_override_changed", base, '{"from": "default", "to": "on"}'
+    )
+    _add_event(
+        db,
+        user.id,
+        "gamification_override_changed",
+        base + timedelta(days=2),
+        '{"from": "on", "to": "off"}',
+    )
+    _add_event(
+        db,
+        user.id,
+        "gamification_override_changed",
+        base + timedelta(days=4),
+        '{"from": "off", "to": "on"}',
+    )
 
     # ON segment 1 [t0, t2): 2 publishes, 1 discuss
     _add_event(db, user.id, "publish", base + timedelta(hours=1))
@@ -87,7 +98,7 @@ def test_within_subject_no_toggles_is_empty(db):
     db.add(user)
     db.commit()
     db.refresh(user)
-    _add_event(db, user.id, "publish", datetime(2026, 6, 1, tzinfo=timezone.utc))
+    _add_event(db, user.id, "publish", datetime(2026, 6, 1, tzinfo=UTC))
 
     report = get_within_subject_comparison(db, user.id)
     assert report.segments == []

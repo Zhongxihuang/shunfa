@@ -84,9 +84,7 @@ async def run_quick_generation(
 
     # Fact enrichment: try to get more context before drafting.
     article_url = (
-        (topic_record.url if topic_record else None)
-        or (checkin.topic_url if checkin else "")
-        or ""
+        (topic_record.url if topic_record else None) or (checkin.topic_url if checkin else "") or ""
     )
     cached_facts = load_generation_context(checkin).enriched_facts if checkin else None
     if cached_facts:

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_admin_user, get_db
-from ..models import CheckIn, CheckInStatus, Event, User
+from ..models import CheckIn, CheckInStatus, User
 from ..schemas import GamificationOverrideRequest
 from ..services.analytics import track
 from ..services.analytics_queries import (

@@ -106,17 +106,13 @@ async def generate_post_copy(
 
     # Attempt 1
     try:
-        raw = await chat_completion(
-            messages, temperature=0.7, max_tokens=1400, api_key=api_key
-        )
+        raw = await chat_completion(messages, temperature=0.7, max_tokens=1400, api_key=api_key)
         data = _parse_compose_response(raw)
     except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning("generate_post_copy: first parse failed, retrying: %r", e)
         # Attempt 2 — same prompt, lower temperature for more conservative output
         try:
-            raw = await chat_completion(
-                messages, temperature=0.5, max_tokens=1400, api_key=api_key
-            )
+            raw = await chat_completion(messages, temperature=0.5, max_tokens=1400, api_key=api_key)
             data = _parse_compose_response(raw)
         except Exception as e2:
             logger.warning("generate_post_copy: second attempt failed: %r", e2)

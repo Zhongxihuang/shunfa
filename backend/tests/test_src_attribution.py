@@ -29,11 +29,7 @@ def _admin_auth(admin: User) -> dict:
 
 
 def _register_event_props(db, user_id: int) -> dict:
-    row = (
-        db.query(Event)
-        .filter(Event.user_id == user_id, Event.event == "register")
-        .one()
-    )
+    row = db.query(Event).filter(Event.user_id == user_id, Event.event == "register").one()
     return json.loads(row.props_json)
 
 

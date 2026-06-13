@@ -99,9 +99,7 @@ def dump_generation_context(context: GenerationContext) -> dict[str, Any]:
     return context.model_dump(exclude_unset=True)
 
 
-def store_generation_context(
-    checkin: CheckIn, context: GenerationContext
-) -> dict[str, Any]:
+def store_generation_context(checkin: CheckIn, context: GenerationContext) -> dict[str, Any]:
     """Write a typed context back onto the check-in as JSON."""
     return set_generation_context(checkin, dump_generation_context(context))
 

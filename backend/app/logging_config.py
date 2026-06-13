@@ -5,7 +5,7 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 
 # Per-task/coroutine request context for request ID (thread- and async-safe)
-_request_id_context: ContextVar[str | None] = ContextVar('request_id', default=None)
+_request_id_context: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
 class RequestIDFilter(logging.Filter):

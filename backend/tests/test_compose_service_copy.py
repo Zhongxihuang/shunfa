@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, patch
 
 from app.services.compose_service import generate_post_copy
 
-
 # A typical LLM response wrapped in markdown code fences — the LLM sometimes
 # adds them even when not asked.
 GOOD_PAYLOAD = json.dumps(
@@ -90,9 +89,7 @@ async def test_returns_empty_on_both_attempts_failing():
 async def test_returns_empty_on_empty_input():
     """No content = no point calling the LLM."""
 
-    with patch(
-        "app.services.compose_service.chat_completion", new_callable=AsyncMock
-    ) as mock:
+    with patch("app.services.compose_service.chat_completion", new_callable=AsyncMock) as mock:
         result = await generate_post_copy("", api_key="")
     assert result == {"title": "", "tags": []}
     mock.assert_not_called()

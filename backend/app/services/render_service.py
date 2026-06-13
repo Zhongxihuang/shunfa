@@ -64,9 +64,7 @@ async def render_cards(pages: list[Page], template: str) -> list[bytes]:
     htmls = [render_page_html(p, template, total) for p in pages]
 
     browser = await get_browser()
-    bp = await browser.new_page(
-        viewport=_VIEWPORT, device_scale_factor=_DEVICE_SCALE_FACTOR
-    )
+    bp = await browser.new_page(viewport=_VIEWPORT, device_scale_factor=_DEVICE_SCALE_FACTOR)
     images: list[bytes] = []
     try:
         for html in htmls:

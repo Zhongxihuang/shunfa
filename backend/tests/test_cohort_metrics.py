@@ -109,17 +109,13 @@ def _admin_headers(db):
 
 def test_funnel_endpoint_accepts_cohort_param(client, db):
     """The admin endpoint exposes ?cohort= and echoes it back."""
-    resp = client.get(
-        "/api/admin/metrics/funnel?cohort=subtraction", headers=_admin_headers(db)
-    )
+    resp = client.get("/api/admin/metrics/funnel?cohort=subtraction", headers=_admin_headers(db))
     assert resp.status_code == 200
     assert resp.json()["cohort"] == "subtraction"
 
 
 def test_funnel_endpoint_rejects_bad_cohort(client, db):
-    resp = client.get(
-        "/api/admin/metrics/funnel?cohort=banana", headers=_admin_headers(db)
-    )
+    resp = client.get("/api/admin/metrics/funnel?cohort=banana", headers=_admin_headers(db))
     assert resp.status_code == 422
 
 

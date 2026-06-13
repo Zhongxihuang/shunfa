@@ -98,17 +98,13 @@ class Settings(BaseSettings):
                     'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
                 )
             if len(self.api_key_encryption_secret) < 32:
-                raise ValueError(
-                    "API_KEY_ENCRYPTION_SECRET must be at least 32 characters."
-                )
+                raise ValueError("API_KEY_ENCRYPTION_SECRET must be at least 32 characters.")
 
     def validate_admin_password(self) -> None:
         """Validate admin password strength at startup."""
         if self.environment == "production":
             if len(self.admin_password) < 12:
-                raise ValueError(
-                    "ADMIN_PASSWORD must be at least 12 characters in production."
-                )
+                raise ValueError("ADMIN_PASSWORD must be at least 12 characters in production.")
 
     def validate_rate_limit_storage(self) -> None:
         """Warn when production relies on the in-memory rate limiter.

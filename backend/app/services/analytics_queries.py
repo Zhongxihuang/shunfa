@@ -331,9 +331,7 @@ def _distinct_users_like(
     return {row[0] for row in q.all()} & restrict_to
 
 
-def get_distribution_metrics(
-    db: Session, since: datetime | None = None
-) -> DistributionReport:
+def get_distribution_metrics(db: Session, since: datetime | None = None) -> DistributionReport:
     """Compute the publisher-anchored copy/export distribution rates."""
     pub_q = (
         db.query(Event.user_id)
@@ -399,18 +397,8 @@ def get_user_funnel_position(db: Session, user_id: int) -> UserFunnelPosition:
     Returns a UserFunnelPosition with has_published=False and furthest_step=None
     for a user with no events yet.
     """
-    last_row = (
-        db.query(Event)
-        .filter(Event.user_id == user_id)
-        .order_by(Event.ts.desc())
-        .first()
-    )
-    user_events = (
-        db.query(Event.event)
-        .filter(Event.user_id == user_id)
-        .distinct()
-        .all()
-    )
+    last_row = db.query(Event).filter(Event.user_id == user_id).order_by(Event.ts.desc()).first()
+    user_events = db.query(Event.event).filter(Event.user_id == user_id).distinct().all()
     event_names = {row[0] for row in user_events}
 
     furthest_event: str | None = None

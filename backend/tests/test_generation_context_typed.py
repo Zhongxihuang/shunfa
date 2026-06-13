@@ -22,9 +22,7 @@ from app.services.generation_context import (
 
 def _checkin(context: dict | None) -> CheckIn:
     return CheckIn(
-        generation_context=json.dumps(context, ensure_ascii=False)
-        if context is not None
-        else None
+        generation_context=json.dumps(context, ensure_ascii=False) if context is not None else None
     )
 
 

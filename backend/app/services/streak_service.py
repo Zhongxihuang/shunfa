@@ -27,11 +27,7 @@ def calculate_and_update_streak(user: User, today: date, db: Session) -> int:
     elif is_consecutive_day(last_date, today):
         # Consecutive day - increment
         new_streak = user.streak + 1
-    elif (
-        (today - last_date).days == 2
-        and user.streak > 0
-        and (user.streak_freezes or 0) > 0
-    ):
+    elif (today - last_date).days == 2 and user.streak > 0 and (user.streak_freezes or 0) > 0:
         # Exactly one missed day, and the user has a freeze: spend it to keep
         # the streak alive (and still count today).
         user.streak_freezes -= 1

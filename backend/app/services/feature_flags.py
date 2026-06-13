@@ -46,7 +46,7 @@ def gamification_enabled(user_id: int) -> bool:
     return not in_subtraction_experiment(user_id)
 
 
-def resolve_gamification_enabled(user: "User") -> bool:
+def resolve_gamification_enabled(user: User) -> bool:
     """Gamification visibility for a user, honouring the within-subject override.
 
     Priority:

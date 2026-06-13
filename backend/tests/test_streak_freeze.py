@@ -28,9 +28,9 @@ def _make_user(db, **kw) -> User:
 
 
 def _freeze_events(db, user_id):
-    return db.query(Event).filter(
-        Event.user_id == user_id, Event.event == "streak_freeze_used"
-    ).all()
+    return (
+        db.query(Event).filter(Event.user_id == user_id, Event.event == "streak_freeze_used").all()
+    )
 
 
 def test_consecutive_day_does_not_use_freeze(db):

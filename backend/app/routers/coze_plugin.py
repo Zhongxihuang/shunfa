@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..dependencies import get_db
-from ..rate_limit import limiter
 from ..models import CheckIn, CheckInStatus, User
+from ..rate_limit import limiter
 from ..services.content_service import confirm_publish
 from ..services.discussion_service import (
     AUTO_SUGGEST_SENTINEL,
@@ -35,7 +35,7 @@ from ..utils.time_utils import get_today_cst
 router = APIRouter(prefix="/coze")
 
 ANONYMOUS_COZE_USER = "anonymous"
-_VALID_ID_PATTERN = re.compile(r'^[\w\-\.@]{3,128}$')
+_VALID_ID_PATTERN = re.compile(r"^[\w\-\.@]{3,128}$")
 
 USER_HEADER_PREFIXES = (
     ("X-Lark-User-Id", "feishu_user"),

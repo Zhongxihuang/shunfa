@@ -15,7 +15,17 @@ from app.dependencies import get_db
 from app.errors import normalize_http_error
 from app.logging_config import get_logger, setup_logging
 from app.middleware import RequestIDMiddleware, RequestLoggingMiddleware
-from app.routers import admin, analytics, content, coze_plugin, hot_topics, image_jobs, reminder, topics, user
+from app.routers import (
+    admin,
+    analytics,
+    content,
+    coze_plugin,
+    hot_topics,
+    image_jobs,
+    reminder,
+    topics,
+    user,
+)
 from app.routers.my import router as my_router
 
 

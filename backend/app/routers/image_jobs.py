@@ -60,11 +60,7 @@ def _parse_ai_copy(ai_copy: str | None) -> tuple[str, list[str]]:
 
 
 def _get_owned_job(job_id: int, user: User, db: Session) -> ImageJob:
-    job = (
-        db.query(ImageJob)
-        .filter(ImageJob.id == job_id, ImageJob.user_id == user.id)
-        .first()
-    )
+    job = db.query(ImageJob).filter(ImageJob.id == job_id, ImageJob.user_id == user.id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Image job not found")
     return job
