@@ -4,11 +4,9 @@
 
 「写完了再想好不好。」
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)](https://fastapi.tiangolo.com) [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black)](https://nextjs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)](https://fastapi.tiangolo.com) [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2016-black)](https://nextjs.org)
 
-> 📖 想看「为什么这么做、做对了什么、哪里诚实地承认做得不够」——一个人用 AI 从 0 到可上线的完整复盘，见 **[案例研究 docs/SHOWCASE.md](docs/SHOWCASE.md)**。本 README 只讲「怎么跑起来」。
-
-**在线 Demo：** _待补充_ · **案例研究：** [docs/SHOWCASE.md](docs/SHOWCASE.md) · **上线清单：** [docs/launch-checklist.md](docs/launch-checklist.md)
+**在线 Demo：** _待补充_
 
 ---
 
@@ -43,10 +41,8 @@
 - 🔑 **BYOK 安全模型** — 用户自带 DeepSeek Key，Fernet 加密存储，作者无法查看明文，AI 费用用户自付。
 - 📊 **可度量的留存** — 内建埋点 → 漏斗 → 北极星指标（≥3 天连胜占发布者比例），运营靠数据而非感觉。
 - 🗞️ **自动化选题供给** — RSS 抓取 → 事实增强 → 网络检索的热点管线，降低「今天写什么」的摩擦。
-- ✅ **工程纪律** — 244 个测试、4 条 CI 流水线、10 个 Alembic 迁移、可勾选的上线检查清单。
+- ✅ **工程纪律** — 293 个测试函数（359 passed，含参数化）、4 条 CI 流水线、16 个 Alembic 迁移、可勾选的上线检查清单。
 - 🚀 **可落地** — 一键部署 Vercel + Railway，Fork 后改 `.env` 即可启动，无需改代码。
-
-> 完整设计取舍与诚实复盘见 **[案例研究 docs/SHOWCASE.md](docs/SHOWCASE.md)**。
 
 ---
 
@@ -78,7 +74,7 @@
 
 | 层 | 技术 |
 |----|------|
-| Web 前端 | Next.js 14（App Router）+ Tailwind CSS |
+| Web 前端 | Next.js 16（App Router）+ Tailwind CSS |
 | 后端 | FastAPI + SQLAlchemy（同步 Session，SQLite WAL） |
 | AI | DeepSeek API（OpenAI SDK 兼容，用户自带 Key） |
 | 数据库 | SQLite（开发） / PostgreSQL（生产可选） |
@@ -202,7 +198,7 @@ shunfa/
 │   ├── alembic/versions/   # 数据库迁移历史
 │   └── tests/              # 后端自动化测试（mock AI / 本地 AI 替身）
 └── web/
-    ├── src/app/            # Next.js App Router 页面（login, topics, discuss, preview, profile, settings）
+    ├── src/app/            # Next.js App Router 页面（login, topics, discuss, preview, compose, drafts, history, profile, settings, image-cards）
     ├── src/components/     # 共用组件（Navbar, StreakBadge, LevelProgress, DiamondDisplay）
     └── src/lib/            # api.ts（自动注入 X-User-Api-Key）、auth.tsx（AuthContext）
 ```
@@ -221,8 +217,6 @@ shunfa/
 ---
 
 ## 部署
-
-Before production deployment, complete [docs/launch-checklist.md](docs/launch-checklist.md). The checklist includes migration rollback, PostgreSQL verification, BYOK redaction, timeout policy, rate limits, Web build, and manual smoke validation.
 
 ### Vercel（前端）
 
