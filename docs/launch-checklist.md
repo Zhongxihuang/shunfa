@@ -25,7 +25,7 @@
 | Scripted launch smoke | `pytest tests/test_launch_smoke.py -v` | PASS | Covers register -> save key -> select topic -> generate -> preview -> compose assets -> publish -> profile with mocked AI providers; duplicate publish leaves points/streak unchanged. |
 | Mock DeepSeek service | `python -m scripts.mock_deepseek_server --port 1081`, then POST `/v1/chat/completions` | PASS | Verified locally with HTTP 200 and OpenAI-compatible `choices[0].message.content`; sandbox required elevated local loopback access. Use `DEEPSEEK_BASE_URL=http://127.0.0.1:1081/v1` for local smoke. |
 | Browser smoke with mock DeepSeek | Start mock DeepSeek on `1081`, backend on `8080`, Web on `3000`, run `npx playwright install chromium`, then run `TARGET_URL=http://127.0.0.1:3000 npm run smoke:browser` from `web/` | PASS / CI CONFIGURED | Verified locally through the Playwright runner and configured in `.github/workflows/launch-smoke.yml`, which installs Chromium before running. Flow: register -> save key -> select topic -> generate -> preview -> compose assets -> publish -> profile. Console error count: 0. Local direct npm-script rerun requires a completed Playwright browser install. |
-| Real DeepSeek browser smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | NOT RUN | Requires browser/API smoke against a configured runtime and real/sandbox DeepSeek key. |
+| Real DeepSeek browser smoke | Register -> save key -> select topic -> generate -> preview -> publish -> profile; repeated publish leaves points/streak unchanged | PASS | Manually verified by the product owner with a real DeepSeek key (2026-06-13). |
 
 ## Rate Limits
 
