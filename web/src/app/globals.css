@@ -3,25 +3,279 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #f6f3ee;
+  --foreground: #222320;
+  --surface: rgba(255, 253, 250, 0.92);
+  --surface-strong: #fffdfb;
+  --surface-muted: #f1ece4;
+  --surface-tint: rgba(216, 226, 218, 0.52);
+  --accent: #8ea592;
+  --accent-strong: #6f8773;
+  --accent-deep: #46554b;
+  --accent-soft: rgba(142, 165, 146, 0.16);
+  --ink: #222320;
+  --ink-soft: #50524b;
+  --ink-muted: #86887f;
+  --highlight: #ebe2d5;
+  --border: rgba(133, 128, 118, 0.18);
+  --border-strong: rgba(124, 120, 111, 0.28);
+  --danger: #b56a5b;
+  --shadow-card: 0 18px 50px rgba(25, 25, 25, 0.06);
+  --shadow-soft: 0 10px 28px rgba(35, 35, 35, 0.05);
+  --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Baskerville, "Times New Roman", "Songti SC", "STSong", serif;
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(circle at 18% 4%, rgba(235, 226, 213, 0.68), transparent 32rem),
+    linear-gradient(180deg, #f8f5f1 0%, #f3efe8 100%);
+  font-family: var(--font-body);
+  min-height: 100vh;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@keyframes sf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-rise {
+    animation: sf-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .sf-rise-1 { animation-delay: 70ms; }
+  .sf-rise-2 { animation-delay: 140ms; }
+  .sf-rise-3 { animation-delay: 210ms; }
+  .sf-rise-4 { animation-delay: 280ms; }
+  .sf-fade {
+    animation: sf-fade 0.3s ease-out both;
+  }
+}
+
+@layer components {
+  .sf-shell {
+    @apply mx-auto min-h-screen w-full max-w-md px-4 pb-24 pt-6 md:max-w-5xl md:px-8 md:pb-12 md:pt-24 xl:max-w-6xl;
+  }
+
+  .sf-wide-shell {
+    @apply mx-auto min-h-screen w-full max-w-2xl px-4 pb-24 pt-6 md:max-w-5xl md:px-8 md:pb-12 md:pt-24 xl:max-w-6xl;
+  }
+
+  .sf-page-grid {
+    @apply grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem];
+  }
+
+  .sf-page-main {
+    @apply min-w-0;
+  }
+
+  .sf-page-side {
+    @apply min-w-0 lg:sticky lg:top-24 lg:self-start;
+  }
+
+  .sf-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(12px);
+  }
+
+  /* Interactive cards (links/buttons) lift slightly on hover. */
+  a.sf-card,
+  button.sf-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a.sf-card:hover,
+    button.sf-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 22px 56px rgba(25, 25, 25, 0.09);
+    }
+  }
+
+  .sf-note-card {
+    background: linear-gradient(180deg, rgba(255, 249, 241, 0.98) 0%, rgba(248, 243, 236, 0.98) 100%);
+    border: 1px solid rgba(170, 151, 123, 0.2);
+    border-radius: 16px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .sf-soft-card {
+    background: var(--surface-tint);
+    border: 1px solid rgba(142, 165, 146, 0.18);
+    border-radius: 16px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .sf-eyebrow {
+    @apply inline-block text-[11px] uppercase leading-none tracking-[0.18em];
+    color: var(--ink-muted);
+  }
+
+  .sf-display {
+    font-family: var(--font-display);
+    letter-spacing: 0;
+  }
+
+  .sf-pill {
+    @apply inline-flex items-center justify-center rounded-full px-3 py-1 text-xs leading-none;
+    background: rgba(255, 255, 255, 0.68);
+    border: 1px solid var(--border);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  .sf-pill-accent {
+    color: var(--accent-deep);
+    border-color: rgba(111, 135, 115, 0.18);
+    background: rgba(142, 165, 146, 0.12);
+  }
+
+  .sf-btn-primary {
+    @apply inline-flex min-h-12 items-center justify-center rounded-full px-6 text-center text-sm font-semibold transition disabled:opacity-50;
+    background: linear-gradient(180deg, #414741 0%, #2d302d 100%);
+    color: #fcfbf8;
+    box-shadow: 0 14px 36px rgba(111, 135, 115, 0.12);
+  }
+
+  .sf-btn-primary:hover {
+    background: linear-gradient(180deg, #373d37 0%, #242724 100%);
+  }
+
+  .sf-btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .sf-btn-primary:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+
+  .sf-btn-secondary {
+    @apply inline-flex min-h-12 items-center justify-center rounded-full px-6 text-center text-sm font-medium transition disabled:opacity-50;
+    background: rgba(255, 253, 250, 0.84);
+    color: var(--ink);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .sf-btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 253, 250, 0.98);
+    border-color: rgba(124, 120, 111, 0.42);
+  }
+
+  .sf-btn-secondary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .sf-btn-secondary:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+
+  .sf-input {
+    @apply w-full rounded-2xl px-4 py-3 text-sm;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+
+  .sf-input::placeholder {
+    color: var(--ink-muted);
+  }
+
+  .sf-input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.92);
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .sf-input:disabled {
+    opacity: 0.55;
+  }
+
+  .sf-textarea {
+    @apply sf-input resize-none leading-7;
+  }
+
+  .sf-muted {
+    color: var(--ink-muted);
+  }
+
+  .sf-soft-text {
+    color: var(--ink-soft);
+  }
+
+  /* Stat chips — gamification badges harmonized with the warm-paper palette.
+     One shape, differentiated by muted tints instead of saturated UI colors. */
+  .sf-stat {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid var(--border);
+    color: var(--ink-soft);
+  }
+
+  .sf-stat-ember {
+    background: rgba(196, 122, 60, 0.12);
+    border-color: rgba(196, 122, 60, 0.22);
+    color: #8a5a2e;
+  }
+
+  .sf-stat-gold {
+    background: rgba(178, 148, 74, 0.12);
+    border-color: rgba(178, 148, 74, 0.22);
+    color: #7d6635;
+  }
+
+  .sf-stat-frost {
+    background: rgba(122, 148, 168, 0.14);
+    border-color: rgba(122, 148, 168, 0.24);
+    color: #4f6c80;
+  }
+
+  /* Inline notice bars — success / caution variants on the warm palette. */
+  .sf-notice {
+    @apply rounded-xl px-4 py-2.5 text-sm;
+    background: var(--highlight);
+    border: 1px solid rgba(170, 151, 123, 0.25);
+    color: var(--ink-soft);
+  }
+
+  .sf-notice-ok {
+    background: var(--accent-soft);
+    border-color: rgba(111, 135, 115, 0.25);
+    color: var(--accent-deep);
+  }
+
+  .sf-notice-danger {
+    background: rgba(181, 106, 91, 0.08);
+    border-color: rgba(181, 106, 91, 0.25);
+    color: var(--danger);
   }
 }

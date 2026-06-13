@@ -8,6 +8,8 @@ Endpoint prefix: /api/coze/
 Auth: X-Coze-Plugin-Token header (shared secret) + optional user identity headers
 """
 
+import hmac
+import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -16,22 +18,25 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..dependencies import get_db
 from ..models import CheckIn, CheckInStatus, User
+from ..rate_limit import limiter
 from ..services.content_service import confirm_publish
-from ..services.draft_service import (
-    confirm_content,
-    quick_generate,
-)
 from ..services.discussion_service import (
     AUTO_SUGGEST_SENTINEL,
     process_message,
     reset_checkin_for_new_topic,
 )
-from ..services.hot_topic_store import get_pending_topics
+from ..services.draft_service import (
+    confirm_content,
+    quick_generate,
+)
+from ..services.local_hot_topic_store import ensure_topics_for_date, records_are_fallback
 from ..utils.time_utils import get_today_cst
 
 router = APIRouter(prefix="/coze")
 
 ANONYMOUS_COZE_USER = "anonymous"
+_VALID_ID_PATTERN = re.compile(r"^[\w\-\.@]{3,128}$")
+
 USER_HEADER_PREFIXES = (
     ("X-Lark-User-Id", "feishu_user"),
     ("X-User-Id", "feishu_user"),
@@ -48,14 +53,23 @@ USER_HEADER_PREFIXES = (
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-def _resolve_user_identity(request: Request, explicit_user_id: str | None) -> str:
-    if explicit_user_id and explicit_user_id.strip():
-        return f"feishu_user:{explicit_user_id.strip()}"
+
+def _validate_user_id(value: str) -> bool:
+    return bool(_VALID_ID_PATTERN.match(value))
+
+
+def _resolve_user_identity(request: Request, explicit_user_id: str | None) -> str | None:
+    if explicit_user_id:
+        stripped = explicit_user_id.strip()
+        if stripped and _validate_user_id(stripped):
+            return f"feishu_user:{stripped}"
 
     for header_name, prefix in USER_HEADER_PREFIXES:
         value = request.headers.get(header_name)
-        if value and value.strip():
-            return f"{prefix}:{value.strip()}"
+        if value:
+            stripped = value.strip()
+            if stripped and _validate_user_id(stripped):
+                return f"{prefix}:{stripped}"
 
     return f"coze_anonymous:{ANONYMOUS_COZE_USER}"
 
@@ -67,9 +81,15 @@ def get_coze_user(
     db: Session = Depends(get_db),
 ) -> User:
     """Extract Feishu user ID from Coze request headers and look up/create User."""
+    if not settings.enable_coze_plugin:
+        raise HTTPException(status_code=404, detail="Coze plugin is disabled")
     if not settings.coze_plugin_token:
         raise HTTPException(status_code=503, detail="Plugin auth is not configured")
-    if x_coze_plugin_token != settings.coze_plugin_token:
+    # Constant-time comparison: a plain `!=` short-circuits on the first
+    # differing byte, leaking the shared secret one character at a time to a
+    # timing attacker. compare_digest takes the same time regardless of where
+    # the strings diverge.
+    if not hmac.compare_digest(x_coze_plugin_token, settings.coze_plugin_token):
         raise HTTPException(status_code=401, detail="Invalid plugin token")
 
     openid = _resolve_user_identity(request, x_feishu_user_id)
@@ -84,9 +104,14 @@ def get_coze_user(
 
 # ── Request / Response models ─────────────────────────────────────────────────
 
+
 class GetHotTopicsResponse(BaseModel):
     topics: list[dict]
     date: str
+    # True when topics are synthetic backups (no real hot topics loaded yet).
+    # Push consumers (WeChat daily push etc.) should surface this so users
+    # don't see evergreen placeholders labelled as "today's hot topic".
+    is_fallback: bool = False
 
 
 class QuickGeneratePluginRequest(BaseModel):
@@ -151,58 +176,65 @@ class UserStatsResponse(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/get_hot_topics", response_model=GetHotTopicsResponse)
 async def get_hot_topics(
     limit: int = 3,
     current_user: User = Depends(get_coze_user),
     db: Session = Depends(get_db),
 ):
-    """Return today's top-scored pending hot topics for the daily push."""
+    """Return locally stored hot topics for the daily push."""
     try:
-        topics = await get_pending_topics(limit=limit)
+        topic_date = get_today_cst()
+        topics = ensure_topics_for_date(topic_date=topic_date, limit=limit, db=db)
     except Exception:
-        # Bitable unavailable — return empty
+        topic_date = get_today_cst()
         topics = []
 
     topic_list = [
         {
             "index": i + 1,
-            "hot_topic": t.hot_topic,
-            "hot_source": t.hot_source,
-            "hot_url": t.hot_url,
-            "hot_summary": t.hot_summary,
-            "ai_angle": t.ai_angle,
-            "ai_counter_angle": t.ai_counter_angle,
+            "hot_topic": t.title,
+            "hot_source": t.source,
+            "hot_url": t.url,
+            "hot_summary": t.summary or "",
+            "ai_angle": t.ai_angle or "",
+            "ai_counter_angle": t.ai_counter_angle or "",
             "score": t.score,
-            "category": t.topic_category.value,
-            "record_id": t.record_id,
+            "category": t.category,
+            "record_id": str(t.id),
         }
         for i, t in enumerate(topics)
     ]
 
     return GetHotTopicsResponse(
         topics=topic_list,
-        date=get_today_cst().isoformat(),
+        date=topic_date.isoformat(),
+        is_fallback=records_are_fallback(topics),
     )
 
 
 @router.post("/quick_generate", response_model=QuickGeneratePluginResponse)
+@limiter.limit(settings.generation_rate_limit)
 async def coze_quick_generate(
-    request: QuickGeneratePluginRequest,
+    request: Request,
+    body: QuickGeneratePluginRequest,
     current_user: User = Depends(get_coze_user),
 ):
     """Quick mode: generate content from hot topic + angle in ~30s. Stateless."""
     result = await quick_generate(
-        hot_topic=request.hot_topic,
-        angle=request.angle,
-        platform=request.platform,
+        hot_topic=body.hot_topic,
+        angle=body.angle,
+        platform=body.platform,
     )
     return QuickGeneratePluginResponse(**result)
 
 
 @router.post("/start_deep_mode", response_model=StartDeepModeResponse)
+@limiter.limit(settings.generation_rate_limit)
 async def start_deep_mode(
-    request: StartDeepModeRequest,
+    request: Request,
+    body: StartDeepModeRequest,
     current_user: User = Depends(get_coze_user),
     db: Session = Depends(get_db),
 ):
@@ -210,21 +242,25 @@ async def start_deep_mode(
     today = get_today_cst()
 
     # Reuse existing incomplete checkin for today, or create new one
-    existing = db.query(CheckIn).filter(
-        CheckIn.user_id == current_user.id,
-        CheckIn.date == today,
-        CheckIn.status != CheckInStatus.completed,
-    ).first()
+    existing = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.user_id == current_user.id,
+            CheckIn.date == today,
+            CheckIn.status != CheckInStatus.completed,
+        )
+        .first()
+    )
 
     if existing:
         checkin = existing
-        reset_checkin_for_new_topic(checkin, request.hot_topic, CheckInStatus.discussing)
+        reset_checkin_for_new_topic(checkin, body.hot_topic, CheckInStatus.discussing)
         db.commit()
     else:
         checkin = CheckIn(
             user_id=current_user.id,
             date=today,
-            topic=request.hot_topic,
+            topic=body.hot_topic,
             status=CheckInStatus.discussing,
         )
         db.add(checkin)
@@ -236,7 +272,7 @@ async def start_deep_mode(
         checkin=checkin,
         user_message=AUTO_SUGGEST_SENTINEL,
         db=db,
-        angle=request.angle,
+        angle=body.angle,
     )
 
     return StartDeepModeResponse(
@@ -247,16 +283,22 @@ async def start_deep_mode(
 
 
 @router.post("/deep_mode_message", response_model=DeepModeMessageResponse)
+@limiter.limit(settings.generation_rate_limit)
 async def deep_mode_message(
-    request: DeepModeMessageRequest,
+    request: Request,
+    body: DeepModeMessageRequest,
     current_user: User = Depends(get_coze_user),
     db: Session = Depends(get_db),
 ):
     """Send a message in the deep mode discussion flow."""
-    checkin = db.query(CheckIn).filter(
-        CheckIn.id == request.checkin_id,
-        CheckIn.user_id == current_user.id,
-    ).first()
+    checkin = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.id == body.checkin_id,
+            CheckIn.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if not checkin:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -266,9 +308,9 @@ async def deep_mode_message(
 
     result = await process_message(
         checkin=checkin,
-        user_message=request.message,
+        user_message=body.message,
         db=db,
-        angle=request.angle,
+        angle=body.angle,
     )
 
     return DeepModeMessageResponse(
@@ -280,35 +322,42 @@ async def deep_mode_message(
 
 
 @router.post("/confirm_and_publish", response_model=ConfirmPublishResponse)
+@limiter.limit(settings.publish_rate_limit)
 async def confirm_and_publish(
-    request: ConfirmPublishRequest,
+    request: Request,
+    body: ConfirmPublishRequest,
     current_user: User = Depends(get_coze_user),
     db: Session = Depends(get_db),
 ):
     """Confirm content and publish. Updates streak and points."""
-    checkin = db.query(CheckIn).filter(
-        CheckIn.id == request.checkin_id,
-        CheckIn.user_id == current_user.id,
-    ).first()
+    checkin = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.id == body.checkin_id,
+            CheckIn.user_id == current_user.id,
+        )
+        .with_for_update()
+        .first()
+    )
 
     if not checkin:
         raise HTTPException(status_code=404, detail="Session not found")
 
     # If not yet at draft_ready, force the content and move to pending
     if checkin.status not in (CheckInStatus.draft_ready, CheckInStatus.pending):
-        checkin.content = request.content
+        checkin.content = body.content
         checkin.status = CheckInStatus.draft_ready
         db.commit()
 
     try:
-        await confirm_content(checkin, request.content, db)
+        await confirm_content(checkin, body.content, db)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     try:
         result = await confirm_publish(checkin, db, current_user)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     return ConfirmPublishResponse(
         streak=result["streak"],
@@ -327,11 +376,15 @@ async def get_user_stats(
 ):
     """Return user streak, points, level, and today's completion status."""
     today = get_today_cst()
-    today_checkin = db.query(CheckIn).filter(
-        CheckIn.user_id == current_user.id,
-        CheckIn.date == today,
-        CheckIn.status == CheckInStatus.completed,
-    ).first()
+    today_checkin = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.user_id == current_user.id,
+            CheckIn.date == today,
+            CheckIn.status == CheckInStatus.completed,
+        )
+        .first()
+    )
 
     achievements = [
         {"type": a.achievement_type, "unlocked_at": str(a.unlocked_at)}

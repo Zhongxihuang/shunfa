@@ -6,12 +6,12 @@ from .discussion_service import count_real_user_rounds
 
 # 成就定义
 ACHIEVEMENTS = {
-    "first_post":     {"name": "破冰",     "desc": "完成第一次发布",     "icon": "🌱"},
-    "streak_3":       {"name": "三日坚持", "desc": "连续打卡3天",       "icon": "🔥"},
-    "streak_7":       {"name": "一周英雄", "desc": "连续打卡7天",       "icon": "⚡"},
-    "streak_30":      {"name": "月度传奇", "desc": "连续打卡30天",      "icon": "👑"},
-    "quality_writer": {"name": "言之有物", "desc": "经过3轮讨论后发布",  "icon": "💎"},
-    "century_points": {"name": "百分达人", "desc": "累计积分超过100分",  "icon": "🌟"},
+    "first_post": {"name": "破冰", "desc": "完成第一次发布", "icon": "🌱"},
+    "streak_3": {"name": "三日坚持", "desc": "连续打卡3天", "icon": "🔥"},
+    "streak_7": {"name": "一周英雄", "desc": "连续打卡7天", "icon": "⚡"},
+    "streak_30": {"name": "月度传奇", "desc": "连续打卡30天", "icon": "👑"},
+    "quality_writer": {"name": "言之有物", "desc": "经过3轮讨论后发布", "icon": "💎"},
+    "century_points": {"name": "百分达人", "desc": "累计积分超过100分", "icon": "🌟"},
 }
 
 
@@ -32,10 +32,13 @@ def _unlock(user_id: int, achievement_type: str, db: Session) -> bool:
         # This prevents undoing previously unlocked achievements in the same call.
         db.rollback()
         # Re-check if already exists (in case of race condition)
-        existing = db.query(Achievement).filter(
-            Achievement.user_id == user_id,
-            Achievement.achievement_type == achievement_type
-        ).first()
+        existing = (
+            db.query(Achievement)
+            .filter(
+                Achievement.user_id == user_id, Achievement.achievement_type == achievement_type
+            )
+            .first()
+        )
         if existing:
             return False
         # If still doesn't exist, re-raise (something else went wrong)
@@ -50,15 +53,18 @@ def check_and_unlock(user: User, checkin: CheckIn, db: Session) -> list[dict]:
     Note: Does NOT commit - caller controls the transaction boundary.
     """
     import json
+
     newly_unlocked = []
 
     def try_unlock(atype: str):
         if _unlock(user.id, atype, db):
-            newly_unlocked.append({
-                "type": atype,
-                "name": ACHIEVEMENTS[atype]["name"],
-                "desc": ACHIEVEMENTS[atype]["desc"],
-            })
+            newly_unlocked.append(
+                {
+                    "type": atype,
+                    "name": ACHIEVEMENTS[atype]["name"],
+                    "desc": ACHIEVEMENTS[atype]["desc"],
+                }
+            )
 
     # 已有成就类型（用于去重判断）
     existing = {a.achievement_type for a in user.achievements}
@@ -95,11 +101,13 @@ def get_user_achievements(user: User) -> list[dict]:
     result = []
     for a in user.achievements:
         meta = ACHIEVEMENTS.get(a.achievement_type, {})
-        result.append({
-            "type": a.achievement_type,
-            "name": meta.get("name", a.achievement_type),
-            "desc": meta.get("desc", ""),
-            "icon": meta.get("icon", "🏆"),
-            "unlocked_at": a.unlocked_at.isoformat() if a.unlocked_at else None,
-        })
+        result.append(
+            {
+                "type": a.achievement_type,
+                "name": meta.get("name", a.achievement_type),
+                "desc": meta.get("desc", ""),
+                "icon": meta.get("icon", "🏆"),
+                "unlocked_at": a.unlocked_at.isoformat() if a.unlocked_at else None,
+            }
+        )
     return result

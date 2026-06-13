@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
-import { api } from '@/lib/api';
+import { api, getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { isDevPreviewToken } from '@/lib/devPreview';
 
@@ -20,13 +20,14 @@ interface ApiKeyStatus {
 
 function SettingsContent() {
   const router = useRouter();
-  const { token, user, apiKeyConfigured, setApiKeyConfigured } = useAuth();
+  const { token, user, apiKeyConfigured, setApiKeyConfigured, logout } = useAuth();
 
   // Reminder settings
   const [enabled, setEnabled] = useState(false);
   const [time, setTime] = useState('09:00');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [reminderError, setReminderError] = useState('');
 
   // BYOK
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -34,6 +35,7 @@ function SettingsContent() {
   const [apiKeySaving, setApiKeySaving] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (isDevPreviewToken(token)) {
@@ -42,29 +44,31 @@ function SettingsContent() {
       setApiKeyStatus({ configured: true, preview: '...demo' });
       return;
     }
-    api.get<ReminderStatus>('/api/reminder_status').then((d) => {
-      setEnabled(d.reminder_enabled);
-      setTime(d.reminder_time ?? '09:00');
-    });
-    api.get<ApiKeyStatus>('/api/user/api_key/status').then((d) => {
-      setApiKeyStatus(d);
-    });
-    // Also check localStorage
-    const localKey = localStorage.getItem('shunfa_api_key');
-    if (localKey) {
-      setApiKeyStatus({ configured: true, preview: `...${localKey.slice(-4)}` });
-    }
+    api.get<ReminderStatus>('/api/reminder_status')
+      .then((d) => {
+        setEnabled(d.reminder_enabled);
+        setTime(d.reminder_time ?? '09:00');
+      })
+      .catch(() => { /* keep defaults; saving still works */ });
+    api.get<ApiKeyStatus>('/api/user/api_key/status')
+      .then((d) => {
+        setApiKeyStatus(d);
+      })
+      .catch(() => { /* the auth context already tracks configured-state */ });
   }, [token, user]);
 
   async function handleSave() {
     setSaving(true);
     setSaved(false);
+    setReminderError('');
     try {
       if (!isDevPreviewToken(token)) {
         await api.post('/api/reminder', { reminder_enabled: enabled, reminder_time: enabled ? time : null });
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } catch (e: unknown) {
+      setReminderError(getErrorMessage(e, '保存失败，请重试'));
     } finally {
       setSaving(false);
     }
@@ -75,10 +79,8 @@ function SettingsContent() {
     if (!key) return;
     setApiKeySaving(true);
     setApiKeySaved(false);
+    setError('');
     try {
-      // Save to localStorage for immediate use
-      localStorage.setItem('shunfa_api_key', key);
-      // Save encrypted to backend
       if (!isDevPreviewToken(token)) {
         await api.post<ApiKeyStatus>('/api/user/api_key', { api_key: key });
       }
@@ -89,43 +91,57 @@ function SettingsContent() {
       setShowApiKey(false);
       setApiKeySaved(true);
       setTimeout(() => setApiKeySaved(false), 2000);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, '保存失败，请检查 Key 后重试'));
     } finally {
       setApiKeySaving(false);
     }
   }
 
   async function handleDeleteApiKey() {
-    localStorage.removeItem('shunfa_api_key');
-    if (!isDevPreviewToken(token)) {
-      await api.delete('/api/user/api_key');
+    setError('');
+    try {
+      if (!isDevPreviewToken(token)) {
+        await api.delete('/api/user/api_key');
+      }
+      localStorage.removeItem('shunfa_api_key');
+      setApiKeyStatus({ configured: false, preview: null });
+      setApiKeyConfigured(false);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, '删除失败，请重试'));
     }
-    setApiKeyStatus({ configured: false, preview: null });
-    setApiKeyConfigured(false);
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-24">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700">
+    <div className="sf-shell md:max-w-4xl xl:max-w-4xl">
+      <div className="sf-rise mb-6 flex items-center gap-3">
+        <button
+          onClick={() => router.back()}
+          aria-label="返回上一页"
+          className="sf-btn-secondary h-10 min-h-10 w-10 px-0"
+        >
           ←
         </button>
-        <h1 className="text-xl font-bold text-gray-900">设置</h1>
+        <div>
+          <p className="sf-eyebrow">设置</p>
+          <h1 className="sf-display mt-1 text-2xl font-semibold text-[var(--ink)]">让顺发顺手一点</h1>
+        </div>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
       {/* DeepSeek API Key (BYOK) */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
-        <div className="flex items-center justify-between mb-3">
+      <section className="sf-card sf-rise sf-rise-1 p-6">
+        <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <div className="font-medium text-gray-800">DeepSeek API Key</div>
-            <div className="text-xs text-gray-500 mt-0.5">用于驱动 AI 选题和内容生成</div>
+            <h2 className="sf-display text-xl font-semibold text-[var(--ink)]">DeepSeek API Key</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">用于驱动 AI 选题和内容生成</p>
           </div>
-          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-            apiKeyConfigured ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-          }`}>
+          <span className={`sf-pill ${apiKeyConfigured ? 'sf-pill-accent' : ''}`} style={apiKeyConfigured ? undefined : { color: 'var(--danger)', borderColor: 'rgba(181, 106, 91, 0.3)' }}>
             {apiKeyConfigured ? (apiKeyStatus.preview ?? '已配置') : '未配置'}
           </span>
         </div>
 
+        {error && <p className="mb-3 text-sm text-[var(--danger)]">{error}</p>}
         {!apiKeyStatus.configured || showApiKey ? (
           <div className="space-y-3">
             <input
@@ -133,15 +149,16 @@ function SettingsContent() {
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
               placeholder="sk-..."
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+              autoComplete="off"
+              className="sf-input"
             />
-            <p className="text-xs text-gray-400">
+            <p className="text-xs leading-5 text-[var(--ink-muted)]">
               前往{' '}
               <a
                 href="https://platform.deepseek.com/api_keys"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline"
+                className="underline hover:text-[var(--ink-soft)]"
               >
                 platform.deepseek.com
               </a>{' '}
@@ -151,14 +168,14 @@ function SettingsContent() {
               <button
                 onClick={handleSaveApiKey}
                 disabled={apiKeySaving || !apiKeyInput.trim()}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
+                className="sf-btn-primary min-h-11 flex-1"
               >
                 {apiKeySaving ? '保存中...' : apiKeySaved ? '已保存 ✓' : '保存 Key'}
               </button>
               {showApiKey && (
                 <button
                   onClick={() => setShowApiKey(false)}
-                  className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-600"
+                  className="sf-btn-secondary min-h-11 px-4"
                 >
                   取消
                 </button>
@@ -169,55 +186,71 @@ function SettingsContent() {
           <div className="flex gap-2">
             <button
               onClick={() => setShowApiKey(true)}
-              className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              className="sf-btn-secondary min-h-11 flex-1"
             >
               更换 Key
             </button>
             <button
               onClick={handleDeleteApiKey}
-              className="px-4 py-2.5 border border-red-200 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors"
+              className="min-h-11 rounded-full border border-[rgba(181,106,91,0.3)] px-5 text-sm text-[var(--danger)] transition hover:bg-[rgba(181,106,91,0.06)]"
             >
               移除
             </button>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Reminder settings */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm space-y-5">
-        <div className="flex items-center justify-between">
+      <section className="sf-card sf-rise sf-rise-2 space-y-5 p-6">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="font-medium text-gray-800">每日提醒</div>
-            <div className="text-xs text-gray-500">在设定时间提醒你写文章</div>
+            <h2 className="sf-display text-xl font-semibold text-[var(--ink)]">每日提醒</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--ink-muted)]">在设定时间提醒你写文章</p>
           </div>
           <button
             onClick={() => setEnabled(!enabled)}
-            className={`w-12 h-6 rounded-full transition-colors relative ${enabled ? 'bg-primary' : 'bg-gray-300'}`}
+            role="switch"
+            aria-checked={enabled}
+            aria-label="每日提醒开关"
+            className={`relative h-6 w-12 flex-shrink-0 rounded-full transition-colors ${enabled ? 'bg-primary' : 'bg-[var(--border-strong)]'}`}
           >
             <span
-              className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-0.5'}`}
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-0.5'}`}
             />
           </button>
         </div>
 
         {enabled && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">提醒时间</label>
+          <div className="sf-fade">
+            <label htmlFor="reminder-time" className="mb-1.5 block text-sm font-medium text-[var(--ink-soft)]">提醒时间</label>
             <input
+              id="reminder-time"
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+              className="sf-input"
             />
           </div>
         )}
 
+        {reminderError && <p className="text-sm text-[var(--danger)]">{reminderError}</p>}
+
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full py-3 bg-primary text-white rounded-xl font-medium disabled:opacity-50 hover:bg-primary-dark transition-colors"
+          className="sf-btn-primary w-full"
         >
           {saving ? '保存中...' : saved ? '已保存 ✓' : '保存'}
+        </button>
+      </section>
+      </div>
+
+      <div className="sf-rise sf-rise-3 mt-6 border-t border-[var(--border)] pt-6">
+        <button
+          onClick={logout}
+          className="min-h-12 w-full rounded-full border border-[rgba(181,106,91,0.3)] text-sm font-medium text-[var(--danger)] transition hover:bg-[rgba(181,106,91,0.06)]"
+        >
+          退出登录
         </button>
       </div>
     </div>

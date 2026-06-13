@@ -85,13 +85,14 @@ def _title_fingerprint(title: str) -> str:
 def _url_to_source_name(url: str) -> str:
     """Derive a human-readable source name from a URL."""
     mapping = {
-        "ycombinator": "Hacker News",
         "venturebeat": "VentureBeat AI",
         "techcrunch": "TechCrunch AI",
         "technologyreview": "MIT Tech Review",
-        "theverge": "The Verge",
-        "arstechnica": "Ars Technica",
-        "leiphone": "雷锋网",
+        "theverge": "The Verge AI",
+        "artificialintelligence-news": "AI News",
+        "openai": "OpenAI Blog",
+        "jack-clark": "Import AI",
+        "syncedreview": "机器之心",
         "36kr": "36Kr",
     }
     for key, name in mapping.items():

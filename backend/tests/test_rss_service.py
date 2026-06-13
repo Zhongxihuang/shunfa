@@ -1,20 +1,19 @@
 """Tests for RSS aggregation service."""
 
-import pytest
-import httpx
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.rss_service import (
-    fetch_source,
-    fetch_all_sources,
-    _deduplicate,
-    _title_fingerprint,
-    _url_to_source_name,
-    _strip_html,
-)
+import httpx
+import pytest
+
 from app.schemas import RawArticle
-
+from app.services.rss_service import (
+    _deduplicate,
+    _strip_html,
+    _url_to_source_name,
+    fetch_all_sources,
+    fetch_source,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -24,6 +23,7 @@ def _load_fixture(filename: str) -> str:
 
 
 # ── fetch_source ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_fetch_source_parses_articles():
@@ -82,6 +82,7 @@ async def test_fetch_source_returns_empty_on_4xx():
 
 # ── deduplication ─────────────────────────────────────────────────────────────
 
+
 def test_deduplicate_removes_exact_title_duplicates():
     articles = [
         RawArticle(title="DeepSeek V4 Released", link="https://a.com", source="HN"),
@@ -115,11 +116,25 @@ def test_deduplicate_keeps_unique():
 
 # ── helper functions ──────────────────────────────────────────────────────────
 
+
 def test_url_to_source_name_known_sources():
-    assert _url_to_source_name("https://news.ycombinator.com/rss") == "Hacker News"
     assert _url_to_source_name("https://venturebeat.com/category/ai/feed/") == "VentureBeat AI"
-    assert _url_to_source_name("https://techcrunch.com/category/artificial-intelligence/feed/") == "TechCrunch AI"
+    assert (
+        _url_to_source_name("https://techcrunch.com/category/artificial-intelligence/feed/")
+        == "TechCrunch AI"
+    )
     assert _url_to_source_name("https://www.technologyreview.com/feed/") == "MIT Tech Review"
+    assert (
+        _url_to_source_name("https://www.theverge.com/rss/ai-artificial-intelligence/index.xml")
+        == "The Verge AI"
+    )
+    assert _url_to_source_name("https://www.artificialintelligence-news.com/feed/") == "AI News"
+    assert _url_to_source_name("https://openai.com/blog/rss.xml") == "OpenAI Blog"
+    assert _url_to_source_name("https://jack-clark.net/feed/") == "Import AI"
+    assert _url_to_source_name("https://syncedreview.com/feed/") == "机器之心"
+    assert _url_to_source_name("https://36kr.com/feed") == "36Kr"
+    # Unknown URL falls back to domain
+    assert _url_to_source_name("https://unknown-site.com/rss") == "unknown-site.com"
 
 
 def test_strip_html_removes_tags():

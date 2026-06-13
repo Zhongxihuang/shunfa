@@ -1,0 +1,17 @@
+<view class="level-progress">
+  <view class="level-header">
+    <view class="level-left">
+      <view class="level-badge">
+        <text class="level-badge__text">{{level}}</text>
+      </view>
+      <view class="level-meta">
+        <text class="level-name">{{levelName}}</text>
+        <text class="level-label">Lv.{{level}}</text>
+      </view>
+    </view>
+    <text class="points-text">{{points}} / {{nextLevelPoints}} 积分</text>
+  </view>
+  <view class="progress-bar">
+    <view class="progress-fill" style="width: {{progressPercent}}%"></view>
+  </view>
+</view>

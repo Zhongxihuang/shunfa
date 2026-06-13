@@ -4,19 +4,20 @@ from typing import Any
 from openai import APIError, AsyncOpenAI, RateLimitError, Timeout
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from ..config import settings
+
 logger = logging.getLogger("ai_service")
 
 
 def _get_client(api_key: str) -> AsyncOpenAI:
     return AsyncOpenAI(
         api_key=api_key,
-        base_url="https://api.deepseek.com",
-        timeout=60.0,
+        base_url=settings.deepseek_base_url,
+        timeout=float(settings.deepseek_request_timeout_seconds),
     )
 
 
 def get_system_api_key() -> str:
-    from ..config import settings
     if not settings.deepseek_api_key:
         raise RuntimeError(
             "DEEPSEEK_API_KEY is not configured. "

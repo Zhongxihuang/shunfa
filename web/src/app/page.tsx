@@ -1,86 +1,217 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Navbar from '@/components/Navbar';
-import StreakBadge from '@/components/StreakBadge';
-import DiamondDisplay from '@/components/DiamondDisplay';
-import LevelProgress from '@/components/LevelProgress';
+import SkeletonCard from '@/components/Skeleton';
+import { api, ApiError } from '@/lib/api';
+import { CheckinItem, CheckinsResponse, continueHref, statusLabel } from '@/lib/checkins';
 import { useAuth } from '@/lib/auth';
+import { isDevPreviewToken } from '@/lib/devPreview';
 
 function Dashboard() {
-  const { user, refreshUser, apiKeyConfigured } = useAuth();
-  const [showReminderToast, setShowReminderToast] = useState(false);
+  const { user, apiKeyConfigured, logout } = useAuth();
+  const [recent, setRecent] = useState<CheckinItem[]>([]);
+  const [drafts, setDrafts] = useState<CheckinItem[]>([]);
+  const [draftCount, setDraftCount] = useState(0);
+  const [loadingLists, setLoadingLists] = useState(true);
+  const [listError, setListError] = useState(false);
+  const [listAuthError, setListAuthError] = useState(false);
 
-  useEffect(() => {
-    refreshUser();
-  }, [refreshUser]);
-
-  useEffect(() => {
-    if (user?.reminder_needed) {
-      setShowReminderToast(true);
-      const t = setTimeout(() => setShowReminderToast(false), 4000);
-      return () => clearTimeout(t);
+  // AuthProvider already calls refreshUser() on mount (auth.tsx); the cached
+  // user flows into this component via the context, so the dashboard does not
+  // need a second /api/user_status call.
+  const loadDashboardLists = useCallback(() => {
+    // Dev preview has no real backend session — show the empty states instead
+    // of letting the 401 surface as a scary auth banner during UI demos.
+    if (isDevPreviewToken(localStorage.getItem('token'))) {
+      setLoadingLists(false);
+      return;
     }
-  }, [user?.reminder_needed]);
+    let cancelled = false;
+    setLoadingLists(true);
+    setListAuthError(false);
+    Promise.all([
+      api.get<CheckinsResponse>('/api/my/checkins?limit=3&offset=0'),
+      api.get<CheckinsResponse>('/api/my/checkins?status_filter=draft&limit=3&offset=0'),
+    ])
+      .then(([recentData, draftData]) => {
+        if (cancelled) return;
+        setRecent(recentData.checkins);
+        setDrafts(draftData.checkins);
+        setDraftCount(draftData.draft_count);
+        setListError(false);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setListAuthError(e instanceof ApiError && e.status === 401);
+        setListError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingLists(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => loadDashboardLists(), [loadDashboardLists]);
 
   if (!user) return null;
 
   return (
-    <div className="max-w-md mx-auto px-4 pt-6 pb-24">
-      {showReminderToast && (
-        <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-primary text-white px-4 py-3 rounded-xl shadow-lg z-50 text-sm">
-          该写今天的文章啦！🔔
-        </div>
-      )}
+    <div className="sf-shell">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <main className="min-w-0">
+          <section className="sf-card sf-rise mb-5 p-6 md:p-8">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <span className="sf-eyebrow">顺发</span>
+              <span className="sf-pill sf-pill-accent">{user.today_completed ? '今日已发布' : '今日待发'}</span>
+            </div>
+            <h1 className="sf-display text-[40px] font-bold leading-tight text-[var(--ink)] md:max-w-2xl md:text-[64px] md:leading-none">
+              {user.today_completed ? '今天已经发出一条' : '今天，先发一条'}
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-[var(--ink-soft)]">
+              选一个热点，形成一个判断。草稿可以回来继续，历史稿件也会一直保留。
+            </p>
+            {user.gamification_enabled && (
+              <div className="mt-5 flex flex-wrap gap-3">
+                <span className="sf-stat sf-stat-ember">
+                  🔥 {user.streak > 0 ? `已连更 ${user.streak} 天` : '今天开始第一天'}
+                </span>
+                <span className="sf-stat sf-stat-gold">
+                  ⭐ {user.points} 积分
+                </span>
+                <span className="sf-stat">
+                  Lv.{user.level}
+                </span>
+                {user.streak_freezes > 0 && (
+                  <span className="sf-stat sf-stat-frost">
+                    🧊 {user.streak_freezes} 张保护卡
+                  </span>
+                )}
+              </div>
+            )}
+            {user.reminder_needed && !user.today_completed && (
+              <div className="sf-notice mt-4">
+                今天还没发，继续连胜的话现在可以开始 →
+              </div>
+            )}
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link href="/topics" className="sf-btn-primary flex-1">
+                开始今日写作
+              </Link>
+              <Link href="/drafts" className="sf-btn-secondary flex-1">
+                查看草稿箱
+              </Link>
+            </div>
+          </section>
 
-      <h1 className="text-xl font-bold text-gray-900 mb-4">顺发</h1>
+          {user && !apiKeyConfigured && (
+            <div className="sf-note-card mb-4 px-4 py-3">
+              <p className="text-sm font-semibold text-[var(--ink)]">还差一步：配置 DeepSeek API Key</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--ink-soft)]">AI 选题、深挖和起稿需要可用 Key。</p>
+              <Link href="/settings" className="mt-2 inline-block text-xs font-semibold text-primary-dark underline">
+                前往设置
+              </Link>
+            </div>
+          )}
 
-      {user && !apiKeyConfigured && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-          <p className="text-sm font-medium text-amber-800">还差一步：配置 DeepSeek API Key</p>
-          <p className="text-xs text-amber-700 mt-0.5">AI 选题和讨论功能需要你自己的 Key。</p>
-          <Link
-            href="/settings"
-            className="mt-2 inline-block text-xs font-medium text-amber-900 underline"
-          >
-            前往设置 →
-          </Link>
-        </div>
-      )}
+          <section className="sf-rise sf-rise-2 mb-5">
+            {listError && (
+              <div className="mb-3 flex items-center justify-between rounded-xl bg-white/50 px-4 py-2 text-xs text-[var(--ink-muted)]">
+                {listAuthError ? (
+                  <>
+                    <span>登录状态异常，无法加载数据</span>
+                    <button onClick={logout} className="font-medium text-primary-dark underline">重新登录</button>
+                  </>
+                ) : (
+                  <>
+                    <span>内容加载失败，可能是网络问题</span>
+                    <button
+                      onClick={loadDashboardLists}
+                      disabled={loadingLists}
+                      className="font-medium text-primary-dark underline disabled:opacity-50"
+                    >
+                      {loadingLists ? '重试中...' : '重试'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            <div className="mb-3 flex items-center justify-between px-1">
+              <div>
+                <p className="sf-eyebrow">最近创作</p>
+                <h2 className="sf-display mt-1 text-2xl font-semibold text-[var(--ink)]">继续看你的发文记录</h2>
+              </div>
+              <Link href="/history" className="text-xs font-medium text-primary-dark">全部</Link>
+            </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <StreakBadge streak={user.streak} longestStreak={user.longest_streak} />
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <DiamondDisplay diamonds={user.diamonds} />
-        </div>
-      </div>
+            {loadingLists ? (
+              <div className="grid gap-3 md:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <SkeletonCard key={i} height="h-32" />
+                ))}
+              </div>
+            ) : recent.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-3">
+                {recent.map((item) => (
+                  <Link key={item.id} href={continueHref(item)} className="sf-card block p-4 transition hover:border-[var(--border-strong)]">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs text-[var(--ink-muted)]">{item.date}</span>
+                      <span className="sf-pill">{statusLabel(item.status)}</span>
+                    </div>
+                    <h3 className="line-clamp-2 text-sm font-semibold leading-6 text-[var(--ink)]">{item.topic}</h3>
+                    {item.content && (
+                      <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--ink-soft)]">{item.content}</p>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="sf-card px-5 py-8 text-center">
+                <p className="sf-display text-2xl font-semibold text-[var(--ink)]">还没有创作记录</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">从今日热点开始写第一条。</p>
+              </div>
+            )}
+          </section>
+        </main>
 
-      <div className="bg-white rounded-2xl p-4 shadow-sm mb-6">
-        <LevelProgress level={user.level} points={user.points} />
-      </div>
+        <aside className="sf-rise sf-rise-3 lg:sticky lg:top-24 lg:self-start">
+          <section className="sf-card mb-5 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="sf-display text-2xl font-semibold text-[var(--ink)]">草稿箱</h2>
+              <span className="sf-pill">{draftCount > 0 ? `${draftCount} 篇` : '空'}</span>
+            </div>
+            {drafts.length > 0 ? (
+              <div className="space-y-3">
+                {drafts.map((item) => (
+                  <Link key={item.id} href={continueHref(item)} className="block rounded-2xl border border-[var(--border)] bg-white/50 p-3 transition hover:bg-white/70">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-xs text-[var(--ink-muted)]">{item.date}</span>
+                      <span className="text-xs text-primary-dark">{statusLabel(item.status)}</span>
+                    </div>
+                    <p className="line-clamp-2 text-sm font-medium leading-6 text-[var(--ink)]">{item.topic}</p>
+                  </Link>
+                ))}
+                <Link href="/drafts" className="sf-btn-secondary w-full">查看全部草稿</Link>
+              </div>
+            ) : (
+              <div>
+                <p className="mb-4 text-sm leading-6 text-[var(--ink-soft)]">没有中断的创作。新草稿会出现在这里。</p>
+                <Link href="/topics" className="sf-btn-primary w-full">去选题</Link>
+              </div>
+            )}
+          </section>
 
-      <div className="bg-white rounded-2xl p-5 shadow-sm">
-        <h2 className="font-semibold text-gray-800 mb-3">今日状态</h2>
-        {user.today_completed ? (
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-primary"></span>
-            <span className="text-primary font-medium text-sm">今日已打卡 ✓</span>
-          </div>
-        ) : (
-          <div>
-            <p className="text-gray-500 text-sm mb-3">今天还没写文章，快来开始吧！</p>
-            <Link
-              href="/topics"
-              className="block w-full text-center py-3 bg-primary text-white rounded-xl font-medium hover:bg-primary-dark transition-colors"
-            >
-              开始今天的选题 →
-            </Link>
-          </div>
-        )}
+          <section className="sf-note-card p-5">
+            <p className="sf-eyebrow">提醒</p>
+            <p className="mt-2 text-sm leading-7 text-[var(--ink-soft)]">
+              顺发现在聚焦发文闭环：选题、起稿、修改、发布、回看。
+            </p>
+          </section>
+        </aside>
       </div>
     </div>
   );

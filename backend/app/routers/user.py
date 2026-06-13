@@ -1,6 +1,8 @@
+import hmac
 from datetime import UTC, date, datetime, timedelta
 
 import bcrypt
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import jwt
 from pydantic import BaseModel
@@ -15,13 +17,17 @@ from ..schemas import (
     AchievementItem,
     AchievementsResponse,
     ApiKeyStatusResponse,
+    LoginRequest,
     LoginResponse,
+    RedeemRequest,
+    RedeemResponse,
     RegisterRequest,
     SaveApiKeyRequest,
     UserStatusResponse,
     WebAuthLoginRequest,
     WebLoginRequest,
 )
+from ..services.analytics import track
 from ..services.reminder_service import check_reminder_needed
 from ..utils.time_utils import get_today_cst
 
@@ -36,6 +42,54 @@ def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
+def _dev_wechat_openid() -> str:
+    return "wx_dev_user"
+
+
+async def get_wechat_openid(code: str) -> str:
+    """Exchange a WeChat mini program login code for an openid.
+
+    Local development often runs without WeChat credentials. In that case we
+    use a stable dev openid so the restored mini program can run end-to-end.
+    """
+    if not settings.wechat_app_id or not settings.wechat_app_secret:
+        if settings.environment == "production":
+            raise HTTPException(status_code=503, detail="WeChat login is not configured")
+        return _dev_wechat_openid()
+
+    url = "https://api.weixin.qq.com/sns/jscode2session"
+    params = {
+        "appid": settings.wechat_app_id,
+        "secret": settings.wechat_app_secret,
+        "js_code": code,
+        "grant_type": "authorization_code",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
+        if settings.environment != "production":
+            return _dev_wechat_openid()
+        raise HTTPException(status_code=503, detail="WeChat service unavailable") from exc
+
+    if "errcode" in data and data["errcode"] != 0:
+        if settings.environment != "production":
+            return _dev_wechat_openid()
+        raise HTTPException(
+            status_code=400, detail=f"WeChat error: {data.get('errmsg', 'Unknown error')}"
+        )
+
+    openid = data.get("openid")
+    if not openid:
+        if settings.environment != "production":
+            return _dev_wechat_openid()
+        raise HTTPException(status_code=400, detail="Failed to get openid from WeChat")
+
+    return openid
+
+
 def create_jwt_token(user_id: int, token_version: int = 0) -> str:
     expire = datetime.now(UTC) + timedelta(hours=settings.jwt_expire_hours)
     payload = {"sub": str(user_id), "tv": token_version, "exp": expire}
@@ -45,17 +99,23 @@ def create_jwt_token(user_id: int, token_version: int = 0) -> str:
 def get_user_today_status(user: User, today: date, db: Session) -> bool:
     """Check if user has completed today's check-in."""
     from ..models import CheckInStatus
-    checkin = db.query(CheckIn).filter(
-        CheckIn.user_id == user.id,
-        CheckIn.date == today,
-        CheckIn.status == CheckInStatus.completed
-    ).first()
+
+    checkin = (
+        db.query(CheckIn)
+        .filter(
+            CheckIn.user_id == user.id,
+            CheckIn.date == today,
+            CheckIn.status == CheckInStatus.completed,
+        )
+        .first()
+    )
     return checkin is not None
 
 
-def _build_login_response(user: User, today: date, db: Session) -> LoginResponse:
-    token = create_jwt_token(user.id, user.token_version)
-    user_status = UserStatusResponse(
+def _build_user_status(user: User, today: date, db: Session) -> UserStatusResponse:
+    from ..services.feature_flags import resolve_gamification_enabled
+
+    return UserStatusResponse(
         id=user.id,
         streak=user.streak,
         longest_streak=user.longest_streak,
@@ -66,58 +126,103 @@ def _build_login_response(user: User, today: date, db: Session) -> LoginResponse
         reminder_enabled=user.reminder_enabled,
         last_checkin_date=user.last_checkin_date,
         today_completed=get_user_today_status(user, today, db),
-        reminder_needed=check_reminder_needed(user, db)
+        reminder_needed=check_reminder_needed(user, db),
+        gamification_enabled=resolve_gamification_enabled(user),
+        streak_freezes=user.streak_freezes or 0,
     )
-    return LoginResponse(token=token, user=user_status)
+
+
+def _build_login_response(user: User, today: date, db: Session) -> LoginResponse:
+    token = create_jwt_token(user.id, user.token_version)
+    return LoginResponse(token=token, user=_build_user_status(user, today, db))
+
+
+def _safe_api_key_preview(plaintext: str) -> str | None:
+    key = plaintext.strip()
+    if len(key) < 12:
+        return None
+    return f"...{key[-4:]}"
+
+
+# ── WeChat mini program login ─────────────────────────────────────────────────
+
+
+@router.post("/login", response_model=LoginResponse)
+@limiter.limit("10/minute")
+async def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
+    openid = await get_wechat_openid(body.code)
+
+    user = db.query(User).filter(User.openid == openid).first()
+    if not user:
+        try:
+            user = User(openid=openid)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except IntegrityError:
+            db.rollback()
+            user = db.query(User).filter(User.openid == openid).first()
+
+    track("login", user_id=user.id, props={"method": "wechat"})
+    return _build_login_response(user, get_today_cst(), db)
 
 
 # ── Web auth: register + login ─────────────────────────────────────────────────
 
+
 @router.post("/register", response_model=LoginResponse)
-async def register(request: RegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, body: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new web user with username + password."""
-    existing = db.query(User).filter(User.username == request.username).first()
+    existing = db.query(User).filter(User.username == body.username).first()
     if existing:
         raise HTTPException(status_code=400, detail="用户名已存在")
 
-    openid = f"web_{request.username}"
+    openid = f"web_{body.username}"
     if db.query(User).filter(User.openid == openid).first():
         raise HTTPException(status_code=400, detail="用户名已存在")
 
     try:
         user = User(
             openid=openid,
-            username=request.username,
-            password_hash=_hash_password(request.password),
+            username=body.username,
+            password_hash=_hash_password(body.password),
         )
         db.add(user)
         db.commit()
         db.refresh(user)
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="用户名已存在")
+        raise HTTPException(status_code=400, detail="用户名已存在") from exc
 
+    register_props: dict[str, str] = {"method": "web_password"}
+    if body.src:
+        register_props["src"] = body.src
+    track("register", user_id=user.id, props=register_props)
     return _build_login_response(user, get_today_cst(), db)
 
 
 @router.post("/auth_login", response_model=LoginResponse)
-async def auth_login(request: WebAuthLoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def auth_login(request: Request, body: WebAuthLoginRequest, db: Session = Depends(get_db)):
     """Login with username + password (web users)."""
-    user = db.query(User).filter(User.username == request.username).first()
+    user = db.query(User).filter(User.username == body.username).first()
     if not user or not user.password_hash:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
-    if not _verify_password(request.password, user.password_hash):
+    if not _verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
 
+    track("login", user_id=user.id, props={"method": "web_password"})
     return _build_login_response(user, get_today_cst(), db)
 
 
 @router.post("/web_login", response_model=LoginResponse)
-async def web_login(request: WebLoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def web_login(request: Request, body: WebLoginRequest, db: Session = Depends(get_db)):
     """Legacy single-password admin login. Kept for backward compatibility."""
     if not settings.admin_password:
         raise HTTPException(status_code=503, detail="Web login is not configured")
-    if request.password != settings.admin_password:
+    if not hmac.compare_digest(body.password.encode(), settings.admin_password.encode()):
         raise HTTPException(status_code=401, detail="Invalid password")
 
     openid = "web_admin"
@@ -132,23 +237,38 @@ async def web_login(request: WebLoginRequest, db: Session = Depends(get_db)):
             db.rollback()
             user = db.query(User).filter(User.openid == openid).first()
 
+    track("login", user_id=user.id, props={"method": "admin_password"})
     return _build_login_response(user, get_today_cst(), db)
 
 
 # ── User API Key management ────────────────────────────────────────────────────
 
+
 @router.get("/user/api_key/status", response_model=ApiKeyStatusResponse)
 async def get_api_key_status(current_user: User = Depends(get_current_user)):
     """Check if the user has a DeepSeek API key configured (never returns the plaintext key)."""
+    from ..services.free_quota import (
+        free_quota_enabled,
+        free_quota_limit,
+        free_quota_remaining,
+    )
+
+    quota = {
+        "free_quota_enabled": free_quota_enabled(),
+        "free_quota_limit": free_quota_limit(),
+        "free_quota_used": current_user.free_quota_used or 0,
+        "free_quota_remaining": free_quota_remaining(current_user),
+    }
     if not current_user.deepseek_api_key:
-        return ApiKeyStatusResponse(configured=False)
+        return ApiKeyStatusResponse(configured=False, **quota)
     try:
         from ..utils.crypto import decrypt_api_key
+
         plaintext = decrypt_api_key(current_user.deepseek_api_key)
-        preview = f"...{plaintext[-4:]}" if len(plaintext) >= 4 else "..."
-        return ApiKeyStatusResponse(configured=True, preview=preview)
+        preview = _safe_api_key_preview(plaintext)
+        return ApiKeyStatusResponse(configured=True, preview=preview, **quota)
     except Exception:
-        return ApiKeyStatusResponse(configured=True, preview=None)
+        return ApiKeyStatusResponse(configured=True, preview=None, **quota)
 
 
 @router.post("/user/api_key", response_model=ApiKeyStatusResponse)
@@ -159,9 +279,11 @@ async def save_api_key(
 ):
     """Save the user's DeepSeek API key (stored encrypted)."""
     from ..utils.crypto import encrypt_api_key
+
     current_user.deepseek_api_key = encrypt_api_key(request.api_key.strip())
     db.commit()
-    preview = f"...{request.api_key.strip()[-4:]}"
+    preview = _safe_api_key_preview(request.api_key)
+    track("key_configured", user_id=current_user.id, props={"key_preview": preview})
     return ApiKeyStatusResponse(configured=True, preview=preview)
 
 
@@ -178,41 +300,47 @@ async def delete_api_key(
 
 # ── User status + achievements ─────────────────────────────────────────────────
 
+
 @router.get("/achievements", response_model=AchievementsResponse)
 async def get_achievements(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     from ..services.achievement_service import get_user_achievements
+
     items = get_user_achievements(current_user)
     return AchievementsResponse(
-        achievements=[AchievementItem(**i) for i in items],
-        total=len(items)
+        achievements=[AchievementItem(**i) for i in items], total=len(items)
     )
+
+
+@router.post("/redeem", response_model=RedeemResponse)
+async def redeem_item(
+    body: RedeemRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Spend diamonds on a catalog item (currently: a streak-freeze card)."""
+    from ..errors import raise_api_error
+    from ..services.redeem_service import RedeemError, redeem
+
+    try:
+        result = redeem(db, current_user, body.item)
+    except RedeemError as exc:
+        status = 404 if exc.code == "unknown_item" else 400
+        raise_api_error(status, exc.code, exc.message)
+    return RedeemResponse(**result)
 
 
 @router.get("/user_status", response_model=UserStatusResponse)
 async def get_user_status(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     today = get_today_cst()
-    return UserStatusResponse(
-        id=current_user.id,
-        streak=current_user.streak,
-        longest_streak=current_user.longest_streak,
-        points=current_user.points,
-        level=current_user.level,
-        diamonds=current_user.diamonds,
-        reminder_time=current_user.reminder_time,
-        reminder_enabled=current_user.reminder_enabled,
-        last_checkin_date=current_user.last_checkin_date,
-        today_completed=get_user_today_status(current_user, today, db),
-        reminder_needed=check_reminder_needed(current_user, db)
-    )
+    return _build_user_status(current_user, today, db)
 
 
 # ── Admin: token revocation ────────────────────────────────────────────────────
+
 
 class RevokeTokenRequest(BaseModel):
     user_id: int
@@ -229,7 +357,7 @@ async def revoke_token(
     request: Request,
     revoke_req: RevokeTokenRequest,
     current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Admin endpoint to revoke a user's tokens. Rate limited to 5/minute."""
     user = db.query(User).filter(User.id == revoke_req.user_id).first()
@@ -239,7 +367,4 @@ async def revoke_token(
     user.token_version += 1
     db.commit()
 
-    return RevokeTokenResponse(
-        revoked_user_id=user.id,
-        new_token_version=user.token_version
-    )
+    return RevokeTokenResponse(revoked_user_id=user.id, new_token_version=user.token_version)

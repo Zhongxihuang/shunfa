@@ -1,7 +1,5 @@
-import pytest
-from app.models import User
-from app.routers.user import create_jwt_token
 from app.config import settings
+from app.models import User
 
 
 def test_web_login_correct_password(client, db):

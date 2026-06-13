@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1440px; }
+  .card {
+    width: 1080px; height: 1440px; background: #f3ece0;
+    padding: 110px 96px; display: flex; flex-direction: column;
+    font-family: Georgia, "Songti SC", "Noto Serif SC", serif; color: #23201b;
+  }
+  .idx { font-size: 30px; letter-spacing: 8px; color: #b08d57; }
+  .kicker { font-size: 24px; letter-spacing: 10px; text-transform: uppercase; color: #9a8f7d; margin-top: 12px; }
+  .rule { height: 2px; background: #cdbfa6; margin: 48px 0 60px; }
+  .ttl { font-size: 84px; line-height: 1.34; font-weight: 700; }
+  .body p { font-size: 40px; line-height: 1.9; margin-bottom: 30px; }
+  .foot { margin-top: auto; font-size: 28px; color: #9a8f7d; letter-spacing: 3px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="idx">{{ "%02d"|format(page.index) }} / {{ "%02d"|format(total) }}</div>
+    <div class="kicker">AI INDUSTRY NOTES</div>
+    <div class="rule"></div>
+    {% if page.kind == 'cover' %}
+      <div class="ttl">{{ page.title }}</div>
+    {% else %}
+      <div class="body">{% for p in page.paragraphs %}<p>{{ p }}</p>{% endfor %}</div>
+    {% endif %}
+    <div class="foot">顺发 · 行业洞察</div>
+  </div>
+</body>
+</html>

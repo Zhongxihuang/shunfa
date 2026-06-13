@@ -24,18 +24,13 @@ class ReminderStatusResponse(BaseModel):
 async def set_reminder(
     request: ReminderSettingsRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Set reminder time and enable/disable reminder."""
     try:
-        update_reminder_settings(
-            current_user,
-            request.reminder_time,
-            request.reminder_enabled,
-            db
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        update_reminder_settings(current_user, request.reminder_time, request.reminder_enabled, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return ReminderStatusResponse(
         reminder_enabled=current_user.reminder_enabled,
@@ -46,8 +41,7 @@ async def set_reminder(
 
 @router.get("/reminder_status", response_model=ReminderStatusResponse)
 async def get_reminder_status(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get reminder settings and whether reminder is needed now."""
     return ReminderStatusResponse(

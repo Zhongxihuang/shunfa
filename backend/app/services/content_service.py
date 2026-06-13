@@ -26,6 +26,10 @@ from .draft_service import (  # noqa: F401
 )
 
 
+class AlreadyPublishedError(ValueError):
+    """Raised when a checkin has already been published."""
+
+
 async def confirm_publish(checkin: CheckIn, db: Session, user: User) -> dict:
     """
     User confirms publish. Updates checkin to completed.
@@ -34,7 +38,7 @@ async def confirm_publish(checkin: CheckIn, db: Session, user: User) -> dict:
     to ensure data consistency across streak, points, and achievements.
     """
     if checkin.status == CheckInStatus.completed:
-        raise ValueError("今日已完成发布，请勿重复提交")
+        raise AlreadyPublishedError("今日已完成发布，请勿重复提交")
     if checkin.status != CheckInStatus.pending:
         raise ValueError("请先确认内容后再发布")
 
@@ -47,21 +51,45 @@ async def confirm_publish(checkin: CheckIn, db: Session, user: User) -> dict:
     today = get_today_cst()
 
     try:
+        publish_started_at = get_now_cst()
+        claimed = (
+            db.query(CheckIn)
+            .filter(
+                CheckIn.id == checkin.id,
+                CheckIn.user_id == user.id,
+                CheckIn.status == CheckInStatus.pending,
+            )
+            .update(
+                {
+                    CheckIn.status: CheckInStatus.completed,
+                    CheckIn.completed_at: publish_started_at,
+                },
+                synchronize_session=False,
+            )
+        )
+        if claimed != 1:
+            db.rollback()
+            current = (
+                db.query(CheckIn)
+                .filter(CheckIn.id == checkin.id, CheckIn.user_id == user.id)
+                .first()
+            )
+            if current and current.status == CheckInStatus.completed:
+                raise AlreadyPublishedError("今日已完成发布，请勿重复提交")
+            raise ValueError("请先确认内容后再发布")
+        db.flush()
+        db.refresh(checkin)
+
         # 1. Update streak (flushes, no commit)
         new_streak = calculate_and_update_streak(user, today, db)
 
         # 2. Apply points (flushes, no commit)
         result = apply_points_and_update_user(user, checkin, db)
 
-        # 3. Mark checkin as completed (flushes, no commit)
-        checkin.status = CheckInStatus.completed
-        checkin.completed_at = get_now_cst()
-        db.flush()
-
-        # 4. Check and unlock achievements (flushes new ones, no commit)
+        # 3. Check and unlock achievements (flushes new ones, no commit)
         newly_unlocked = check_and_unlock(user, checkin, db)
 
-        # 5. Single atomic commit — everything succeeds or everything fails
+        # 4. Single atomic commit — everything succeeds or everything fails
         db.commit()
 
     except Exception:

@@ -8,17 +8,17 @@ export default function ChatBubble({ role, content, time }: Props) {
   const isUser = role === 'user';
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
-      <div className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+      <div className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'} sf-fade flex flex-col gap-1`}>
         <div
-          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+          className={`whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
             isUser
-              ? 'bg-primary text-white rounded-br-sm'
-              : 'bg-white text-gray-800 rounded-bl-sm shadow-sm'
+              ? 'rounded-br-sm bg-[var(--ink)] text-[#fcfbf8]'
+              : 'rounded-bl-sm border border-[var(--border)] bg-[var(--surface-strong)] text-[var(--ink)] shadow-[var(--shadow-soft)]'
           }`}
         >
           {content}
         </div>
-        <span className="text-xs text-gray-400">{time}</span>
+        <span className="text-xs text-[var(--ink-muted)]">{time}</span>
       </div>
     </div>
   );

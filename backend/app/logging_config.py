@@ -1,17 +1,18 @@
 import logging
 import sys
 import traceback
+from contextvars import ContextVar
 from datetime import UTC, datetime
 
-# Global request context for request ID
-_request_id_context: str | None = None
+# Per-task/coroutine request context for request ID (thread- and async-safe)
+_request_id_context: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
 class RequestIDFilter(logging.Filter):
     """Add request_id to log records."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.request_id = _request_id_context or "-"
+        record.request_id = _request_id_context.get() or "-"
         return True
 
 
@@ -65,9 +66,8 @@ def setup_logging(level: str = "INFO") -> None:
 
 
 def set_request_id(request_id: str | None) -> None:
-    """Set the request ID for the current context."""
-    global _request_id_context
-    _request_id_context = request_id
+    """Set the request ID for the current context (coroutine/task-local)."""
+    _request_id_context.set(request_id)
 
 
 def get_logger(name: str) -> logging.Logger:

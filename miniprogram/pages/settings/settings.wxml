@@ -1,0 +1,94 @@
+<view class="container">
+  <view wx:if="{{loading}}" class="loading-state">
+    <view class="loading-spinner"></view>
+    <text>加载中...</text>
+  </view>
+
+  <block wx:else>
+    <view class="header paper-card">
+      <view class="header__topline">
+        <text class="settings-kicker">提醒与节律</text>
+        <text class="header__status">{{reminderEnabled ? '已开启' : '未开启'}}</text>
+      </view>
+      <text class="title">提醒设置</text>
+      <text class="subtitle">把顺发变成一个固定动作。到时间还没发文时，系统会轻轻提醒你继续写。</text>
+    </view>
+
+    <view class="settings-card paper-card">
+      <view class="setting-row api-key-row">
+        <view class="setting-copy">
+          <text class="setting-label">DeepSeek API Key</text>
+          <text class="setting-desc">
+            {{apiKeyConfigured ? ('已配置 ' + apiKeyPreview + '。Key 只加密保存在服务端账号下。') : 'AI 选题、讨论和起稿需要先配置 DeepSeek Key。'}}
+          </text>
+        </view>
+        <view class="api-key-status {{apiKeyConfigured ? 'configured' : 'missing'}}">
+          {{apiKeyConfigured ? '已配置' : '未配置'}}
+        </view>
+      </view>
+
+      <view wx:if="{{!apiKeyConfigured || showApiKeyInput}}" class="api-key-form">
+        <input
+          class="api-key-input"
+          type="safe-password"
+          password="{{true}}"
+          placeholder="sk-..."
+          value="{{apiKeyInput}}"
+          bindinput="onApiKeyInput"
+        />
+        <view class="api-key-actions">
+          <button
+            class="btn-primary api-key-save {{apiKeySaving ? 'saving' : ''}}"
+            bindtap="onSaveApiKey"
+            disabled="{{apiKeySaving || !apiKeyInput}}"
+          >
+            {{apiKeySaving ? '保存中...' : '保存 Key'}}
+          </button>
+          <button wx:if="{{showApiKeyInput}}" class="api-key-secondary" bindtap="onCancelApiKeyInput">
+            取消
+          </button>
+        </view>
+      </view>
+
+      <view wx:else class="api-key-actions">
+        <button class="api-key-secondary" bindtap="onShowApiKeyInput">更换 Key</button>
+        <button class="api-key-danger" bindtap="onDeleteApiKey">移除</button>
+      </view>
+    </view>
+
+    <view class="settings-card paper-card">
+      <view class="setting-row">
+        <view class="setting-copy">
+          <text class="setting-label">开启每日提醒</text>
+          <text class="setting-desc">建议放在你最容易拖延写作的那段时间。</text>
+        </view>
+        <switch checked="{{reminderEnabled}}" bindchange="onToggleReminder" color="var(--color-accent)" />
+      </view>
+
+      <view wx:if="{{reminderEnabled}}" class="setting-row">
+        <view class="setting-copy">
+          <text class="setting-label">提醒时间</text>
+          <text class="setting-desc">建议留给自己 10-20 分钟起稿，而不是临睡前补作业。</text>
+        </view>
+        <picker mode="time" value="{{reminderTime}}" bindchange="onTimeChange">
+          <text class="time-display">{{reminderTime}}</text>
+        </picker>
+      </view>
+    </view>
+
+    <button
+      class="btn-primary save-btn {{saving ? 'saving' : ''}}"
+      bindtap="onSave"
+      disabled="{{saving}}"
+    >
+      {{saving ? '保存中...' : '保存设置'}}
+    </button>
+
+    <view class="note note-card">
+      <text class="note__label">当前说明</text>
+      <text class="note__text">
+        {{wechatPushConfigured ? '当前服务端已支持微信订阅消息发送；模板和授权配置完成后，会按提醒时间推送。' : '当前还没配好微信订阅消息模板，保存后只会先记录提醒时间。'}}
+      </text>
+    </view>
+  </block>
+</view>

@@ -58,15 +58,11 @@ def calculate_points_earned(checkin: CheckIn, user: User) -> dict:
         "topic_bonus": topic_bonus,
         "discussion_bonus": discussion_bonus,
         "on_time_bonus": on_time_bonus,
-        "total": total
+        "total": total,
     }
 
 
-def apply_points_and_update_user(
-    user: User,
-    checkin: CheckIn,
-    db: Session
-) -> dict:
+def apply_points_and_update_user(user: User, checkin: CheckIn, db: Session) -> dict:
     """
     Apply points to user and update level/diamonds.
     Returns the points breakdown and new user stats.
@@ -82,7 +78,9 @@ def apply_points_and_update_user(
     # Update user
     user.points += points_earned
     user.level = calculate_level(user.points)
-    user.diamonds = calculate_diamonds(user.points)
+    # Effective balance = earned − already-spent, so redemptions (W3.9) persist
+    # instead of being overwritten by the freshly re-derived earned total.
+    user.diamonds = calculate_diamonds(user.points) - (user.diamonds_spent or 0)
 
     # Flush to trigger constraint checks, but do NOT commit
     db.flush()
@@ -92,5 +90,5 @@ def apply_points_and_update_user(
         "total_points": user.points,
         "level": user.level,
         "diamonds": user.diamonds,
-        "breakdown": breakdown
+        "breakdown": breakdown,
     }

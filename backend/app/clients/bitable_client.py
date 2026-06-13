@@ -21,6 +21,7 @@ FEISHU_BASE = "https://open.feishu.cn/open-apis"
 
 class BitableError(Exception):
     """Raised when Feishu API returns a non-zero code."""
+
     def __init__(self, code: int, msg: str):
         self.code = code
         self.msg = msg
@@ -90,9 +91,7 @@ class BitableClient:
         self._check(data)
         return data["data"]["record"]["record_id"]
 
-    async def batch_create_records(
-        self, table_id: str, records: list[dict[str, Any]]
-    ) -> list[str]:
+    async def batch_create_records(self, table_id: str, records: list[dict[str, Any]]) -> list[str]:
         """Batch create up to 500 records. Returns list of record_ids."""
         if not records:
             return []
@@ -122,10 +121,7 @@ class BitableClient:
         sort: list | None = None,
     ) -> dict:
         """List records with optional filter formula. Returns raw API response data."""
-        url = (
-            f"{FEISHU_BASE}/bitable/v1/apps/{self._app_token}"
-            f"/tables/{table_id}/records"
-        )
+        url = f"{FEISHU_BASE}/bitable/v1/apps/{self._app_token}/tables/{table_id}/records"
         params: dict = {"page_size": page_size}
         if filter_formula:
             params["filter"] = filter_formula
@@ -133,6 +129,7 @@ class BitableClient:
             params["page_token"] = page_token
         if sort:
             import json as _json
+
             params["sort"] = _json.dumps(sort)
 
         async with httpx.AsyncClient(timeout=15) as client:
@@ -147,13 +144,10 @@ class BitableClient:
         self._check(data)
         return data["data"]
 
-    async def update_record(
-        self, table_id: str, record_id: str, fields: dict[str, Any]
-    ) -> None:
+    async def update_record(self, table_id: str, record_id: str, fields: dict[str, Any]) -> None:
         """Update fields on an existing record."""
         url = (
-            f"{FEISHU_BASE}/bitable/v1/apps/{self._app_token}"
-            f"/tables/{table_id}/records/{record_id}"
+            f"{FEISHU_BASE}/bitable/v1/apps/{self._app_token}/tables/{table_id}/records/{record_id}"
         )
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.put(
@@ -166,9 +160,7 @@ class BitableClient:
 
         self._check(data)
 
-    async def batch_update_records(
-        self, table_id: str, updates: list[dict]
-    ) -> None:
+    async def batch_update_records(self, table_id: str, updates: list[dict]) -> None:
         """Batch update records. Each item must have record_id and fields."""
         if not updates:
             return
@@ -244,6 +236,7 @@ class BitableClient:
 def get_bitable_client() -> BitableClient:
     """Factory using app settings. Call lazily to avoid import-time errors."""
     from ..config import settings
+
     return BitableClient(
         app_id=settings.feishu_app_id,
         app_secret=settings.feishu_app_secret,

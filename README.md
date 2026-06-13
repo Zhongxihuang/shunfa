@@ -6,6 +6,27 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)](https://fastapi.tiangolo.com) [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black)](https://nextjs.org)
 
+> 📖 想看「为什么这么做、做对了什么、哪里诚实地承认做得不够」——一个人用 AI 从 0 到可上线的完整复盘，见 **[案例研究 docs/SHOWCASE.md](docs/SHOWCASE.md)**。本 README 只讲「怎么跑起来」。
+
+**在线 Demo：** _待补充_ · **案例研究：** [docs/SHOWCASE.md](docs/SHOWCASE.md) · **上线清单：** [docs/launch-checklist.md](docs/launch-checklist.md)
+
+---
+
+## 目录
+
+- [产品 Insight](#产品-insight)
+- [项目亮点](#项目亮点)
+- [在线 Demo 与截图](#在线-demo-与截图)
+- [技术栈](#技术栈)
+- [BYOK（Bring Your Own Key）](#byokbring-your-own-key)
+- [快速启动](#快速启动)
+- [核心流程](#核心流程)
+- [项目结构](#项目结构)
+- [游戏化机制](#游戏化机制)
+- [部署](#部署)
+- [主要 API 端点](#主要-api-端点)
+- [开源说明](#开源说明)
+
 ---
 
 ## 产品 Insight
@@ -13,6 +34,43 @@
 顺发解决一个问题：**想写，但总觉得写得不够好，于是永远不发布**。
 
 三步流程：AI 提供选题 → 一对一讨论打磨角度 → 生成初稿一键发布。配合连胜/积分/等级机制，把「开始写」变成不需要意志力的日常习惯。
+
+---
+
+## 项目亮点
+
+- 🧩 **三端一体** — FastAPI 后端 + Next.js 14 Web + 微信小程序，共享同一套 API 与业务逻辑。
+- 🔑 **BYOK 安全模型** — 用户自带 DeepSeek Key，Fernet 加密存储，作者无法查看明文，AI 费用用户自付。
+- 📊 **可度量的留存** — 内建埋点 → 漏斗 → 北极星指标（≥3 天连胜占发布者比例），运营靠数据而非感觉。
+- 🗞️ **自动化选题供给** — RSS 抓取 → 事实增强 → 网络检索的热点管线，降低「今天写什么」的摩擦。
+- ✅ **工程纪律** — 244 个测试、4 条 CI 流水线、10 个 Alembic 迁移、可勾选的上线检查清单。
+- 🚀 **可落地** — 一键部署 Vercel + Railway，Fork 后改 `.env` 即可启动，无需改代码。
+
+> 完整设计取舍与诚实复盘见 **[案例研究 docs/SHOWCASE.md](docs/SHOWCASE.md)**。
+
+---
+
+## 在线 Demo 与截图
+
+> 🚧 占位区：截图与录屏待补充。建议把静态图放在 `docs/assets/` 下，引用相对路径即可在 GitHub 与 Vercel 正常渲染。
+
+| 入口 | 链接 |
+|------|------|
+| Web 应用（线上） | _待部署后补充 Vercel 链接_ |
+| 后端 API（线上） | _待部署后补充 Railway 链接_ |
+| 演示录屏（30s） | _待补充 YouTube / Bilibili 链接_ |
+
+**界面截图**
+
+<!-- 替换为真实截图：把图片放到 docs/assets/ 后改用 ![描述](docs/assets/xxx.png) -->
+
+| 选题 | AI 讨论 | 初稿预览 | 个人主页 |
+|:----:|:------:|:-------:|:-------:|
+| _截图待补充_ | _截图待补充_ | _截图待补充_ | _截图待补充_ |
+
+| 漏斗 / 北极星看板（Admin） | 连胜 / 等级 / 钻石 |
+|:------------------------:|:-----------------:|
+| _截图待补充_ | _截图待补充_ |
 
 ---
 
@@ -59,6 +117,7 @@ pip install -r requirements.txt
 cp ../.env.example .env
 # 必填：JWT_SECRET_KEY（随机字符串）、API_KEY_ENCRYPTION_SECRET（随机字符串）
 # 可选：DEEPSEEK_API_KEY（系统级 fallback，默认不需要）
+# 可选：DEEPSEEK_BASE_URL（默认 https://api.deepseek.com）
 
 # 运行数据库迁移
 alembic upgrade head
@@ -85,12 +144,30 @@ npm run dev
 
 ```bash
 cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+
 DEEPSEEK_API_KEY=test JWT_SECRET_KEY=supersecretkey123456789 \
   API_KEY_ENCRYPTION_SECRET=testencryptionsecretkey12345678 \
   pytest -v
+
+ruff check app tests
+ruff format --check app tests
+mypy app --ignore-missing-imports
 ```
 
-所有测试均 mock AI 调用，无需真实 API Key，全套 152 个测试用例。
+所有自动化测试均 mock AI 调用或使用本地替身服务，无需真实 API Key。
+
+本地跑完整 AI HTTP 形状 smoke 时，可以启动 DeepSeek 兼容 mock：
+
+```bash
+cd backend
+python -m scripts.mock_deepseek_server --port 1081
+
+# 另一个终端启动后端时设置：
+DEEPSEEK_BASE_URL=http://127.0.0.1:1081/v1
+```
 
 ---
 
@@ -123,7 +200,7 @@ shunfa/
 │   │   ├── dependencies.py # JWT 鉴权 + get_resolved_api_key（BYOK 三级解析）
 │   │   └── database.py     # engine + WAL 模式
 │   ├── alembic/versions/   # 数据库迁移历史
-│   └── tests/              # 152 个测试（全 mock AI）
+│   └── tests/              # 后端自动化测试（mock AI / 本地 AI 替身）
 └── web/
     ├── src/app/            # Next.js App Router 页面（login, topics, discuss, preview, profile, settings）
     ├── src/components/     # 共用组件（Navbar, StreakBadge, LevelProgress, DiamondDisplay）
@@ -144,6 +221,8 @@ shunfa/
 ---
 
 ## 部署
+
+Before production deployment, complete [docs/launch-checklist.md](docs/launch-checklist.md). The checklist includes migration rollback, PostgreSQL verification, BYOK redaction, timeout policy, rate limits, Web build, and manual smoke validation.
 
 ### Vercel（前端）
 

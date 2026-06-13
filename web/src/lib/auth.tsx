@@ -7,30 +7,38 @@ import { DEV_PREVIEW_TOKEN, isDevPreviewToken } from './devPreview';
 
 interface UserStatus {
   id: number;
-  streak: number;
-  longest_streak: number;
-  points: number;
-  level: number;
-  diamonds: number;
   reminder_time: string | null;
   reminder_enabled: boolean;
   last_checkin_date: string | null;
   today_completed: boolean;
   reminder_needed: boolean;
+  streak: number;
+  longest_streak: number;
+  points: number;
+  level: number;
+  diamonds: number;
+  level_progress?: number;
+  // Subtraction experiment (W2.7): when false the client hides all gamification UI.
+  gamification_enabled: boolean;
+  // Streak freeze (W3.8): protection cards the user holds.
+  streak_freezes: number;
 }
 
 const MOCK_USER: UserStatus = {
   id: 1,
-  streak: 7,
-  longest_streak: 14,
-  points: 320,
-  level: 3,
-  diamonds: 6,
   reminder_time: '09:00',
   reminder_enabled: true,
   last_checkin_date: null,
   today_completed: false,
   reminder_needed: false,
+  streak: 3,
+  longest_streak: 7,
+  points: 150,
+  level: 2,
+  diamonds: 4,
+  level_progress: 25,
+  gamification_enabled: true,
+  streak_freezes: 1,
 };
 
 interface AuthContextValue {
@@ -68,11 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const checkApiKeyStatus = useCallback(async () => {
-    const localKey = localStorage.getItem('shunfa_api_key');
-    if (localKey) {
-      setApiKeyConfigured(true);
-      return;
-    }
+    localStorage.removeItem('shunfa_api_key');
     try {
       const status = await api.get<{ configured: boolean }>('/api/user/api_key/status');
       setApiKeyConfigured(status.configured);
@@ -95,6 +99,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   }, [refreshUser, checkApiKeyStatus]);
+
+  useEffect(() => {
+    function handleExpired() {
+      setToken(null);
+      setUser(null);
+      setApiKeyConfigured(false);
+      router.push('/login');
+    }
+    window.addEventListener('auth:expired', handleExpired);
+    return () => window.removeEventListener('auth:expired', handleExpired);
+  }, [router]);
 
   const login = useCallback(async (username: string, password: string) => {
     const data = await api.post<{ token: string; user: UserStatus }>('/api/auth_login', { username, password });

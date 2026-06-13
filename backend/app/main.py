@@ -1,23 +1,32 @@
 import os
 from contextlib import asynccontextmanager
 
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.dependencies import get_db
+from app.errors import normalize_http_error
 from app.logging_config import get_logger, setup_logging
 from app.middleware import RequestIDMiddleware, RequestLoggingMiddleware
-from app.routers import content, coze_plugin, hot_topics, reminder, topics, user
+from app.routers import (
+    admin,
+    analytics,
+    content,
+    coze_plugin,
+    hot_topics,
+    image_jobs,
+    reminder,
+    topics,
+    user,
+)
 from app.routers.my import router as my_router
-from app.rate_limit import limiter
 
 
 @asynccontextmanager
@@ -33,19 +42,29 @@ async def lifespan(app: FastAPI):
         import sentry_sdk
         from sentry_sdk.integrations.fastapi import FastApiIntegration
 
+        def before_send(event, hint):
+            request = event.get("request") or {}
+            headers = request.get("headers") or {}
+            for key in list(headers.keys()):
+                if key.lower() in {"authorization", "x-user-api-key"}:
+                    headers[key] = "[Filtered]"
+            return event
+
         sentry_sdk.init(
             dsn=os.getenv("SENTRY_DSN"),
             integrations=[FastApiIntegration()],
             environment=settings.environment,
             traces_sample_rate=0.1,
             send_default_pii=False,
+            before_send=before_send,
         )
         logger.info("Sentry initialized")
 
     # Development: auto-upgrade to latest migration
     if settings.environment == "development":
-        from alembic import command
         from alembic.config import Config
+
+        from alembic import command
 
         logger.debug("Running database migrations...")
         alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
@@ -54,6 +73,9 @@ async def lifespan(app: FastAPI):
 
     yield
     logger.info("Shutting down 顺发 API")
+    from app.services.render_service import shutdown_browser
+
+    await shutdown_browser()
 
 
 _is_prod = settings.environment == "production"
@@ -67,17 +89,19 @@ app = FastAPI(
     openapi_url=None if _is_prod else "/openapi.json",
 )
 
-# Prometheus /metrics endpoint
-instrumentator = Instrumentator(
-    should_group_status_codes=False,
-    should_ignore_untemplated=True,
-    should_respect_env_var=True,
-    should_instrument_requests_inprogress=True,
-    excluded_handlers=["/health", "/metrics"],
-    inprogress_name="shunfa_inprogress_requests",
-    inprogress_labels=True,
-)
-instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+# Prometheus /metrics endpoint. Keep it off by default and never expose it from
+# production without an internal gateway.
+if settings.enable_metrics and not _is_prod:
+    instrumentator = Instrumentator(
+        should_group_status_codes=False,
+        should_ignore_untemplated=True,
+        should_respect_env_var=False,
+        should_instrument_requests_inprogress=True,
+        excluded_handlers=["/health", "/metrics"],
+        inprogress_name="shunfa_inprogress_requests",
+        inprogress_labels=True,
+    )
+    instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # Add middlewares
 app.add_middleware(
@@ -99,6 +123,29 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
     )
 
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=normalize_http_error(request, exc),
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    request_id = request.headers.get("X-Request-ID")
+    content = {
+        "error_code": "validation_error",
+        "message": "请求参数不正确",
+    }
+    if request_id:
+        content["request_id"] = request_id
+    return JSONResponse(status_code=422, content=content)
+
+
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -106,7 +153,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     from app.logging_config import _request_id_context, get_logger
 
     logger = get_logger("exception")
-    request_id = _request_id_context or "unknown"
+    request_id = _request_id_context.get() or "unknown"
 
     logger.exception(f"Unhandled exception: {type(exc).__name__}: {str(exc)}")
 
@@ -126,8 +173,12 @@ app.include_router(content.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
 app.include_router(reminder.router, prefix="/api")
 app.include_router(hot_topics.router, prefix="/api")
-app.include_router(coze_plugin.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
+if settings.enable_coze_plugin:
+    app.include_router(coze_plugin.router, prefix="/api")
 app.include_router(my_router, prefix="/api")
+app.include_router(image_jobs.router, prefix="/api")
+app.include_router(admin.router)
 
 
 @app.get("/health")

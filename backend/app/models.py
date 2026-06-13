@@ -45,6 +45,18 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=True, index=True)
     password_hash = Column(String(256), nullable=True)
     deepseek_api_key = Column(String(512), nullable=True)  # encrypted via Fernet
+    # Entry-loop free trial: how many shared-key generations this user has used.
+    free_quota_used = Column(Integer, default=0, nullable=False)
+    # Streak freeze (W3.8): protection cards that save the streak on a missed day.
+    # Everyone starts with one free card; more can be redeemed with diamonds.
+    streak_freezes = Column(Integer, default=1, nullable=False)
+    # Diamond sink (W3.9): lifetime diamonds spent on redemptions. Effective
+    # balance = earned (3 + points//100) − spent, so spending actually persists.
+    diamonds_spent = Column(Integer, default=0, nullable=False)
+    # Appendix A (cold-start within-subject experiment): per-user override of the
+    # stable md5 gamification bucket. "on"/"off" force the arm; NULL falls back to
+    # in_subtraction_experiment() so existing users are completely unchanged.
+    gamification_override = Column(String(8), nullable=True)
 
     checkins = relationship("CheckIn", back_populates="user", lazy="selectin")
     topic_history = relationship("TopicHistory", back_populates="user", lazy="selectin")
@@ -62,11 +74,16 @@ class CheckIn(Base):
     topic_url = Column(Text, nullable=True)
     topic_summary = Column(Text, nullable=True)
     topic_published_at = Column(String, nullable=True)
+    generation_context = Column(
+        Text, nullable=True
+    )  # JSON: platform, selected angle, discussion brief, guard results
     content = Column(Text, nullable=True)  # final published content
     conversation_history = Column(Text, nullable=True)  # JSON string
     status = Column(SAEnum(CheckInStatus), default=CheckInStatus.topic_selected, nullable=False)
     refresh_count = Column(Integer, default=0, nullable=False)  # topic refresh count for the day
-    content_approved = Column(Boolean, default=False, nullable=False)  # 用户是否对初稿满意（质量反馈）
+    content_approved = Column(
+        Boolean, default=False, nullable=False
+    )  # 用户是否对初稿满意（质量反馈）
     content_feedback = Column(String, nullable=True)  # explicit user feedback: up / down
     content_feedback_at = Column(DateTime(timezone=True), nullable=True)
     points_earned = Column(Integer, default=0, nullable=False)
@@ -134,8 +151,66 @@ class HotTopic(Base):
     ai_counter_angle = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    __table_args__ = (UniqueConstraint("topic_date", "title", name="uq_hot_topics_date_title"),)
+
+
+class Event(Base):
+    """Product analytics event (added in 2026-06 W1.1).
+
+    Used to compute the funnel, the north-star metric (≥3-day streak ratio), and
+    any custom funnel for product retrofits. Tracking is best-effort — see
+    `app.services.analytics.track` — failures must never break the request flow.
+    """
+
+    __tablename__ = "events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Nullable so login-failure / anonymous events can still be recorded.
+    # SET NULL on user delete: we keep the event, lose the linkage.
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    event = Column(String(64), nullable=False)
+    props_json = Column(Text, nullable=True)  # JSON string; nullable when no props
+    ts = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
     __table_args__ = (
-        UniqueConstraint("topic_date", "title", name="uq_hot_topics_date_title"),
+        # Funnel queries: "for user X, in time window, find event Y"
+        Index("ix_events_user_event_ts", "user_id", "event", "ts"),
+        # Global event counts / time-range slices
+        Index("ix_events_event_ts", "event", "ts"),
+        # Time-range queries across all events
+        Index("ix_events_ts", "ts"),
     )
 
 
+class ImageJobStatus(enum.Enum):
+    draft = "draft"
+    rendered = "rendered"
+    failed = "failed"
+
+
+class ImageJob(Base):
+    """Paste-to-cards job (added 2026-06). Decoupled from CheckIn: this is a
+    standalone formatting tool, it does NOT affect streak / points / diamonds.
+
+    We deliberately do NOT store rendered image bytes — images are re-rendered
+    on demand from raw_text + template, so the table stays tiny.
+    """
+
+    __tablename__ = "image_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    raw_text = Column(Text, nullable=False)  # user's pasted article, stored verbatim
+    template = Column(String(8), nullable=False, default="a")  # 'a' | 'b' | 'c'
+    cover_title = Column(Text, nullable=True)  # user override; empty -> first paragraph
+    page_count = Column(Integer, default=0, nullable=False)  # filled after pagination
+    # AI-generated Xiaohongshu-style title + tags (JSON: {"title": str, "tags": [str]}).
+    # Populated by POST /api/image_jobs via compose_service.generate_post_copy().
+    # Nullable because the field is new (2026-06 W2.x) and existing rows predate it.
+    ai_copy = Column(Text, nullable=True)
+    status = Column(SAEnum(ImageJobStatus), default=ImageJobStatus.draft, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

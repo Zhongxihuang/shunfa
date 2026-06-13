@@ -36,10 +36,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         logger = get_logger("http.request")
 
-        request_id = request.headers.get("X-Request-ID", "-")
         method = request.method
         path = request.url.path
-        query = str(request.url.query) if request.url.query else ""
 
         # Skip logging for health checks
         if path == "/health":
@@ -47,26 +45,17 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         start_time = time.perf_counter()
 
-        # Extract user ID if available (from JWT)
-        user_id = None
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            # Don't log the actual token, just indicate auth was present
-            user_id = "authenticated"
-
         try:
             response = await call_next(request)
             duration_ms = (time.perf_counter() - start_time) * 1000
 
-            logger.info(
-                f"{method} {path} - {response.status_code} - {duration_ms:.1f}ms"
-            )
+            logger.info(f"{method} {path} - {response.status_code} - {duration_ms:.1f}ms")
 
             return response
 
         except Exception as e:
             duration_ms = (time.perf_counter() - start_time) * 1000
             logger.error(
-                f"{method} {path} - 500 - {duration_ms:.1f}ms - EXCEPTION: {type(e).__name__}: {str(e)}"
+                f"{method} {path} - 500 - {duration_ms:.1f}ms - EXCEPTION: {type(e).__name__}"
             )
             raise

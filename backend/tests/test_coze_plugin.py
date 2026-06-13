@@ -1,9 +1,9 @@
 """Tests for Coze plugin endpoints."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from datetime import timedelta
+from unittest.mock import AsyncMock, patch
 
-from app.models import User, CheckIn, CheckInStatus
+from app.models import CheckIn, CheckInStatus, HotTopic, User
 from app.utils.time_utils import get_today_cst
 
 PLUGIN_TOKEN = "shunfa-coze-token"
@@ -23,7 +23,27 @@ def _create_feishu_user(db) -> User:
     return user
 
 
+def _create_hot_topic(db, *, title: str = "DeepSeek V4发布", days_ago: int = 0) -> HotTopic:
+    topic = HotTopic(
+        topic_date=get_today_cst() - timedelta(days=days_ago),
+        rank=1,
+        title=title,
+        summary="DeepSeek 发布新模型，开发者开始讨论成本和能力边界。",
+        source="Hacker News",
+        url="https://example.com/deepseek-v4",
+        category="ai_model",
+        score=8,
+        ai_angle="国产AI性价比之战",
+        ai_counter_angle="成本不等于质量",
+    )
+    db.add(topic)
+    db.commit()
+    db.refresh(topic)
+    return topic
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
+
 
 def test_coze_endpoint_requires_plugin_token(client):
     response = client.get(
@@ -38,6 +58,19 @@ def test_coze_endpoint_rejects_wrong_token(client):
         "/api/coze/user_stats",
         headers={
             "X-Coze-Plugin-Token": "wrong-token",
+            "X-Feishu-User-Id": FEISHU_USER_ID,
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_coze_endpoint_rejects_prefix_of_token(client):
+    """A token that is a prefix of the real one must be rejected, and the
+    constant-time compare must not raise on the length mismatch."""
+    response = client.get(
+        "/api/coze/user_stats",
+        headers={
+            "X-Coze-Plugin-Token": PLUGIN_TOKEN[:-1],
             "X-Feishu-User-Id": FEISHU_USER_ID,
         },
     )
@@ -77,85 +110,80 @@ def test_coze_endpoint_allows_missing_user_id_header(client, db):
 
 # ── get_hot_topics ────────────────────────────────────────────────────────────
 
+
 def test_get_hot_topics_returns_list(client, db):
     _create_feishu_user(db)
+    topic = _create_hot_topic(db)
 
-    mock_topics = [
-        MagicMock(
-            hot_topic="DeepSeek V4发布",
-            hot_source="Hacker News",
-            ai_angle="国产AI性价比之战",
-            ai_counter_angle="成本不等于质量",
-            score=8,
-            topic_category=MagicMock(value="ai_model"),
-            record_id="rec_001",
-        )
-    ]
-
-    with patch("app.routers.coze_plugin.get_pending_topics", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_topics
-        response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
+    response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
 
     assert response.status_code == 200
     data = response.json()
     assert len(data["topics"]) == 1
     assert data["topics"][0]["hot_topic"] == "DeepSeek V4发布"
+    assert data["topics"][0]["hot_source"] == "Hacker News"
+    assert data["topics"][0]["record_id"] == str(topic.id)
     assert data["topics"][0]["index"] == 1
     assert "date" in data
+    # A real stored topic is not a synthetic fallback.
+    assert data["is_fallback"] is False
 
 
-def test_get_hot_topics_handles_bitable_error(client, db):
+def test_get_hot_topics_falls_back_to_latest_local_topics(client, db):
+    _create_feishu_user(db)
+    topic = _create_hot_topic(db, title="昨天的高分热点", days_ago=1)
+
+    response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["date"] == get_today_cst().isoformat()
+    assert data["topics"][0]["hot_topic"] == "昨天的高分热点"
+    assert data["topics"][0]["record_id"] != str(topic.id)
+    # Cloned-from-yesterday is real content, not synthetic fallback.
+    assert data["is_fallback"] is False
+
+
+def test_get_hot_topics_surfaces_fallback_when_database_empty(client, db):
+    """Empty database → seeded evergreen fallback → is_fallback must be true
+    so push consumers (WeChat daily push) can warn the user."""
     _create_feishu_user(db)
 
-    with patch("app.routers.coze_plugin.get_pending_topics", new_callable=AsyncMock) as mock_get:
-        mock_get.side_effect = Exception("Bitable unavailable")
-        response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
+    response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
 
-    # Should return empty list gracefully
     assert response.status_code == 200
-    assert response.json()["topics"] == []
+    data = response.json()
+    assert len(data["topics"]) == 3
+    assert data["topics"][0]["hot_source"] == "顺发兜底"
+    assert data["is_fallback"] is True
 
 
 def test_get_hot_topics_without_user_header_returns_list(client, db):
-    mock_topics = []
-
-    with patch("app.routers.coze_plugin.get_pending_topics", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_topics
-        response = client.get(
-            "/api/coze/get_hot_topics",
-            headers={"X-Coze-Plugin-Token": PLUGIN_TOKEN},
-        )
+    response = client.get(
+        "/api/coze/get_hot_topics",
+        headers={"X-Coze-Plugin-Token": PLUGIN_TOKEN},
+    )
 
     assert response.status_code == 200
-    assert response.json()["topics"] == []
+    assert len(response.json()["topics"]) == 3
+    assert response.json()["topics"][0]["hot_source"] == "顺发兜底"
 
 
-def test_get_hot_topics_does_not_mark_as_pushed(client, db):
+def test_get_hot_topics_returns_local_record_id(client, db):
     _create_feishu_user(db)
+    topic = _create_hot_topic(
+        db,
+        title="Claude Code costs up to $200 a month. Goose does the same thing for free.",
+    )
 
-    mock_topics = [
-        MagicMock(
-            hot_topic="Claude Code costs up to $200 a month. Goose does the same thing for free.",
-            hot_source="VentureBeat AI",
-            hot_url="https://venturebeat.com/example",
-            hot_summary="summary",
-            ai_angle="angle",
-            ai_counter_angle="counter",
-            score=9,
-            topic_category=MagicMock(value="ai_product"),
-            record_id="rec_001",
-        )
-    ]
-
-    with patch("app.routers.coze_plugin.get_pending_topics", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_topics
-        response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
+    response = client.get("/api/coze/get_hot_topics", headers=COZE_HEADERS)
 
     assert response.status_code == 200
-    assert response.json()["topics"][0]["record_id"] == "rec_001"
+    assert response.json()["topics"][0]["record_id"] == str(topic.id)
 
 
 # ── quick_generate ────────────────────────────────────────────────────────────
+
 
 def test_coze_quick_generate(client, db):
     _create_feishu_user(db)
@@ -183,6 +211,7 @@ def test_coze_quick_generate(client, db):
 
 
 # ── start_deep_mode ───────────────────────────────────────────────────────────
+
 
 def test_start_deep_mode_creates_checkin(client, db):
     _create_feishu_user(db)
@@ -228,7 +257,11 @@ def test_start_deep_mode_reuses_existing_checkin(client, db):
     db.commit()
 
     with patch("app.routers.coze_plugin.process_message", new_callable=AsyncMock) as mock_pm:
-        mock_pm.return_value = {"reply": "角度建议...", "status": CheckInStatus.discussing, "draft": None}
+        mock_pm.return_value = {
+            "reply": "角度建议...",
+            "status": CheckInStatus.discussing,
+            "draft": None,
+        }
         response = client.post(
             "/api/coze/start_deep_mode",
             json={"hot_topic": "New hot topic", "angle": "角度"},
@@ -245,6 +278,7 @@ def test_start_deep_mode_reuses_existing_checkin(client, db):
 
 
 # ── deep_mode_message ─────────────────────────────────────────────────────────
+
 
 def test_deep_mode_message_returns_reply(client, db):
     user = _create_feishu_user(db)
@@ -278,7 +312,7 @@ def test_deep_mode_message_returns_reply(client, db):
 
 
 def test_deep_mode_message_404_for_wrong_user(client, db):
-    user = _create_feishu_user(db)
+    _create_feishu_user(db)
     other_user = User(openid="feishu_user:other_user")
     db.add(other_user)
     db.commit()
@@ -303,6 +337,7 @@ def test_deep_mode_message_404_for_wrong_user(client, db):
 
 
 # ── confirm_and_publish ───────────────────────────────────────────────────────
+
 
 def test_confirm_and_publish_returns_streak(client, db):
     user = _create_feishu_user(db)
@@ -344,8 +379,9 @@ def test_confirm_and_publish_returns_streak(client, db):
 
 # ── user_stats ────────────────────────────────────────────────────────────────
 
+
 def test_get_user_stats(client, db):
-    user = _create_feishu_user(db)
+    _create_feishu_user(db)
 
     response = client.get("/api/coze/user_stats", headers=COZE_HEADERS)
 
@@ -390,7 +426,11 @@ def test_start_deep_mode_resets_stale_checkin_state(client, db):
     db.commit()
 
     with patch("app.routers.coze_plugin.process_message", new_callable=AsyncMock) as mock_pm:
-        mock_pm.return_value = {"reply": "角度建议...", "status": CheckInStatus.discussing, "draft": None}
+        mock_pm.return_value = {
+            "reply": "角度建议...",
+            "status": CheckInStatus.discussing,
+            "draft": None,
+        }
         response = client.post(
             "/api/coze/start_deep_mode",
             json={"hot_topic": "New hot topic", "angle": "角度"},
