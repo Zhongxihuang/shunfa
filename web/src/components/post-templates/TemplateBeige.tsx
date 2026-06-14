@@ -177,16 +177,12 @@ export default function TemplateBeige({ pageText, pageIndex, totalPages }: PostT
           zIndex: 1,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-end',
           borderTop: '1px solid rgba(133,128,118,0.22)',
           padding: '12px 5px 2px',
           fontFamily: 'var(--font-body), "PingFang SC", sans-serif',
         }}
       >
-        <div>
-          <div style={{ fontSize: 10, color: '#46554B', fontWeight: 600, letterSpacing: 0 }}>可信观点卡</div>
-          <div style={{ marginTop: 4, fontSize: 9, color: '#86887F', letterSpacing: 0 }}>quiet insight / daily signal</div>
-        </div>
         <div
           style={{
             color: '#86887F',

@@ -94,6 +94,7 @@ function PreviewContent() {
   const [copiedTitle, setCopiedTitle] = useState(false);
   const [copiedTags, setCopiedTags] = useState(false);
   const templateRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const lastRenderedTemplateRef = useRef<'beige' | 'magazine' | null>(null);
 
   // W1.4: 多平台格式 + 导出
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformId>('xiaohongshu');
@@ -137,10 +138,12 @@ function PreviewContent() {
   useEffect(() => {
     if (!composeAssets || step !== 'compose_ready') return;
 
-    // Skip when we already have a full set of rendered PNGs for this
-    // assets+template combo. Bumping the template still re-renders because
-    // `template` is in the deps array.
-    if (pngs.length === composeAssets.pages.length) return;
+    // Skip when we already have a full set of rendered PNGs for the current
+    // template. We track the last-rendered template separately so a template
+    // switch (where pngs.length is unchanged) still triggers a re-render.
+    if (pngs.length === composeAssets.pages.length && lastRenderedTemplateRef.current === template) return;
+
+    lastRenderedTemplateRef.current = template;
 
     let cancelled = false;
 
